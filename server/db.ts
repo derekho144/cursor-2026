@@ -917,9 +917,9 @@ export async function getHelloTobyCookies(): Promise<string | null> {
  *  - expenses 表：直接服務成本（transport + equipment_rent + equipment_buy + staff）
  *
  * 指標體系（業界標準）：
- *  - 詢價數 (totalLeads)       = COUNT(*) FROM quotes WHERE leadSource = platform
- *  - 成交數 (conversions)      = COUNT(*) WHERE status = 'accepted'
- *  - 成交收入 (revenue)        = SUM(total) WHERE status = 'accepted'
+ *  - 詢價數 (totalLeads)       = COUNT(*) FROM quotes WHERE leadSource = platform（該年 createdAt，不論 status）
+ *  - 成交數 (conversions)      = status = 'accepted'：有 shootingDate 按拍攝年；無則按開單年 createdAt
+ *  - 成交收入 (revenue)        = 同上條件之 SUM(total)
  *  - 成交率 (conversionRate)   = conversions / totalLeads * 100
  *  - 廣告開支 (adSpend)        = SUM(amount) FROM ad_expenses
  *  - 淨廣告開支 (netAdSpend)   = adSpend - refund
@@ -993,12 +993,12 @@ export async function getPlatformEfficiency(year: number) {
     .orderBy(adExpenses.month);
 
   // 3. 從 quotes.leadSource 精確查詢各平台詢價數、成交數、收入
-  // 詢價數（totalLeads）：按 createdAt 年份統計（詢價是在某年發生的）
-  // 成交數（conversions）和收入（revenue）：按 shootingDate 年份統計（與 Dashboard 一致）
+  // 詢價數（totalLeads）：該年 createdAt 全部報價（不論是否接受）
+  // 成交數／收入：已接受；有拍攝日按拍攝年，無拍攝日按開單年 createdAt（與 Dashboard 一致）
   const yearStart = `${year}-01-01 00:00:00`;
   const yearEnd = `${year + 1}-01-01 00:00:00`;
 
-  // 3a. 詢價數：按 createdAt 統計
+  // 3a. 詢價數：按 createdAt 統計（所有 status）
   const leadSummary = await db
     .select({
       leadSource: quotes.leadSource,
@@ -1008,7 +1008,7 @@ export async function getPlatformEfficiency(year: number) {
     .where(sql`createdAt >= ${yearStart} AND createdAt < ${yearEnd}`)
     .groupBy(quotes.leadSource);
 
-  // 3b. 成交數 + 收入：按 shootingDate 統計（與 Dashboard 一致）
+  // 3b. 成交數 + 收入：已接受；有 shootingDate → 拍攝年；否則 → createdAt 年
   const acceptedSummary = await db
     .select({
       leadSource: quotes.leadSource,
@@ -1018,9 +1018,11 @@ export async function getPlatformEfficiency(year: number) {
     .from(quotes)
     .where(sql`
       status = 'accepted'
-      AND shootingDate IS NOT NULL
-      AND shootingDate != ''
-      AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${year}
+      AND (
+        (shootingDate IS NOT NULL AND shootingDate != '' AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${year})
+        OR
+        ((shootingDate IS NULL OR shootingDate = '') AND createdAt >= ${yearStart} AND createdAt < ${yearEnd})
+      )
     `)
     .groupBy(quotes.leadSource);
 

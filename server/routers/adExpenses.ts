@@ -1027,8 +1027,7 @@ CPC 是否在合理範圍？如何在不降低 CTR 的前提下降低 CPC？有�
         .where(drizzleSql`createdAt >= ${start} AND createdAt < ${end}`)
         .groupBy(quotes.leadSource);
 
-      // 已接受數：按 shootingDate（拍攝日期）篩選當月已接受的報價單
-      // 原因：以拍攝日期為準，反映當月實際執行的工作
+      // 已接受數：有拍攝日按拍攝月；無拍攝日按開單月 createdAt（與評分卡／Dashboard 一致）
       const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
       const endDate = `${endY}-${String(endM).padStart(2, "0")}-01`;
       const acceptedRows = await db
@@ -1037,7 +1036,14 @@ CPC 是否在合理範圍？如何在不降低 CTR 的前提下降低 CPC？有�
           count: drizzleSql<number>`COUNT(*)`,
         })
         .from(quotes)
-        .where(drizzleSql`status = 'accepted' AND shootingDate >= ${startDate} AND shootingDate < ${endDate}`)
+        .where(drizzleSql`
+          status = 'accepted'
+          AND (
+            (shootingDate IS NOT NULL AND shootingDate != '' AND shootingDate >= ${startDate} AND shootingDate < ${endDate})
+            OR
+            ((shootingDate IS NULL OR shootingDate = '') AND createdAt >= ${start} AND createdAt < ${end})
+          )
+        `)
         .groupBy(quotes.leadSource);
 
       const platformMap: Record<string, { leads: number; accepted: number }> = {};

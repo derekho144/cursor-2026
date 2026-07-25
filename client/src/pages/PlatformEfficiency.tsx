@@ -203,21 +203,21 @@ export default function PlatformEfficiency() {
             value={`${data.totalLeads} 份`}
             sub="來自所有平台"
             color="#60a5fa"
-            tooltip="全年所有平台帶來的詢價總數"
+            tooltip="該年開單的全部報價（不論是否已接受），按詢價來源統計"
           />
           <MetricCard
             label="總成交數"
             value={`${data.totalConversions} 份`}
             sub={`成交率 ${data.totalLeads > 0 ? ((data.totalConversions / data.totalLeads) * 100).toFixed(1) : 0}%`}
             color="#4ade80"
-            tooltip="全年已接受報價數量"
+            tooltip="已接受報價：有拍攝日按拍攝年計；無拍攝日則按開單年計"
           />
           <MetricCard
             label="總成交收入"
             value={`HK$${data.totalRevenue.toLocaleString()}`}
             sub="已接受報價金額"
             color="#a78bfa"
-            tooltip="全年所有平台帶來的成交收入"
+            tooltip="同上成交條件之報價金額合計"
           />
           <MetricCard
             label="整體 ROAS"
@@ -389,7 +389,7 @@ export default function PlatformEfficiency() {
               <div className="text-xs text-muted-foreground leading-relaxed">
                 <span style={{ color: "#d4a843" }}>評分方法：</span>
                 綜合評分由四個維度組成：ROAS（佔 40%，以 ROAS=5 為滿分基準）、成交率（佔 30%，以 30% 為滿分）、CPL 效率（佔 20%，成本越低分越高）、開支趨勢（佔 10%，開支下降代表效率提升）。
-                詢價來源以報價單的「詢價來源」欄位精確匹配（HelloToby / PRO360 / FreelanceHunter / Google / Repeat）。回頭客無廣告開支，CPL 效率自動得滿分。
+                詢價來源以報價單的「詢價來源」欄位精確匹配（HelloToby / PRO360 / FreelanceHunter / Google / Repeat）。詢價數＝該年開單全部報價；成交數＝已接受（有拍攝日按拍攝年，無則按開單年）。回頭客無廣告開支，CPL 效率自動得滿分。
                 <span style={{ color: "#888" }}> FreeHunter 為訂閱制月費（非 CPC），請在廣告開支頁面將每月訂閱費輸入為「開支」以計算 ROAS 和 CPL。</span>
                 <span style={{ color: "#888" }}> 「ROAS」（廣告回報率）= 成交收入 ÷ 淨廣告開支，衡量廣告效率，服務業基準 ≥5x 優秀。「真實 ROI」= 扣除廣告開支及按收入比例分攤的直接服務成本（車費+器材+人工）後的實際利潤率。「LTV/CAC」= 客戶終身價值 ÷ 獲客成本，業界黃金比率 ≥3:1。</span>
                 {unclassifiedLeads > 0 && (
