@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# After agent stop: if a git push just marked pending Manus sync, inject one follow-up.
+# After agent stop: only follow up with Manus paste if API auto-deploy is NOT configured.
 set -euo pipefail
 input=$(cat)
 
@@ -8,6 +8,13 @@ MARKER="$ROOT/.git/manus-pending-sync"
 
 loop_count=$(printf '%s' "$input" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d.get("loop_count") or 0))' 2>/dev/null || echo "0")
 if [[ "$loop_count" != "0" ]]; then
+  echo '{}'
+  exit 0
+fi
+
+# API auto-deploy configured → no paste follow-up
+if [[ -f "$ROOT/.env" ]] && grep -q '^MANUS_API_KEY=' "$ROOT/.env" 2>/dev/null; then
+  rm -f "$MARKER" 2>/dev/null || true
   echo '{}'
   exit 0
 fi
