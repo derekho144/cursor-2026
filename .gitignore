@@ -1,7 +1,10 @@
 node_modules/
 .playwright-browsers/
 .manus-logs/
+.pnpm-store/
+.project-config.json
 dist/
 build/
+.env
 .env.local
 .DS_Store
