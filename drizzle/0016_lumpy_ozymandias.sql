@@ -1,0 +1,2 @@
+ALTER TABLE `freehunter_jobs` MODIFY COLUMN `fh_job_status` enum('new','email_fetched','first_email_sent','imported','ignored') NOT NULL DEFAULT 'new';--> statement-breakpoint
+ALTER TABLE `freehunter_jobs` ADD `first_email_sent_at` timestamp;

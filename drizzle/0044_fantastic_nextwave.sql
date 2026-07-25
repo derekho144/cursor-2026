@@ -1,0 +1,1 @@
+ALTER TABLE `quotes` ADD `stop_follow_up` boolean DEFAULT false NOT NULL;

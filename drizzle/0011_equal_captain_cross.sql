@@ -1,0 +1,1 @@
+ALTER TABLE `deliveries` ADD `password` varchar(255);

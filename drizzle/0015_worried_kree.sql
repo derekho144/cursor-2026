@@ -1,0 +1,20 @@
+CREATE TABLE `freehunter_jobs` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`job_id` varchar(32) NOT NULL,
+	`title` varchar(512) NOT NULL,
+	`client_name` varchar(255),
+	`client_email` varchar(320),
+	`budget` varchar(128),
+	`location` varchar(255),
+	`description` text,
+	`job_url` varchar(1024) NOT NULL,
+	`categories` varchar(512),
+	`posted_at` timestamp,
+	`fh_job_status` enum('new','email_fetched','imported','ignored') NOT NULL DEFAULT 'new',
+	`email_inquiry_id` int,
+	`scraped_at` timestamp NOT NULL DEFAULT (now()),
+	`fh_created_at` timestamp NOT NULL DEFAULT (now()),
+	`fh_updated_at` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `freehunter_jobs_id` PRIMARY KEY(`id`),
+	CONSTRAINT `freehunter_jobs_job_id_unique` UNIQUE(`job_id`)
+);

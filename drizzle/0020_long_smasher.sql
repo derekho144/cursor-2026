@@ -1,0 +1,1 @@
+ALTER TABLE `email_inquiries` ADD `fh_job_id` int;

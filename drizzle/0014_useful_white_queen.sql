@@ -1,0 +1,1 @@
+ALTER TABLE `clients` ADD `source` varchar(100);

@@ -1,0 +1,1 @@
+ALTER TABLE `email_inquiries` ADD `follow_up_sent_at` timestamp;

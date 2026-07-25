@@ -1,0 +1,1 @@
+ALTER TABLE `quotes` MODIFY COLUMN `serviceType` enum('corporate_event','product','food_beverage','jewelry','artwork','interior','video_production','graphic_design','ad_video','web_development','ai_photography','menu_design','other') NOT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE `quote_follow_ups` ADD `quote_id` int;

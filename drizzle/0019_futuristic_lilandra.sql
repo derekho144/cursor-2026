@@ -1,0 +1,1 @@
+ALTER TABLE `email_inquiries` MODIFY COLUMN `status` enum('pending','approved','rejected','ignored','pending_send') NOT NULL DEFAULT 'pending';

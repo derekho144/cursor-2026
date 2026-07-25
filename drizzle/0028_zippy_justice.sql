@@ -1,0 +1,1 @@
+ALTER TABLE `loyalty_emails_log` MODIFY COLUMN `email_type` enum('welcome','day30','day90','day180','anniversary','seasonal_cny','seasonal_summer','seasonal_yearend','winback','tier_upgrade','referral_reward') NOT NULL;

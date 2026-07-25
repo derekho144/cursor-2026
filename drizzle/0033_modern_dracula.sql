@@ -1,0 +1,1 @@
+ALTER TABLE `quotes` ADD `discountPercent` decimal(5,2) DEFAULT '0' NOT NULL;

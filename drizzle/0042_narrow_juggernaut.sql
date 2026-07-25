@@ -1,0 +1,1 @@
+ALTER TABLE `pitch_leads` MODIFY COLUMN `email_found_via` enum('job_ad','company_website','hunter_io','manual','decision_maker_website');

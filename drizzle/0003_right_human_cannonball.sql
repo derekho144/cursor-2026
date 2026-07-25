@@ -1,0 +1,1 @@
+ALTER TABLE `ad_expenses` ADD `refundAmount` decimal(10,2) DEFAULT '0' NOT NULL;

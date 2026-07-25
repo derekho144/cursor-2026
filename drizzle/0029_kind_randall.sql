@@ -1,0 +1,1 @@
+ALTER TABLE `client_memberships` MODIFY COLUMN `tier` enum('silver','golden','diamond','black_diamond') NOT NULL DEFAULT 'silver';

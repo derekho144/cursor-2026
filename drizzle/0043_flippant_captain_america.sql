@@ -1,0 +1,1 @@
+ALTER TABLE `freehunter_jobs` ADD `follow_up_sent_at` timestamp;
