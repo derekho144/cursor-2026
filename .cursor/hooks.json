@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "bash .cursor/hooks/after-fix-manus-followup.sh",
+        "timeout": 15,
+        "loop_limit": 1
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "bash .cursor/hooks/after-git-push-manus.sh",
+        "matcher": "git push",
+        "timeout": 10
+      }
+    ]
+  }
+}

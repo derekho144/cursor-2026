@@ -1,0 +1,25 @@
+---
+description: After bug fixes, auto commit/push and emit Manus sync instructions
+alwaysApply: true
+---
+
+# JD Studio ↔ Manus auto workflow
+
+When you finish a **bug fix** or **deployable code change** in this repo, do the following **without waiting for the user to ask**:
+
+1. **Verify** — run focused tests / `tsc --noEmit` for touched areas when practical.
+2. **Commit + push** to `origin/main` (`derekho144/cursor-2026`) — only the relevant files.
+3. **End every such turn** with a ready-to-paste Manus block (Cantonese OK), including the latest commit SHA:
+
+```
+請立即從 GitHub 同步並發佈：
+
+1. Pull / Sync GitHub main（commit: <SHA>）
+2. 保存 checkpoint 並 Publish 到 jdsys.biz
+3. 完成後回報：SHA、checkpoint id、publish 狀態
+```
+
+4. Do **not** ask “要唔要 push / sync Manus?” — just do steps 1–3.
+5. You cannot click Manus UI yourself; the paste block is the handoff. If the user pastes Manus’s “done” reply, automatically re-verify `https://jdsys.biz` (or the URL they name).
+
+Exceptions: pure Q&A with no code changes — skip commit/push/Manus block.
