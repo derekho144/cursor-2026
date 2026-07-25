@@ -28,6 +28,12 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
+      // Session verify requires a non-empty name — never sign with "".
+      const sessionName =
+        (userInfo.name && userInfo.name.trim()) ||
+        (userInfo.email ? userInfo.email.split("@")[0] : "") ||
+        "User";
+
       await db.upsertUser({
         openId: userInfo.openId,
         name: userInfo.name || null,
@@ -37,7 +43,7 @@ export function registerOAuthRoutes(app: Express) {
       });
 
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
-        name: userInfo.name || "",
+        name: sessionName,
         expiresInMs: ONE_YEAR_MS,
       });
 

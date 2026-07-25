@@ -11,12 +11,12 @@ import { fetchGoogleAdsCosts } from "./googleAds";
 import { notifyOwner } from "./_core/notification";
 import { runEmailScan, sendFHFollowUpEmail, sendFHFirstEmail } from "./routers/emailInquiries";
 import { scrapeFreehunterBoard, fetchEmailForJob } from "./scrapers/freehunterBoard";
-import { freehunterJobs } from "../drizzle/schema";
+import { freehunterJobs, emailInquiries } from "../drizzle/schema";
 import { desc, sql, eq } from "drizzle-orm";
 import {
   getFHJobsPendingFollowUp,
   markFollowUpSent,
-  resetFollowUpSentinel, getQuotesPendingReviewEmail, markReviewEmailSent, getClientsForSeasonalEmail, getClientsForWinbackEmail, recordLoyaltyEmail, getClientMembership, getDb } from "./db";
+  resetFollowUpSentinel, getQuotesPendingReviewEmail, markReviewEmailSent, resetReviewEmailSentinel, getClientsForSeasonalEmail, getClientsForWinbackEmail, recordLoyaltyEmail, getClientMembership, getDb, createEmailInquiry } from "./db";
 import { sendEmail } from "./resendEmail";
 import { runQuoteFollowUps } from "./gmailFollowUp";
 import { runWatchdog } from "./watchdog";
@@ -96,7 +96,7 @@ function getNextScanTime(lastScanAt: Date | null): Date {
  * Run a scheduled Freehunter job board scrape.
  * Only runs during active hours (09:00-21:00 HKT) to avoid unnecessary API calls.
  */
-async function runScheduledFreehunterScrape(): Promise<void> {
+export async function runScheduledFreehunterScrape(): Promise<void> {
   await withSchedulerLock("fh-scrape", 14 * 60 * 1000, async () => {
   if (!isWithinScanHours(8)) {
     console.log("[Scheduler] Freehunter scrape skipped (outside active hours 08:00-21:00 HKT)");
@@ -188,8 +188,10 @@ export async function runScheduledGmailScan(): Promise<void> {
 }
 
 /**
- * Auto-backfill: find all 'new' jobs with aiScore >= 80 that still have no email,
- * fetch their emails and auto-send the first email. Runs every hour during active hours.
+ * Auto-backfill: find jobs that still need first-email handling:
+ * - status=new with no email → fetch email (+ auto-send if AI ≥ 80)
+ * - status=email_fetched with AI ≥ 80 and email present → retry send (stuck after failed auto-send)
+ * Always creates an email_inquiries row before sending so FH follow-ups can fire later.
  */
 export async function runFHHighConfidenceBackfill(): Promise<void> {
   await withSchedulerLock("fh-backfill", 55 * 60 * 1000, async () => {
@@ -201,53 +203,106 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
     const db = await getDb();
     if (!db) return;
 
-    // Find ALL 'new' jobs that still have no email (regardless of score)
-    // High-confidence (>= 80%) will auto-send; low-confidence will only fetch email
+    // Include stuck email_fetched high-confidence jobs so failed auto-sends get retried
     const pendingJobs = await db
       .select()
       .from(freehunterJobs)
       .where(
-        sql`${freehunterJobs.status} = 'new' AND (${freehunterJobs.clientEmail} IS NULL OR ${freehunterJobs.clientEmail} = '')`
+        sql`(
+          (${freehunterJobs.status} = 'new' AND (${freehunterJobs.clientEmail} IS NULL OR ${freehunterJobs.clientEmail} = ''))
+          OR (${freehunterJobs.status} = 'email_fetched' AND ${freehunterJobs.aiScore} >= 80
+              AND ${freehunterJobs.clientEmail} IS NOT NULL AND ${freehunterJobs.clientEmail} != '')
+        )`
       )
       .orderBy(desc(freehunterJobs.aiScore))
-      .limit(10); // Process up to 10 per run to avoid rate limiting
+      .limit(10);
 
     if (pendingJobs.length === 0) {
       console.log("[Scheduler] FH backfill: no pending jobs without email.");
       return;
     }
 
-    console.log(`[Scheduler] FH backfill: ${pendingJobs.length} job(s) missing email to process.`);
+    console.log(`[Scheduler] FH backfill: ${pendingJobs.length} job(s) to process.`);
     let fetched = 0;
     let sent = 0;
 
     for (const job of pendingJobs) {
       try {
         await new Promise((r) => setTimeout(r, 1500)); // Rate limit
-        const email = await fetchEmailForJob(job.jobId);
-        if (email) {
+
+        let email = job.clientEmail || "";
+        if (!email) {
+          const fetchedEmail = await fetchEmailForJob(job.jobId);
+          if (!fetchedEmail) continue;
+          email = fetchedEmail;
           fetched++;
-          const isHighConfidence = (job.aiScore ?? 0) >= 80;
-          if (isHighConfidence) {
-            // Auto-send first email for high-confidence jobs
-            const sendResult = await sendFHFirstEmail(email, job.clientName || "", job.title || "");
-            if (sendResult.success) {
-              sent++;
-              await db
-                .update(freehunterJobs)
-                .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
-                .where(eq(freehunterJobs.jobId, job.jobId));
-              console.log(`[Scheduler] FH backfill: auto-sent email to ${email} for job ${job.jobId} (score: ${job.aiScore})`);
-            }
-          } else {
-            // Low-confidence: email fetched, waiting for manual review
-            console.log(`[Scheduler] FH backfill: fetched email for job ${job.jobId} (score: ${job.aiScore}, low-confidence, manual review needed)`);
+        } else {
+          fetched++;
+        }
+
+        const isHighConfidence = (job.aiScore ?? 0) >= 80;
+        if (!isHighConfidence) {
+          console.log(`[Scheduler] FH backfill: fetched email for job ${job.jobId} (score: ${job.aiScore}, low-confidence, manual review needed)`);
+          continue;
+        }
+
+        // Create tracking inquiry so follow-ups can find this job later
+        let fhInquiryId: number | undefined;
+        try {
+          const gmailMessageId = `fh-backfill-${job.jobId}-${Date.now()}`;
+          const replyTrackingId = `fh-${job.jobId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const inquiry = await createEmailInquiry({
+            gmailMessageId,
+            fromEmail: email,
+            fromName: job.clientName || "FreelanceHunter 客戶",
+            subject: job.title,
+            bodyText: job.description || "",
+            receivedAt: job.postedAt || new Date(),
+            aiConfidence: "high",
+            externalLink: job.jobUrl,
+            status: "pending_send",
+            fhJobId: job.id,
+            replyTrackingId,
+          } as any);
+          fhInquiryId = inquiry?.id;
+        } catch (inquiryErr) {
+          console.warn(`[Scheduler] FH backfill: failed to create inquiry for job ${job.jobId}:`, inquiryErr);
+        }
+
+        const sendResult = await sendFHFirstEmail(
+          email,
+          job.clientName || "",
+          job.title || "",
+          fhInquiryId,
+          job.description || ""
+        );
+        if (sendResult.success) {
+          sent++;
+          await db
+            .update(freehunterJobs)
+            .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
+            .where(eq(freehunterJobs.jobId, job.jobId));
+          if (fhInquiryId) {
+            await db
+              .update(emailInquiries)
+              .set({ status: "pending" })
+              .where(eq(emailInquiries.id, fhInquiryId));
           }
+          console.log(`[Scheduler] FH backfill: auto-sent email to ${email} for job ${job.jobId} (score: ${job.aiScore}, inquiryId: ${fhInquiryId})`);
+        } else if (fhInquiryId) {
+          // Keep job as email_fetched for retry; drop orphan tracking row
+          await db.delete(emailInquiries).where(eq(emailInquiries.id, fhInquiryId));
+          if (job.status === "new") {
+            await db
+              .update(freehunterJobs)
+              .set({ status: "email_fetched", clientEmail: email, updatedAt: new Date() })
+              .where(eq(freehunterJobs.jobId, job.jobId));
+          }
+          console.warn(`[Scheduler] FH backfill: send failed for job ${job.jobId}, left as email_fetched for retry`);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         console.warn(`[Scheduler] FH backfill: failed for job ${job.jobId}:`, msg);
-        // If login failed, stop to avoid repeated login attempts
         if (msg.includes('登入失敗') || msg.includes('Login') || msg.includes('session expired')) {
           break;
         }
@@ -258,7 +313,7 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
       try {
         await notifyOwner({
           title: `🤖 FH 自動補跑：取得 ${fetched} 個電郵，發送 ${sent} 封郵件`,
-          content: `補跑發現 ${pendingJobs.length} 個工作沒有電郵，成功取得 ${fetched} 個。其中 ${sent} 個高信心工作已自動發送第一封郵件，${fetched - sent} 個低信心工作已存入待審核。`,
+          content: `補跑處理 ${pendingJobs.length} 個工作，成功取得／重試 ${fetched} 個電郵。其中 ${sent} 個高信心工作已自動發送第一封郵件。`,
         });
       } catch (_) {}
     }
@@ -654,10 +709,12 @@ async function runReviewInviteEmails(): Promise<void> {
           console.log(`[Scheduler] Review invite sent to ${quote.clientEmail} (quoteId: ${quote.id})`);
         } else {
           failed++;
+          await resetReviewEmailSentinel(quote.id).catch(() => {});
           console.error(`[Scheduler] Review invite failed for quoteId ${quote.id}:`, result.error);
         }
       } catch (err) {
         failed++;
+        await resetReviewEmailSentinel(quote.id).catch(() => {});
         console.error(`[Scheduler] Review invite error for quoteId ${quote.id}:`, err);
       }
     }
@@ -856,7 +913,7 @@ async function checkAndSync(): Promise<void> {
  * Run a scheduled pitch outreach pipeline.
  * Only runs once per day at 10:00 HKT to avoid excessive API calls.
  */
-async function runScheduledPitchOutreach(): Promise<void> {
+export async function runScheduledPitchOutreach(): Promise<void> {
   await withSchedulerLock("pitch-outreach", 23 * 60 * 60 * 1000, async () => {
     // Only run during business hours (09:00-12:00 HKT)
     if (!isWithinScanHours(9)) {
@@ -907,12 +964,14 @@ export function startScheduler(): void {
   getDb().then(async (db) => {
     if (!db) return;
     try {
+      // Match both string and Date forms of the SENTINEL across MySQL TZ modes
       const result = await db.execute(sql`
         UPDATE email_inquiries
         SET follow_up_sent_at = NULL,
             follow_up_retry_count = COALESCE(follow_up_retry_count, 0) + 1,
             follow_up_last_error = 'Reset on startup (server crash recovery)'
-        WHERE follow_up_sent_at = '1970-01-01 00:00:01'
+        WHERE follow_up_sent_at = ${new Date("1970-01-01T00:00:01.000Z")}
+           OR follow_up_sent_at = '1970-01-01 00:00:01'
       `);
       const affected = (result as any)?.[0]?.affectedRows ?? 0;
       if (affected > 0) {

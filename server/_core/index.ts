@@ -163,10 +163,11 @@ async function startServer() {
       res.json({ ok: true, skipped: true, reason: "outside active hours (08:00-21:00 HKT)" }); return;
     }
     res.json({ ok: true, started: true, time: new Date().toISOString() });
-    import("../scrapers/freehunterBoard").then(({ scrapeFreehunterBoard }) =>
-      scrapeFreehunterBoard(true, 20)
-    ).then((r) => {
-      console.log(`[Heartbeat/fh-scrape] Done: ${r.newJobs} new, ${r.emailsFetched} emails, ${r.autoEmailsSent ?? 0} auto-sent`);
+    // Use locked scheduler entry (avoids concurrent scrape with in-process timer)
+    import("../scheduler").then(({ runScheduledFreehunterScrape }) =>
+      runScheduledFreehunterScrape()
+    ).then(() => {
+      console.log(`[Heartbeat/fh-scrape] Done`);
     }).catch((err) => console.error("[Heartbeat/fh-scrape] Error:", err));
   });
 
@@ -224,9 +225,10 @@ async function startServer() {
     try { user = await authSdk.authenticateRequest(req); } catch (_) {}
     if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
     res.json({ ok: true, started: true, time: new Date().toISOString() });
-    import("../scrapers/pitchOutreach")
-      .then(({ runOutreachPipeline }) => runOutreachPipeline(process.env.HUNTER_API_KEY))
-      .then((result) => console.log("[Heartbeat/pitch-outreach] Done:", JSON.stringify(result)))
+    // Use locked scheduler entry (avoids concurrent outreach with in-process timer)
+    import("../scheduler")
+      .then(({ runScheduledPitchOutreach }) => runScheduledPitchOutreach())
+      .then(() => console.log("[Heartbeat/pitch-outreach] Done"))
       .catch((err) => console.error("[Heartbeat/pitch-outreach] Error:", err));
   });
   // ─── Google Ads OAuth2 Re-authorization ─────────────────────────────────

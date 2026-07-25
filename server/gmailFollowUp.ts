@@ -19,6 +19,7 @@ import {
   upsertQuoteFollowUp,
   getPendingFollowUps,
   markFollowUpEmailSent,
+  resetQuoteFollowUpSentinel,
   getSentFollowUpMessageIds,
 } from "./db";
 import { sendViaGmail } from "./resendEmail";
@@ -432,10 +433,12 @@ export async function runQuoteFollowUps(): Promise<{
         console.log(`[FollowUp] Sent follow-up to ${item.toEmail} (id=${item.id})`);
       } else {
         console.error(`[FollowUp] Failed to send to ${item.toEmail}:`, result.error);
+        await resetQuoteFollowUpSentinel(item.id).catch(() => {});
         skipped++;
       }
     } catch (e) {
       console.error(`[FollowUp] Error processing follow-up id=${item.id}:`, e);
+      await resetQuoteFollowUpSentinel(item.id).catch(() => {});
       skipped++;
     }
   }

@@ -21,6 +21,70 @@ import { sendFHFirstEmail, translateJobTitleToEnglish, cleanClientName } from ".
 import { invokeLLM } from "../_core/llm";
 import { sendEmail } from "../resendEmail";
 
+/** Create tracking inquiry + send first email (so FH follow-ups can fire later). */
+async function sendFirstEmailWithTracking(job: {
+  id: number;
+  jobId: string;
+  title: string | null;
+  clientName: string | null;
+  clientEmail: string;
+  description: string | null;
+  jobUrl: string | null;
+  postedAt: Date | null;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  let fhInquiryId: number | undefined;
+  try {
+    const gmailMessageId = `fh-router-backfill-${job.jobId}-${Date.now()}`;
+    const replyTrackingId = `fh-${job.jobId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const [inserted] = await db
+      .insert(emailInquiries)
+      .values({
+        gmailMessageId,
+        fromEmail: job.clientEmail,
+        fromName: job.clientName || "FreelanceHunter 客戶",
+        subject: job.title || "",
+        bodyText: job.description || "",
+        receivedAt: job.postedAt || new Date(),
+        aiConfidence: "high",
+        externalLink: job.jobUrl,
+        status: "pending_send",
+        fhJobId: job.id,
+        replyTrackingId,
+      } as any)
+      .$returningId();
+    fhInquiryId = inserted?.id;
+  } catch (e) {
+    console.warn(`[FH Backfill] Failed to create inquiry for job ${job.jobId}:`, e);
+  }
+
+  const sendResult = await sendFHFirstEmail(
+    job.clientEmail,
+    job.clientName || "",
+    job.title || "",
+    fhInquiryId,
+    job.description || ""
+  );
+
+  if (sendResult.success) {
+    await db
+      .update(freehunterJobs)
+      .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
+      .where(eq(freehunterJobs.jobId, job.jobId));
+    if (fhInquiryId) {
+      await db.update(emailInquiries).set({ status: "pending" }).where(eq(emailInquiries.id, fhInquiryId));
+    }
+    return true;
+  }
+
+  if (fhInquiryId) {
+    await db.delete(emailInquiries).where(eq(emailInquiries.id, fhInquiryId));
+  }
+  return false;
+}
+
 export const freehunterBoardRouter = router({
   /**
    * Get scrape status and recent jobs
@@ -740,18 +804,19 @@ ${trackingPixel}
           // Case 1: job already has email (email_fetched status) — just send the first email
           if (job.status === "email_fetched" && job.clientEmail) {
             if (isHighConfidence) {
-              const jobTitle = job.title || "your project";
-              const clientName = job.clientName || "";
               try {
                 console.log(`[FH Backfill] Sending first email for email_fetched job ${job.jobId} (score: ${job.aiScore}) to ${job.clientEmail}`);
-                const sendResult = await sendFHFirstEmail(job.clientEmail, clientName, jobTitle);
-                if (sendResult.success) {
-                  emailsSent++;
-                  await db
-                    .update(freehunterJobs)
-                    .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
-                    .where(eq(freehunterJobs.jobId, job.jobId));
-                }
+                const ok = await sendFirstEmailWithTracking({
+                  id: job.id,
+                  jobId: job.jobId,
+                  title: job.title,
+                  clientName: job.clientName,
+                  clientEmail: job.clientEmail,
+                  description: job.description,
+                  jobUrl: job.jobUrl,
+                  postedAt: job.postedAt,
+                });
+                if (ok) emailsSent++;
               } catch (sendErr) {
                 const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
                 console.warn(`[FH Backfill] Failed to send email for job ${job.jobId}:`, sendErr);
@@ -767,19 +832,19 @@ ${trackingPixel}
           if (email) {
             emailsFetched++;
             if (isHighConfidence) {
-              // Auto-send first email for high-confidence jobs
-              const jobTitle = job.title || "your project";
-              const clientName = job.clientName || "";
               try {
                 console.log(`[FH Backfill] Auto-sending first email for new job ${job.jobId} (score: ${job.aiScore}) to ${email}`);
-                const sendResult = await sendFHFirstEmail(email, clientName, jobTitle);
-                if (sendResult.success) {
-                  emailsSent++;
-                  await db
-                    .update(freehunterJobs)
-                    .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
-                    .where(eq(freehunterJobs.jobId, job.jobId));
-                }
+                const ok = await sendFirstEmailWithTracking({
+                  id: job.id,
+                  jobId: job.jobId,
+                  title: job.title,
+                  clientName: job.clientName,
+                  clientEmail: email,
+                  description: job.description,
+                  jobUrl: job.jobUrl,
+                  postedAt: job.postedAt,
+                });
+                if (ok) emailsSent++;
               } catch (sendErr) {
                 const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
                 console.warn(`[FH Backfill] Failed to send email for job ${job.jobId}:`, sendErr);

@@ -1858,16 +1858,16 @@ export async function getFHJobsPendingFollowUp(): Promise<Array<{
 
   // Step 2: Atomic claim - UPDATE with sentinel only for rows still NULL
   // (concurrent runners that lost the race will update 0 rows for those IDs)
-  const SENTINEL_STR = '1970-01-01 00:00:01';
+  // Always use the same UTC Date for write + read (avoid string/TZ mismatch).
+  const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
   await db.execute(sql`
     UPDATE email_inquiries
-    SET follow_up_sent_at = ${SENTINEL_STR}
+    SET follow_up_sent_at = ${SENTINEL}
     WHERE id IN (${sql.join(candidateIds.map((id) => sql`${id}`), sql`, `)})
       AND follow_up_sent_at IS NULL
   `);
 
   // Step 3: Fetch only the rows we successfully claimed
-  const SENTINEL = new Date('1970-01-01T00:00:01.000Z');
   const rows = await db
     .select({
       inquiryId: emailInquiries.id,
@@ -2073,7 +2073,9 @@ export async function getQuotesPendingReviewEmail() {
     return [];
   }
 
-  return db
+  const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+
+  const candidates = await db
     .select()
     .from(quotes)
     .where(
@@ -2089,6 +2091,27 @@ export async function getQuotesPendingReviewEmail() {
       )
     )
     .limit(20);
+
+  if (candidates.length === 0) return [];
+
+  const ids = candidates.map((q) => q.id);
+  await db.execute(sql`
+    UPDATE quotes
+    SET reviewEmailSentAt = ${SENTINEL}
+    WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+      AND reviewEmailSentAt IS NULL
+  `);
+
+  return db
+    .select()
+    .from(quotes)
+    .where(
+      and(
+        inArray(quotes.id, ids),
+        eq(quotes.reviewEmailSentAt, SENTINEL as any)
+      )
+    )
+    .limit(20);
 }
 
 /**
@@ -2097,11 +2120,20 @@ export async function getQuotesPendingReviewEmail() {
 export async function markReviewEmailSent(quoteId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.update(quotes).set({
-    updatedAt: new Date(),
-  } as any).where(eq(quotes.id, quoteId));
-  // Use raw SQL to update reviewEmailSentAt since it may not be in schema yet
   await db.execute(sql`UPDATE quotes SET reviewEmailSentAt = NOW() WHERE id = ${quoteId}`);
+}
+
+/** 評價邀請發送失敗時重置 SENTINEL，讓下次可重試 */
+export async function resetReviewEmailSentinel(quoteId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+  await db.execute(sql`
+    UPDATE quotes
+    SET reviewEmailSentAt = NULL
+    WHERE id = ${quoteId}
+      AND reviewEmailSentAt = ${SENTINEL}
+  `);
 }
 
 // ─── AI Analysis Reports ──────────────────────────────────────────
@@ -3089,33 +3121,61 @@ export async function upsertQuoteFollowUp(data: InsertQuoteFollowUp): Promise<vo
   }
 }
 
-/** 取得所有 pending 狀態且已超過 daysAfterSent 天的記錄 */
+/** 取得所有 pending 狀態且已超過 daysAfterSent 天的記錄（原子佔位，防重複發送） */
 export async function getPendingFollowUps(daysAfterSent: number): Promise<QuoteFollowUp[]> {
   const db = await getDb();
   if (!db) return [];
   const cutoff = new Date(Date.now() - daysAfterSent * 24 * 60 * 60 * 1000);
-  // 冷卻期：followUpSentAt 後至少 7 天內不再發送（防止即使狀態被重置也重複發送）
-  const cooldownCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  
-  // Get all pending follow-ups that are old enough, excluding those with stopFollowUp=true
-  // Now using the direct stopFollowUp field on quoteFollowUps - no join needed
-  return await db
+  const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+
+  const candidates = await db
     .select()
     .from(quoteFollowUps)
     .where(
       and(
         eq(quoteFollowUps.status, "pending"),
         lte(quoteFollowUps.sentAt, cutoff),
-        // 直接使用跟進記錄本身的 stopFollowUp 欄位（不再依賴報價單）
         eq(quoteFollowUps.stopFollowUp, false),
-        // 冷卻期保護：followUpSentAt 為空（從未發送）或超過 7 天以上
-        or(
-          isNull(quoteFollowUps.followUpSentAt),
-          lte(quoteFollowUps.followUpSentAt, cooldownCutoff)
-        )
+        isNull(quoteFollowUps.followUpSentAt)
+      )
+    )
+    .orderBy(quoteFollowUps.sentAt)
+    .limit(50);
+
+  if (candidates.length === 0) return [];
+
+  const ids = candidates.map((c) => c.id);
+  await db.execute(sql`
+    UPDATE quote_follow_ups
+    SET follow_up_sent_at = ${SENTINEL}
+    WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+      AND status = 'pending'
+      AND follow_up_sent_at IS NULL
+  `);
+
+  return await db
+    .select()
+    .from(quoteFollowUps)
+    .where(
+      and(
+        inArray(quoteFollowUps.id, ids),
+        eq(quoteFollowUps.followUpSentAt, SENTINEL)
       )
     )
     .orderBy(quoteFollowUps.sentAt);
+}
+
+/** 發送失敗時重置 quote follow-up SENTINEL，讓下次排程可重試 */
+export async function resetQuoteFollowUpSentinel(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+  await db.execute(sql`
+    UPDATE quote_follow_ups
+    SET follow_up_sent_at = NULL
+    WHERE id = ${id}
+      AND follow_up_sent_at = ${SENTINEL}
+  `);
 }
 
 /** 標記 follow up 已發送 */
