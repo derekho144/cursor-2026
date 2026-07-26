@@ -8,7 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { pitchLeads, pitchSendLog } from "../../drizzle/schema";
 import { eq, and, desc, count, gte, lte, like, or, inArray } from "drizzle-orm";
-import { runOutreachPipeline, getTodaySentCount, generatePitchEmail } from "../scrapers/pitchOutreach";
+import { runOutreachPipeline, getTodayContactedCount, generatePitchEmail, linkedInPeopleSearchUrl, linkedInCompanySearchUrl } from "../scrapers/pitchOutreach";
 import { extractEmailFromCompanyWebsite, extractEmailFromJobPage } from "../scrapers/emailFinder";
 import { extractDomain } from "../scrapers/jobScraper";
 import { multiLayerEmailSearch } from "../scrapers/multiLayerEmailFinder";
@@ -38,7 +38,10 @@ export const pitchOutreachRouter = router({
       const offset = (input.page - 1) * input.pageSize;
 
       const conditions = [];
-      if (input.status !== "all") {
+      if (input.status === "pending_review") {
+        // 待跟進：包含舊 pending_email
+        conditions.push(inArray(pitchLeads.status, ["pending_review", "pending_email"]));
+      } else if (input.status !== "all") {
         conditions.push(eq(pitchLeads.status, input.status));
       }
       if (input.source !== "all") {
@@ -80,7 +83,7 @@ export const pitchOutreachRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-    const todaySent = await getTodaySentCount();
+    const todayContacted = await getTodayContactedCount();
 
     const statusCounts = await db
       .select({ status: pitchLeads.status, cnt: count() })
@@ -99,13 +102,19 @@ export const pitchOutreachRouter = router({
       .orderBy(desc(pitchLeads.createdAt))
       .limit(1);
 
+    const toContact = (counts["pending_review"] ?? 0) + (counts["pending_email"] ?? 0);
+
     return {
-      todaySent,
-      dailyLimit: 10,
+      todayContacted,
+      todaySent: todayContacted, // backward compat for older UI
+      dailyLimit: null,
       total: Object.values(counts).reduce((a, b) => a + b, 0),
+      toContact,
       pendingEmail: counts["pending_email"] ?? 0,
       pendingReview: counts["pending_review"] ?? 0,
+      contacted: counts["sent"] ?? 0,
       sent: counts["sent"] ?? 0,
+      won: counts["approved"] ?? 0,
       skipped: counts["skipped"] ?? 0,
       replied: counts["replied"] ?? 0,
       lastLeadCreatedAt: latestLead?.createdAt ?? null,
@@ -126,7 +135,7 @@ export const pitchOutreachRouter = router({
     }
   }),
 
-  // ─── 更新 lead 狀態（手動審核/跳過） ──────────────────────────────
+  // ─── 更新 lead 狀態（LinkedIn 跟進） ──────────────────────────────
   updateLeadStatus: protectedProcedure
     .input(
       z.object({
@@ -139,13 +148,25 @@ export const pitchOutreachRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      await db
-        .update(pitchLeads)
-        .set({ status: input.status, notes: input.notes })
-        .where(eq(pitchLeads.id, input.id));
+      const patch: Record<string, unknown> = { status: input.status };
+      if (input.notes !== undefined) patch.notes = input.notes;
+      // 「已聯絡」＝ LinkedIn DM 已發，記時間
+      if (input.status === "sent") {
+        patch.pitchSentAt = new Date();
+      }
+
+      await db.update(pitchLeads).set(patch).where(eq(pitchLeads.id, input.id));
 
       return { success: true };
     }),
+
+  // ─── LinkedIn 搜尋連結 ─────────────────────────────────────────────
+  getLinkedInLinks: protectedProcedure
+    .input(z.object({ companyName: z.string().min(1) }))
+    .query(({ input }) => ({
+      peopleUrl: linkedInPeopleSearchUrl(input.companyName),
+      companyUrl: linkedInCompanySearchUrl(input.companyName),
+    })),
 
   // ─── 更新 lead 聯絡 email ──────────────────────────────────────────
   updateLeadEmail: protectedProcedure
@@ -166,6 +187,7 @@ export const pitchOutreachRouter = router({
           contactEmail: input.contactEmail,
           contactName: input.contactName,
           emailFoundVia: "manual",
+          // 手動填電郵仍保持待跟進；唔自動改寄信流程
           status: "pending_review",
         })
         .where(eq(pitchLeads.id, input.id));

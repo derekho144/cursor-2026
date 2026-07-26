@@ -43,7 +43,7 @@ const PITCH_OUTREACH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24 hours
 
 // Track last pitch outreach run time
 export let lastPitchOutreachAt: Date | null = null;
-export let lastPitchOutreachResult: { scraped: number; emailsFound: number; sent: number; skipped: number } | null = null;
+export let lastPitchOutreachResult: { scraped: number; saved?: number; emailsFound: number; sent: number; skipped: number } | null = null;
 
 // Track last Gmail scan time for frontend display
 export let lastGmailScanAt: Date | null = null;
@@ -920,18 +920,16 @@ export async function runScheduledPitchOutreach(): Promise<void> {
       const result = await runOutreachPipeline(process.env.HUNTER_API_KEY);
       lastPitchOutreachAt = new Date();
       lastPitchOutreachResult = result;
-      console.log(`[Scheduler] Pitch outreach done: ${result.scraped} scraped, ${result.emailsFound} emails found, ${result.sent} sent, ${result.skipped} skipped`);
+      console.log(`[Scheduler] Pitch outreach done: ${result.scraped} scraped, ${result.saved ?? 0} new leads saved`);
 
-      if (result.sent > 0 || result.emailsFound > 0) {
+      if (result.scraped > 0 || (result.saved ?? 0) > 0) {
         try {
           await notifyOwner({
-            title: `📤 客戶開拓自動執行完成 (${result.sent} 封已發送)`,
+            title: `📡 客戶開拓：今日招聘線索已更新`,
             content: [
               `爬取職位：${result.scraped} 個`,
-              `找到電郵：${result.emailsFound} 個`,
-              `已發送 Pitch Email：${result.sent} 封`,
-              `跳過（找不到電郵）：${result.skipped} 個`,
-              `請前往「客戶開拓」頁面查看詳情。`,
+              `新增待跟進：${result.saved ?? 0} 個`,
+              `請到「客戶開拓」用 LinkedIn 聯絡 HR／Hiring Manager（系統已停自動寄電郵）。`,
             ].join("\n"),
           });
         } catch (_) {
