@@ -22,6 +22,7 @@ import { runQuoteFollowUps } from "./gmailFollowUp";
 import { runWatchdog } from "./watchdog";
 import { withSchedulerLock } from "./schedulerLock";
 import { runOutreachPipeline } from "./scrapers/pitchOutreach";
+import { runScheduledContentFactory, notifyDuePublishes } from "./linkedinContentFactory";
 import { buildWaTrackUrl } from "./_core/waTracking";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -943,6 +944,16 @@ export async function runScheduledPitchOutreach(): Promise<void> {
   }); // end withSchedulerLock("pitch-outreach")
 }
 
+export async function runScheduledContentFactoryJob(): Promise<void> {
+  await withSchedulerLock("linkedin-content-factory", 55 * 60 * 1000, async () => {
+    await runScheduledContentFactory();
+    // Daily publish nudge during business hours
+    if (isWithinScanHours(9)) {
+      await notifyDuePublishes();
+    }
+  });
+}
+
 /**
  * Start the background scheduler.
  * Call this once from server startup.
@@ -986,6 +997,7 @@ export function startScheduler(): void {
     runQuoteFollowUps().catch(console.error); // check quote follow-ups on startup
     runScheduledPitchOutreach().catch(console.error); // check pitch outreach on startup
     runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback
+    runScheduledContentFactoryJob().catch(console.error); // LinkedIn content factory
   }, 30_000);
 
   // Ad platform sync + FH follow-up check + review invites + FH high-confidence backfill + watchdog + loyalty: every hour
@@ -997,6 +1009,7 @@ export function startScheduler(): void {
     runQuoteFollowUps().catch(console.error); // quote follow-up check every hour
     runWatchdog().catch(console.error); // system health watchdog every hour
     runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback (windowed; lock + dedupe)
+    runScheduledContentFactoryJob().catch(console.error);
   }, CHECK_INTERVAL_MS);
 
   // Gmail scan: every 30 minutes (with time-of-day guard inside)

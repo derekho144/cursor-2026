@@ -16,6 +16,7 @@ import { quoteCostsRouter } from "./routers/quoteCosts";
 import { followUpRouter } from "./routers/followUp";
 import { pitchOutreachRouter } from "./routers/pitchOutreach";
 import { linkedinOpsRouter } from "./routers/linkedinOps";
+import { linkedinContentRouter } from "./routers/linkedinContent";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
@@ -124,6 +125,7 @@ export const appRouter = router({
   followUp: followUpRouter,
   pitchOutreach: pitchOutreachRouter,
   linkedinOps: linkedinOpsRouter,
+  linkedinContent: linkedinContentRouter,
 });
 
 export type AppRouter = typeof appRouter;

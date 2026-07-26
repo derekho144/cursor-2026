@@ -679,3 +679,50 @@ export const linkedinActions = mysqlTable("linkedin_actions", {
 });
 export type LinkedInAction = typeof linkedinActions.$inferSelect;
 export type InsertLinkedInAction = typeof linkedinActions.$inferInsert;
+
+// ─── LinkedIn Content Factory（Authority 內容工廠）──────────────────────────
+export const linkedinContentTypes = [
+  "case_study", // 作品案例
+  "outsource_vs_inhire", // 外判 vs in-house
+  "industry_insight", // 客戶／行業觀察
+] as const;
+export type LinkedInContentType = (typeof linkedinContentTypes)[number];
+
+export const linkedinContentStatuses = [
+  "draft",
+  "pending_review",
+  "approved",
+  "scheduled",
+  "published",
+  "rejected",
+] as const;
+export type LinkedInContentStatus = (typeof linkedinContentStatuses)[number];
+
+export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  weekKey: varchar("week_key", { length: 16 }).notNull(), // e.g. 2026-W31
+  contentType: mysqlEnum("li_content_type", [
+    "case_study",
+    "outsource_vs_inhire",
+    "industry_insight",
+  ]).notNull(),
+  status: mysqlEnum("li_content_status", [
+    "draft",
+    "pending_review",
+    "approved",
+    "scheduled",
+    "published",
+    "rejected",
+  ]).notNull().default("pending_review"),
+  title: varchar("title", { length: 512 }).notNull(),
+  body: mediumtext("body").notNull(),
+  mediaHint: text("media_hint"), // 建議配圖說明
+  scheduledFor: timestamp("scheduled_for"),
+  publishedAt: timestamp("published_at"),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type LinkedInContentPost = typeof linkedinContentPosts.$inferSelect;
+export type InsertLinkedInContentPost = typeof linkedinContentPosts.$inferInsert;

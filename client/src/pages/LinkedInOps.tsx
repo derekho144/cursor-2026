@@ -21,6 +21,9 @@ import {
   ListTodo,
   BookOpen,
   Users,
+  PenLine,
+  Check,
+  X,
 } from "lucide-react";
 
 const PLAYBOOK_LABELS: Record<string, string> = {
@@ -61,6 +64,72 @@ export default function LinkedInOps() {
   );
 
   const { data: playbooks } = trpc.linkedinOps.playbooks.useQuery();
+
+  const { data: contentStats } = trpc.linkedinContent.getStats.useQuery(undefined, {
+    refetchInterval: 30000,
+    enabled: tab === "content",
+  });
+  const { data: contentMeta } = trpc.linkedinContent.meta.useQuery(undefined, {
+    enabled: tab === "content",
+  });
+  const [contentFilter, setContentFilter] = useState<"all" | "pending_review" | "scheduled" | "published">("pending_review");
+  const { data: contentList, isLoading: contentLoading } = trpc.linkedinContent.listPosts.useQuery(
+    {
+      weekKey:
+        contentFilter === "published" || contentFilter === "all"
+          ? undefined
+          : contentStats?.weekKey,
+      status: contentFilter === "all" ? "all" : contentFilter,
+      limit: 20,
+    },
+    { enabled: tab === "content", refetchInterval: 30000 }
+  );
+  const { data: duePosts } = trpc.linkedinContent.dueToday.useQuery(undefined, {
+    enabled: tab === "content",
+    refetchInterval: 30000,
+  });
+  const [editingPost, setEditingPost] = useState<any>(null);
+
+  const genWeek = trpc.linkedinContent.generateThisWeek.useMutation({
+    onSuccess: (d) => {
+      toast.success(`本週內容：新增 ${d.created}，已有 ${d.existing}（${d.weekKey}）`);
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const approvePost = trpc.linkedinContent.approve.useMutation({
+    onSuccess: () => {
+      toast.success("已批准並排程");
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      utils.linkedinContent.dueToday.invalidate();
+      setEditingPost(null);
+    },
+  });
+  const rejectPost = trpc.linkedinContent.reject.useMutation({
+    onSuccess: () => {
+      toast.success("已拒絕");
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      setEditingPost(null);
+    },
+  });
+  const publishPost = trpc.linkedinContent.markPublished.useMutation({
+    onSuccess: () => {
+      toast.success("已標記為已發佈");
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      utils.linkedinContent.dueToday.invalidate();
+      setEditingPost(null);
+    },
+  });
+  const savePost = trpc.linkedinContent.updatePost.useMutation({
+    onSuccess: () => {
+      toast.success("草稿已儲存");
+      utils.linkedinContent.listPosts.invalidate();
+    },
+  });
 
   const sync = trpc.linkedinOps.syncFromPitchLeads.useMutation({
     onSuccess: (d) => {
@@ -256,6 +325,10 @@ export default function LinkedInOps() {
             <BookOpen className="w-3.5 h-3.5" />
             劇本
           </TabsTrigger>
+          <TabsTrigger value="content" className="gap-1.5">
+            <PenLine className="w-3.5 h-3.5" />
+            內容工廠
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-3 mt-4">
@@ -323,7 +396,223 @@ export default function LinkedInOps() {
             </div>
           ))}
         </TabsContent>
+
+        <TabsContent value="content" className="mt-4 space-y-4">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            每週自動產出 3 篇：作品案例 · 外判 vs In-house · 行業觀察。你批核後按排程發佈（複製貼上 LinkedIn），再標記已發。
+            <div className="text-xs mt-1">{contentMeta?.scheduleNote}</div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2 text-sm">
+              <span className="px-2 py-1 rounded bg-card border">週次 {contentStats?.weekKey ?? "…"}</span>
+              <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                待批核 {contentStats?.weekPending ?? 0}
+              </span>
+              <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                今日要發 {contentStats?.dueToday ?? 0}
+              </span>
+              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                已發佈 {contentStats?.published ?? 0}
+              </span>
+            </div>
+            <Button
+              className="gap-2"
+              onClick={() => genWeek.mutate({})}
+              disabled={genWeek.isPending}
+            >
+              {genWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              生成本週 3 篇
+            </Button>
+          </div>
+
+          {(duePosts?.length ?? 0) > 0 && (
+            <div className="border rounded-lg p-3 space-y-2" style={{ borderColor: "#d4a843" }}>
+              <div className="text-sm font-medium" style={{ color: "#d4a843" }}>
+                今日要發佈
+              </div>
+              {duePosts?.map((p) => (
+                <div key={p.id} className="flex flex-wrap gap-2 items-center justify-between text-sm bg-card rounded p-2 border">
+                  <div>
+                    <span className="font-medium">{p.typeLabel}</span>
+                    <span className="text-muted-foreground ml-2">{p.title}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => copy(p.body)}>
+                      <Copy className="w-3 h-3" />
+                      複製
+                    </Button>
+                    <Button size="sm" className="gap-1" onClick={() => publishPost.mutate({ id: p.id })}>
+                      <Check className="w-3 h-3" />
+                      已發佈
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Select value={contentFilter} onValueChange={(v) => setContentFilter(v as typeof contentFilter)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending_review">待批核</SelectItem>
+                <SelectItem value="scheduled">已排程</SelectItem>
+                <SelectItem value="published">已發佈</SelectItem>
+                <SelectItem value="all">全部</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {contentLoading ? (
+            <div className="py-12 text-center">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+            </div>
+          ) : (contentList?.posts.length ?? 0) === 0 ? (
+            <div className="py-12 text-center text-muted-foreground border rounded-lg">
+              未有內容 — 撳「生成本週 3 篇」或等週一上午自動產生
+            </div>
+          ) : (
+            contentList?.posts.map((p) => (
+              <div key={p.id} className="border rounded-lg p-4 bg-card space-y-2">
+                <div className="flex flex-wrap gap-2 items-center justify-between">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "#1a1a1a", color: "#d4a843" }}>
+                      {p.typeLabel}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-muted">{p.statusLabel}</span>
+                    <span className="font-medium text-sm">{p.title}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {p.scheduledFor
+                      ? `排程 ${new Date(p.scheduledFor).toLocaleString("zh-HK", {
+                          timeZone: "Asia/Hong_Kong",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        })} HKT`
+                      : ""}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{p.body}</p>
+                {p.mediaHint && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">配圖：{p.mediaHint}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditingPost(p)}>
+                    編輯／批核
+                  </Button>
+                  <Button size="sm" variant="ghost" className="gap-1" onClick={() => copy(p.body)}>
+                    <Copy className="w-3 h-3" />
+                    複製
+                  </Button>
+                  {p.status === "pending_review" && (
+                    <>
+                      <Button size="sm" className="gap-1" onClick={() => approvePost.mutate({ id: p.id })}>
+                        <Check className="w-3 h-3" />
+                        批准
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-muted-foreground"
+                        onClick={() => rejectPost.mutate({ id: p.id })}
+                      >
+                        <X className="w-3 h-3" />
+                        拒絕
+                      </Button>
+                    </>
+                  )}
+                  {(p.status === "scheduled" || p.status === "approved") && (
+                    <Button size="sm" className="gap-1" onClick={() => publishPost.mutate({ id: p.id })}>
+                      標記已發佈
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* Content edit dialog */}
+      <Dialog open={!!editingPost} onOpenChange={(o) => !o && setEditingPost(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPost?.typeLabel} · {editingPost?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {editingPost && (
+            <div className="space-y-3">
+              <div>
+                <Label>標題（內部）</Label>
+                <Input
+                  value={editingPost.title}
+                  onChange={(e) => setEditingPost({ ...editingPost, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>帖文</Label>
+                <textarea
+                  className="w-full min-h-[200px] rounded-md border bg-muted/40 p-3 text-sm"
+                  value={editingPost.body}
+                  onChange={(e) => setEditingPost({ ...editingPost, body: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>配圖提示</Label>
+                <Input
+                  value={editingPost.mediaHint ?? ""}
+                  onChange={(e) => setEditingPost({ ...editingPost, mediaHint: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setEditingPost(null)}>
+              關閉
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                editingPost &&
+                savePost.mutate({
+                  id: editingPost.id,
+                  title: editingPost.title,
+                  body: editingPost.body,
+                  mediaHint: editingPost.mediaHint,
+                })
+              }
+              disabled={savePost.isPending}
+            >
+              儲存修改
+            </Button>
+            {editingPost?.status === "pending_review" && (
+              <Button
+                onClick={() => {
+                  if (!editingPost) return;
+                  savePost.mutate(
+                    {
+                      id: editingPost.id,
+                      title: editingPost.title,
+                      body: editingPost.body,
+                      mediaHint: editingPost.mediaHint,
+                    },
+                    { onSuccess: () => approvePost.mutate({ id: editingPost.id }) }
+                  );
+                }}
+              >
+                儲存並批准
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail */}
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
