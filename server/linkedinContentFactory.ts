@@ -16,6 +16,7 @@ import {
 import { and, eq, gte, lte, inArray, sql, asc, desc } from "drizzle-orm";
 import { invokeLLM, type MessageContent } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
+import { LINKEDIN_COPY_STYLE_PROMPT } from "./linkedinCopyStyle";
 
 export type SelectedMediaItem = {
   id: number;
@@ -44,7 +45,7 @@ export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
 };
 
 export const CONTENT_TYPE_BLURBS: Record<LinkedInContentType, string> = {
-  carousel_case_study: "互動率高達 45.85%，B2B 決策者最愛看成果",
+  carousel_case_study: "輪播互動率約 24.42%（vs 文字 6.67%），故事＋幕後最易停滑",
   outsource_vs_inhire: "觸碰客戶核心痛點，引發大量評論",
   contrarian_take: "引發辯論，演算法大力推廣",
 };
@@ -267,34 +268,35 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   carousel_case_study: {
-    angle: `Write a LinkedIn post designed to accompany a CAROUSEL (multi-slide) case study for JD STUDIO HK.
-B2B decision-makers love proof of results — frame it as a success story they can swipe through.
-Structure the BODY as:
-1) Hook line (result or transformation)
-2) Caption that teases the carousel (problem → approach → outcome)
-3) Explicit numbered slide beats matching the PROVIDED STUDIO PHOTOS (in order)
-4) Soft CTA to jdstudiohk.com
-If real photos are provided, BASE the story on what you see / the captions — do NOT invent unrelated scenes.
-Do NOT invent fake named client testimonials.
-In mediaHint: list each slide in Chinese + English, referencing which library photo (id) goes on which slide.`,
+    angle: `Write a LinkedIn CAROUSEL case-study post for JD STUDIO HK (Type A: 項目案例 + 幕後故事).
+Follow LINKEDIN_COPY_STYLE strictly (story-first, Michele Galeotto pattern: project + deep reflection, not portfolio dump).
+BODY:
+1) Hook (story / myth / number / question — never corporate announce)
+2) Scene + challenge (honest difficulty OK)
+3) Method with ✓ / ❌ lists
+4) One real behind-the-scenes moment grounded in PROVIDED PHOTOS / captions
+5) Result — only real numbers/names from captions; no invented testimonials
+6) Insight (craft / trust / process philosophy)
+7) CTA as a question (comments), not hard sell; soft jdstudiohk.com only if natural after the question
+Also list numbered slide beats (5–7) matching photo order in the body or mediaHint.
+If photos are event/product/food/fashion/jewellery/commercial — write THAT story; never force wedding.`,
     mediaHint:
-      "輪播建議（5–7 頁）：封面成果 → Before → Brief → Shoot day → After → 效果 → CTA jdstudiohk.com",
+      "輪播 Type A（5–7 頁）：P1 Hook 封面 → P2 場景/挑戰 → P3 方法 ✓ → P4 幕後真實時刻 → P5 結果 → P6 洞察 → P7 CTA 問題",
   },
   outsource_vs_inhire: {
-    angle: `Write a LinkedIn DEBATE-style post: Outsourcing photography/video to a specialist studio (JD STUDIO HK) vs hiring in-house.
-Goal: hit the client's core pain points and invite comments (not a hard sell).
-Use a provocative question or "Team Outsource vs Team In-house" framing.
-Cover cost, downtime, equipment, peak seasons, creative range — then take a clear stance with room for disagreement.
-If studio photos are provided, use them as proof of specialist-studio quality in mediaHint / framing.
-End with a question that sparks replies. Soft mention of JD STUDIO HK / jdstudiohk.com.`,
-    mediaHint: "配圖建議：對比圖（Outsource vs In-house 兩欄）、或「你會點揀？」投票式封面",
+    angle: `Write a LinkedIn DEBATE post: outsource photography/video to a specialist studio (JD STUDIO HK) vs hire in-house.
+Follow LINKEDIN_COPY_STYLE (hook methods, short paragraphs, CTA = question).
+Hit core pain: cost, downtime, gear, peak seasons, creative range — clear stance, room to disagree.
+Use ✓ / ❌ lists. No hard sell. Soft jdstudiohk.com only after a question CTA.
+If photos provided, treat as proof of specialist craft in framing/mediaHint.`,
+    mediaHint: "配圖：Outsource vs In-house 對比，或問題式封面「你會點揀？」",
   },
   contrarian_take: {
-    angle: `Write a CONTRARIAN LinkedIn take about brand photography / video / hiring creatives in Hong Kong or Asia.
-Pick ONE sharp anti-consensus claim. Structure: bold claim → why most people are wrong → nuance → invite debate in comments.
-If studio photos are provided, tie the claim to what the image shows (real craft / real results).
-Sound confident, not rude. Soft CTA to JD STUDIO HK only if natural.`,
-    mediaHint: "配圖建議：大字報式 hook（一句反常識金句）、高對比爭議封面",
+    angle: `Write a CONTRARIAN LinkedIn take on brand photography / video / creative hiring in HK or Asia.
+Follow LINKEDIN_COPY_STYLE. ONE sharp anti-consensus claim (myth-bust hook).
+Structure: bold claim → why the consensus is wrong → nuance / real craft → CTA question for debate.
+Ground in provided photos if any. Confident, not rude. No hard sell.`,
+    mediaHint: "配圖：大字報式反常識金句封面、高對比",
   },
 };
 
@@ -338,23 +340,14 @@ ${
       messages: [
         {
           role: "system",
-          content: `You are the content strategist for JD STUDIO HK, a Hong Kong creative studio specialising in product, food, fashion, jewellery photography, event coverage and video production.
-Write LinkedIn posts in Traditional Chinese AND English (bilingual is preferred for HK audience).
-Language rules:
-- Default: bilingual body — Traditional Chinese first (or interleaved short blocks), then English (or a clear EN section)
-- Pure Traditional Chinese OR pure English is also OK when it fits the topic better
-- Light Cantonese flavour OK in Chinese lines; keep professional tone
-- Hashtags can mix zh/en
-Content type focus: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
-Rules:
-- Roughly 150–320 words / characters-equivalent (carousel posts can be slightly longer to include slide beats)
-- Strong first-line hook
-- Short paragraphs, scannable
-- Max 3–5 hashtags at the end
-- No fake statistics or fake named client quotes
-- When photos are attached, ground the post in those images and any captions (e.g. event name)
-- Sound human and authoritative; for debate/contrarian types, invite comments
-- Output JSON: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
+          content: `You are the LinkedIn content writer for JD STUDIO HK (Hong Kong photography & videography: product, food, fashion, jewellery, event, commercial, video).
+
+${LINKEDIN_COPY_STYLE_PROMPT}
+
+Content type this run: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
+
+When photos are attached, ground every claim in those images and captions.
+Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
           role: "user",
@@ -403,7 +396,7 @@ Rules:
     if (type === "carousel_case_study") {
       return {
         title: "Carousel case study",
-        body: `We don't sell "a photographer for a day".\nWe sell a result you can swipe through.\n\nCarousel idea for this week:\nSlide 1 — The before\nSlide 2 — The brief\nSlide 3 — Lighting / setup\nSlide 4 — Shoot day\nSlide 5 — After\nSlide 6 — What changed\nSlide 7 — CTA\n\nMore work: https://www.jdstudiohk.com\n\n#CaseStudy #ProductPhotography #JDStudioHK`,
+        body: `上週拍攝，客戶一句話改咗成個方向：「唔好靚到假，要真。」\n\n我哋跟住故事走，唔再等「完美光線」。\n\n✓ 現場即時對光\n✓ 少擺拍、多捕捉\n✓ 交咗精選，唔係交晒全部\n\n最難嘅一刻往往先最有溫度。\n\n你最近一次拍攝，邊張相最有「真」？\n\n---\nLast shoot, one line changed everything: "Don't make it fake-pretty. Make it real."\nWe followed the story — not the perfect light.\nWhich frame from your last project felt the most honest?\n\n#CaseStudy #PhotographyHK #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
@@ -411,14 +404,14 @@ Rules:
     if (type === "outsource_vs_inhire") {
       return {
         title: "Outsource vs in-house debate",
-        body: `Hot take for HK brand teams:\n\nHiring an in-house photographer feels like control.\nOutsourcing to a studio feels like risk.\n\nReality check — the "safe" hire often hides salary + downtime + gear you still don't own.\n\nTeam Outsource or Team In-house?\nDrop your side in the comments.\n\nhttps://www.jdstudiohk.com\n\n#MarketingHK #CreativeOps #Photography`,
+        body: `「請攝影師」聽落好有掌控感。\n「搵工作室」聽落好似有風險。\n\n現實係：自聘隱藏咗人工、淡季空窗、同你仍然冇嘅器材。\n\n❌ 以為有人坐喺度就等於有產量\n✓ 峰值檔期先見到真正成本\n\n你而家 Team Outsource 定 Team In-house？留言話我知。\n\n---\nHiring in-house feels like control. Outsourcing feels like risk.\nOften the "safe" hire hides salary, downtime, and gear you still don't own.\nTeam Outsource or Team In-house?\n\n#MarketingHK #CreativeOps #Photography`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
     }
     return {
       title: "Contrarian take",
-      body: `Unpopular opinion:\n\nA "Photographer wanted" job post is often not a hiring problem — it's a demand-for-visuals problem.\n\nSometimes the contrarian move is: don't hire. Build a flexible studio retainer instead.\n\nAgree or disagree?\n\nJD STUDIO HK — https://www.jdstudiohk.com\n\n#Contrarian #BrandVisuals #HongKong`,
+      body: `反常識講一句：\n\n「急請攝影師」好多時唔係招聘問題——係視覺需求管理問題。\n\n有時更慳同更快嘅做法，唔係再請一個人，而係同一間 studio 建立彈性 retainer。\n\n你同意定反對？\n\n---\nUnpopular: a "Photographer wanted" post is often a demand problem, not a hiring problem.\nSometimes the move is: don't hire — build a flexible studio retainer.\nAgree or disagree?\n\n#Contrarian #BrandVisuals #HongKong`,
       mediaHint: fallbackHint,
       selectedMedia,
     };
