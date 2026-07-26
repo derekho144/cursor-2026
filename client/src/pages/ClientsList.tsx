@@ -204,7 +204,7 @@ export default function ClientsList() {
                         HK${((client as any).totalRevenue as number).toLocaleString()}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {(client as any).orderCount} 次成交
+                        LTV · {(client as any).orderCount} 次成交
                       </div>
                     </div>
                   )}

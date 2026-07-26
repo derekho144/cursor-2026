@@ -11,6 +11,7 @@ import {
   getLoyaltyEmailStats,
   LOYALTY_TIERS,
   calcTier,
+  resyncClientMembershipFromQuotes,
 } from "../db";
 import { getDb } from "../db";
 import { clients, quotes, clientMemberships } from "../../drizzle/schema";
@@ -63,69 +64,32 @@ export const loyaltyRouter = router({
     }))
     .mutation(async ({ input }) => {
       if (input.forceSync) {
-        // 重新計算客戶的總消費
-        const db = await getDb();
-        if (!db) throw new Error("DB not available");
-        const result = await db
-          .select({ total: sql<number>`SUM(${quotes.total})` })
-          .from(quotes)
-          .where(and(eq(quotes.clientId, input.clientId), eq(quotes.status, "accepted")));
-        const totalSpend = Number(result[0]?.total ?? 0);
-        const tier = calcTier(totalSpend);
-        const existing = await getClientMembership(input.clientId);
-        if (existing) {
-          await db
-            .update(clientMemberships)
-            .set({ totalSpend: String(totalSpend), tier })
-            .where(eq(clientMemberships.clientId, input.clientId));
-        } else {
-          await upsertClientMembership(input.clientId, totalSpend);
-        }
-        return getClientMembership(input.clientId);
+        // 重新計算客戶終身累計消費（與 LTV 同一口徑）
+        return resyncClientMembershipFromQuotes(input.clientId);
       }
       return upsertClientMembership(input.clientId, input.additionalSpend ?? 0);
     }),
 
-  /** 同步所有客戶的會員資料（從報價單重新計算） */
+  /** 同步所有客戶的會員資料（終身已成交合計，與 LTV 對齊） */
   syncAll: protectedProcedure.mutation(async () => {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
 
-    // 只計算當年度（1月1日至12月31日）的已接受報價單
-    const currentYear = new Date().getFullYear();
-    const yearStart = `${currentYear}-01-01 00:00:00`;
-    const yearEnd = `${currentYear + 1}-01-01 00:00:00`;
-
     const clientTotals = await db
       .select({
         clientId: quotes.clientId,
-        totalSpend: sql<number>`SUM(${quotes.total})`,
       })
       .from(quotes)
-      .where(
-        and(
-          eq(quotes.status, "accepted"),
-          sql`${quotes.clientId} IS NOT NULL`,
-          sql`${quotes.createdAt} >= ${yearStart}`,
-          sql`${quotes.createdAt} < ${yearEnd}`
-        )
-      )
+      .where(and(eq(quotes.status, "accepted"), sql`${quotes.clientId} IS NOT NULL`))
       .groupBy(quotes.clientId);
 
     let synced = 0;
     for (const row of clientTotals) {
       if (!row.clientId) continue;
-      const totalSpend = Number(row.totalSpend ?? 0);
-      const newTier = calcTier(totalSpend);
-      // 先確保記錄存在，再更新正確的年度總消費
-      await upsertClientMembership(row.clientId, 0);
-      await db
-        .update(clientMemberships)
-        .set({ totalSpend: String(totalSpend), tier: newTier })
-        .where(eq(clientMemberships.clientId, row.clientId));
+      await resyncClientMembershipFromQuotes(row.clientId);
       synced++;
     }
-    return { synced, year: currentYear };
+    return { synced, basis: "lifetime" as const };
   }),
 
   /** 取得等級定義 */

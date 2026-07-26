@@ -21,9 +21,7 @@ import { getDb } from "../db";
 import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { sendEmail } from "../resendEmail";
-import { upsertClientMembership, calcTier } from "../db";
-import { clientMemberships } from "../../drizzle/schema";
-import { sql as drizzleSql } from "drizzle-orm";
+import { resyncClientMembershipFromQuotes } from "../db";
 import {
   SERVICE_TYPE_LABELS,
   generateQuotePdfHtml,
@@ -274,32 +272,18 @@ export const quotesRouter = router({
         ...(hasContentChange && { pdfUrl: null, pdfKey: null }),
       });
 
-      // 當狀態改為 accepted 時，自動同步會員等級（只計算當年度）
+      // 當狀態改為 accepted 時，自動同步會員等級（終身累計，與 LTV 對齊）
       if (input.status === "accepted") {
-        const db = await getDb();
-        if (db) {
-          const quote = await getQuoteById(id);
-          const clientId = (quote as any)?.clientId;
-          if (clientId) {
-            try {
-              const currentYear = new Date().getFullYear();
-              const yearStart = `${currentYear}-01-01 00:00:00`;
-              const yearEnd = `${currentYear + 1}-01-01 00:00:00`;
-              const [totals] = await db
-                .select({ total: drizzleSql<number>`SUM(${quotesTable.total})` })
-                .from(quotesTable)
-                .where(
-                  drizzleSql`${quotesTable.clientId} = ${clientId} AND ${quotesTable.status} = 'accepted' AND ${quotesTable.createdAt} >= ${yearStart} AND ${quotesTable.createdAt} < ${yearEnd}`
-                );
-              const totalSpend = Number(totals?.total ?? 0);
-              await upsertClientMembership(clientId, 0);
-              await db.update(clientMemberships)
-                .set({ totalSpend: String(totalSpend), tier: calcTier(totalSpend) })
-                .where(eq(clientMemberships.clientId, clientId));
-              process.stderr.write(`[Loyalty] Auto-synced client ${clientId}: HKD ${totalSpend} → ${calcTier(totalSpend)} (${currentYear})\n`);
-            } catch (err) {
-              console.error("[Loyalty] Auto-sync failed:", err);
-            }
+        const quote = await getQuoteById(id);
+        const clientId = (quote as any)?.clientId;
+        if (clientId) {
+          try {
+            const membership = await resyncClientMembershipFromQuotes(clientId);
+            process.stderr.write(
+              `[Loyalty] Auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (lifetime)\n`
+            );
+          } catch (err) {
+            console.error("[Loyalty] Auto-sync failed:", err);
           }
         }
       }
@@ -623,30 +607,16 @@ ${itemsText}
         })();
       }
 
-      // 簽署即代表已接受，自動同步會員等級（只計算當年度）
-      const db2 = await getDb();
-      if (db2) {
-        const clientId = (updatedQuote as any)?.clientId;
-        if (clientId) {
-          try {
-            const currentYear = new Date().getFullYear();
-            const yearStart = `${currentYear}-01-01 00:00:00`;
-            const yearEnd = `${currentYear + 1}-01-01 00:00:00`;
-            const [totals] = await db2
-              .select({ total: drizzleSql<number>`SUM(${quotesTable.total})` })
-              .from(quotesTable)
-              .where(
-                drizzleSql`${quotesTable.clientId} = ${clientId} AND ${quotesTable.status} = 'accepted' AND ${quotesTable.createdAt} >= ${yearStart} AND ${quotesTable.createdAt} < ${yearEnd}`
-              );
-            const totalSpend = Number(totals?.total ?? 0);
-            await upsertClientMembership(clientId, 0);
-            await db2.update(clientMemberships)
-              .set({ totalSpend: String(totalSpend), tier: calcTier(totalSpend) })
-              .where(eq(clientMemberships.clientId, clientId));
-            process.stderr.write(`[Loyalty] Sign auto-synced client ${clientId}: HKD ${totalSpend} → ${calcTier(totalSpend)} (${currentYear})\n`);
-          } catch (err) {
-            console.error("[Loyalty] Sign auto-sync failed:", err);
-          }
+      // 簽署即代表已接受，自動同步會員等級（終身累計，與 LTV 對齊）
+      const clientId = (updatedQuote as any)?.clientId;
+      if (clientId) {
+        try {
+          const membership = await resyncClientMembershipFromQuotes(clientId);
+          process.stderr.write(
+            `[Loyalty] Sign auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (lifetime)\n`
+          );
+        } catch (err) {
+          console.error("[Loyalty] Sign auto-sync failed:", err);
         }
       }
 

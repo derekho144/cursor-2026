@@ -155,7 +155,7 @@ export default function LoyaltyPage() {
             style={{ borderColor: "rgba(212,168,67,0.3)", color: "#d4a843" }}
           >
             <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
-            {syncAllMutation.isPending ? "同步中..." : "從報價單同步所有會員"}
+            {syncAllMutation.isPending ? "同步中..." : "從報價單同步所有會員（終身累計）"}
           </Button>
         </div>
 
