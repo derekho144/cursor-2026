@@ -49,18 +49,21 @@ export const appRouter = router({
         return getAvgResponseTimeHours({ year, month: input?.month });
       }),
     whatsappStats: protectedProcedure
-      .input(z.object({ year: z.number(), month: z.number().min(1).max(12).optional() }).optional())
+      .input(z.object({ year: z.number(), month: z.number().min(1).max(12) }).optional())
       .query(async ({ input }) => {
-        const year = input?.year ?? new Date().getFullYear();
-        return getWhatsappClickStats({ year, month: input?.month });
+        const hkt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        const year = input?.year ?? hkt.getUTCFullYear();
+        const month = input?.month ?? hkt.getUTCMonth() + 1;
+        return getWhatsappClickStats({ year, month });
       }),
     // ─── Merged Dashboard Query ───────────────────────────────────────────
     // Replaces 5 separate API calls with 1 parallel Promise.all
     all: protectedProcedure
       .input(z.object({ year: z.number().optional(), month: z.number().min(1).max(12).optional() }).optional())
       .query(async ({ input }) => {
-        const year = input?.year ?? new Date().getFullYear();
-        const month = input?.month ?? (new Date().getMonth() + 1);
+        const hkt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        const year = input?.year ?? hkt.getUTCFullYear();
+        const month = input?.month ?? hkt.getUTCMonth() + 1;
         const db = await getDb();
 
         const [stats, avgResp, waStats, pendingCount, fhStats] = await Promise.all([
@@ -68,7 +71,7 @@ export const appRouter = router({
           getDashboardStats(year, month),
           // 2. Average response time
           getAvgResponseTimeHours({ year, month }),
-          // 3. WhatsApp click stats
+          // 3. WhatsApp click stats (same selected month as other KPIs)
           getWhatsappClickStats({ year, month }),
           // 4. Pending email inquiries count (lightweight — only count, no full rows)
           db

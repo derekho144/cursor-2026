@@ -2741,13 +2741,21 @@ export async function recordWhatsappClick(opts: {
   });
 }
 
-/** 取得 WhatsApp 轉化率統計（按月份和來源）*/
+/** 取得 WhatsApp 轉化率統計（按 HKT 年月；業務儀表板用當月）*/
 export async function getWhatsappClickStats(opts: { year: number; month?: number }) {
   const db = await getDb();
-  if (!db) return { totalClicks: 0, fhClicks: 0, bySource: [], emailsSent: 0, conversionRate: 0 };
+  if (!db) return { totalClicks: 0, fhClicks: 0, bySource: [], emailsSent: 0, conversionRate: 0, year: opts.year, month: opts.month ?? null };
 
-  const conditions = [sql`YEAR(clicked_at) = ${opts.year}`];
-  if (opts.month) conditions.push(sql`MONTH(clicked_at) = ${opts.month}`);
+  // Default to current HKT month so callers never accidentally get whole-year rates
+  const hktNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const year = opts.year;
+  const month = opts.month ?? hktNow.getUTCMonth() + 1;
+
+  // Timestamps stored in UTC — shift +8h so YEAR/MONTH match 香港當月
+  const clickYm = sql`YEAR(${whatsappClickEvents.clickedAt} + INTERVAL 8 HOUR) = ${year}
+    AND MONTH(${whatsappClickEvents.clickedAt} + INTERVAL 8 HOUR) = ${month}`;
+  const emailYm = sql`YEAR(${freehunterJobs.firstEmailSentAt} + INTERVAL 8 HOUR) = ${year}
+    AND MONTH(${freehunterJobs.firstEmailSentAt} + INTERVAL 8 HOUR) = ${month}`;
 
   const clicksBySource = await db
     .select({
@@ -2755,7 +2763,7 @@ export async function getWhatsappClickStats(opts: { year: number; month?: number
       count: sql<number>`COUNT(*)`,
     })
     .from(whatsappClickEvents)
-    .where(and(...conditions))
+    .where(clickYm)
     .groupBy(whatsappClickEvents.source);
 
   const totalClicks = clicksBySource.reduce((s, r) => s + Number(r.count), 0);
@@ -2764,18 +2772,11 @@ export async function getWhatsappClickStats(opts: { year: number; month?: number
     .filter((r) => r.source === "fh_first_email" || r.source === "fh_follow_up")
     .reduce((s, r) => s + Number(r.count), 0);
 
-  // 分母：該期 FH 已發第一封郵件數（按 firstEmailSentAt，唔係全部 email_inquiries）
-  const firstEmailConditions = [
-    isNotNull(freehunterJobs.firstEmailSentAt),
-    sql`YEAR(${freehunterJobs.firstEmailSentAt}) = ${opts.year}`,
-  ];
-  if (opts.month) {
-    firstEmailConditions.push(sql`MONTH(${freehunterJobs.firstEmailSentAt}) = ${opts.month}`);
-  }
+  // 分母：該月（HKT）FH 已發第一封郵件數
   const emailsSentResult = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(freehunterJobs)
-    .where(and(...firstEmailConditions));
+    .where(and(isNotNull(freehunterJobs.firstEmailSentAt), emailYm));
   const emailsSent = Number(emailsSentResult[0]?.count ?? 0);
   const conversionRate = emailsSent > 0 ? Math.round((fhClicks / emailsSent) * 100) : 0;
 
@@ -2785,6 +2786,8 @@ export async function getWhatsappClickStats(opts: { year: number; month?: number
     bySource: clicksBySource.map((r) => ({ source: r.source, count: Number(r.count) })),
     emailsSent,
     conversionRate,
+    year,
+    month,
   };
 }
 
