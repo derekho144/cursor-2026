@@ -12,7 +12,6 @@ import {
   Copy,
   Sparkles,
   Check,
-  X,
   ImagePlus,
   Trash2,
   ExternalLink,
@@ -626,135 +625,174 @@ export default function LinkedInOps() {
             )}
           </div>
         ) : (
-          contentList?.posts.map((p) => (
-            <div key={p.id} className="border rounded-lg p-3 sm:p-4 bg-card space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-2 items-center min-w-0">
-                  <span className="text-xs px-2 py-0.5 rounded shrink-0" style={{ background: "#1a1a1a", color: "#d4a843" }}>
-                    {p.typeLabel}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-muted shrink-0">{p.statusLabel}</span>
-                  {p.bufferStatus && (
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded border shrink-0 ${
-                        p.bufferStatus === "queued"
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : p.bufferStatus === "failed"
-                            ? "bg-red-50 text-red-800 border-red-200"
-                            : "bg-muted"
-                      }`}
-                    >
-                      {(p as any).bufferStatusLabel || p.bufferStatus}
-                    </span>
-                  )}
-                  <span className="font-medium text-sm break-words">{p.title}</span>
-                </div>
-                <div className="text-xs text-muted-foreground shrink-0">
-                  {p.scheduledFor ? `排程 ${formatHkt(p.scheduledFor)} HKT` : ""}
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4 break-words">{p.body}</p>
-              {Array.isArray(p.selectedMedia) && p.selectedMedia.length > 0 ? (
-                <div className="flex gap-2 overflow-x-auto py-1 -mx-1 px-1">
-                  {p.selectedMedia.map((m: any) => (
-                    <a
-                      key={`${p.id}-${m.id}-${m.slideOrder}`}
-                      href={m.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 w-16 h-16 rounded border overflow-hidden bg-muted"
-                      title={`#${m.id} ${m.fileName || ""}`}
-                    >
-                      <img src={m.url} alt="" className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-destructive">未配圖 — Buffer 只會出文字；請撳「補相並重推 Buffer」</p>
-              )}
-              {p.mediaHint && (
-                <p className="text-xs text-amber-700 dark:text-amber-400 break-words">配圖：{p.mediaHint}</p>
-              )}
-              {p.bufferError && (
-                <p className="text-xs text-destructive break-words">Buffer：{p.bufferError}</p>
-              )}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="min-h-10 sm:min-h-0" onClick={() => setEditingPost(p)}>
-                  編輯／批核
-                </Button>
-                <Button size="sm" variant="ghost" className="gap-1 min-h-10 sm:min-h-0 border sm:border-0" onClick={() => copy(p.body)}>
-                  <Copy className="w-3 h-3" />
-                  複製
-                </Button>
-                {p.status === "pending_review" && (
-                  <>
-                    <Button size="sm" className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1" onClick={() => approvePost.mutate({ id: p.id })}>
-                      <Check className="w-3 h-3" />
-                      批准 → Buffer
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1 text-muted-foreground min-h-10 sm:min-h-0 border sm:border-0"
-                      onClick={() => rejectPost.mutate({ id: p.id })}
-                    >
-                      <X className="w-3 h-3" />
-                      拒絕
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1 text-destructive min-h-10 sm:min-h-0 border sm:border-0 col-span-2 sm:col-span-1"
-                      onClick={() => {
-                        if (confirm("刪除呢篇草稿？")) deletePost.mutate({ id: p.id });
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      刪除
-                    </Button>
-                  </>
-                )}
-                {p.status === "rejected" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1 text-destructive min-h-10 sm:min-h-0 border sm:border-0"
-                    onClick={() => {
-                      if (confirm("刪除呢篇？")) deletePost.mutate({ id: p.id });
-                    }}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    刪除
-                  </Button>
-                )}
-                {(p.status === "scheduled" || p.status === "approved") && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1"
-                    disabled={pushBuffer.isPending}
-                    onClick={() => pushBuffer.mutate({ id: p.id, force: true })}
-                  >
-                    {pushBuffer.isPending ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <ImagePlus className="w-3 h-3" />
+          <div className="space-y-3">
+            {contentList?.posts.map((p) => {
+              const media = Array.isArray(p.selectedMedia) ? p.selectedMedia : [];
+              const hasMedia = media.length > 0;
+              const bufferFailed = p.bufferStatus === "failed";
+              const bufferQueued = p.bufferStatus === "queued";
+              const needsRepush = p.status === "scheduled" || p.status === "approved";
+
+              return (
+                <div key={p.id} className="border rounded-lg bg-card overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3 px-3 sm:px-4 pt-3 pb-2">
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="text-[11px] px-1.5 py-0.5 rounded shrink-0"
+                          style={{ background: "#1a1a1a", color: "#d4a843" }}
+                        >
+                          {p.typeLabel}
+                        </span>
+                        {bufferQueued ? (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            Buffer 已排程
+                          </span>
+                        ) : bufferFailed ? (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded border bg-red-50 text-red-800 border-red-200">
+                            Buffer 失敗
+                          </span>
+                        ) : (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            {p.statusLabel}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-medium text-sm leading-snug line-clamp-2">{p.title}</h3>
+                    </div>
+                    {p.scheduledFor && (
+                      <div className="shrink-0 text-right text-[11px] text-muted-foreground leading-tight pt-0.5">
+                        <div>排程</div>
+                        <div className="tabular-nums">{formatHkt(p.scheduledFor)}</div>
+                        <div>HKT</div>
+                      </div>
                     )}
-                    {!(Array.isArray(p.selectedMedia) && p.selectedMedia.length)
-                      ? "補相並重推 Buffer"
-                      : p.bufferStatus === "queued"
-                        ? "重推 Buffer（含相）"
-                        : "推 Buffer"}
-                  </Button>
-                )}
-                {(p.status === "scheduled" || p.status === "approved") && (
-                  <Button size="sm" className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1" onClick={() => publishPost.mutate({ id: p.id })}>
-                    標記已發佈
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))
+                  </div>
+
+                  {/* Body preview */}
+                  <p className="px-3 sm:px-4 text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap break-words">
+                    {p.body}
+                  </p>
+
+                  {/* Media strip — thumbs only, no filename dump */}
+                  <div className="px-3 sm:px-4 mt-2.5 mb-1">
+                    {hasMedia ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1.5 overflow-x-auto max-w-full py-0.5">
+                          {media.slice(0, 6).map((m: any) => (
+                            <a
+                              key={`${p.id}-${m.id}-${m.slideOrder}`}
+                              href={m.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 w-12 h-12 rounded-md border overflow-hidden bg-muted"
+                              title={`#${m.id}`}
+                            >
+                              <img src={m.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </a>
+                          ))}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          {media.length > 6 ? `+${media.length - 6}` : `${media.length} 張`}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-destructive">未配圖</p>
+                    )}
+                  </div>
+
+                  {bufferFailed && p.bufferError && (
+                    <p className="px-3 sm:px-4 text-[11px] text-destructive line-clamp-2 break-words mb-1">
+                      {p.bufferError}
+                    </p>
+                  )}
+
+                  {/* Actions — one primary + compact secondary */}
+                  <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-4 py-2.5 border-t bg-muted/20">
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditingPost(p)}>
+                      編輯
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs gap-1" onClick={() => copy(p.body)}>
+                      <Copy className="w-3 h-3" />
+                      複製
+                    </Button>
+
+                    {p.status === "pending_review" && (
+                      <>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs gap-1 ml-auto"
+                          onClick={() => approvePost.mutate({ id: p.id })}
+                        >
+                          <Check className="w-3 h-3" />
+                          批准 → Buffer
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs text-muted-foreground"
+                          onClick={() => rejectPost.mutate({ id: p.id })}
+                        >
+                          拒絕
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs text-destructive"
+                          onClick={() => {
+                            if (confirm("刪除呢篇草稿？")) deletePost.mutate({ id: p.id });
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+
+                    {p.status === "rejected" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs text-destructive ml-auto"
+                        onClick={() => {
+                          if (confirm("刪除呢篇？")) deletePost.mutate({ id: p.id });
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        刪除
+                      </Button>
+                    )}
+
+                    {needsRepush && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant={hasMedia && bufferQueued ? "ghost" : "outline"}
+                          className="h-8 text-xs gap-1 ml-auto"
+                          disabled={pushBuffer.isPending}
+                          onClick={() => pushBuffer.mutate({ id: p.id, force: true })}
+                        >
+                          {pushBuffer.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <ImagePlus className="w-3 h-3" />
+                          )}
+                          {!hasMedia ? "補相重推" : bufferFailed ? "重試 Buffer" : "重推 Buffer"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => publishPost.mutate({ id: p.id })}
+                        >
+                          已發佈
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
