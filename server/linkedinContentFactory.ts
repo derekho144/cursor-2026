@@ -374,6 +374,7 @@ Content type this run: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[ty
 
 When photos are attached, ground every claim in those images and captions.
 CRITICAL: the "body" field must contain NO punctuation marks (no 。，！？、：；「」''""().,!?:; etc). Use line breaks instead.
+After --- the English block MUST be a mini-story (hook + conflict/moment + insight + CTA) — never only two weak bullets.
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -442,6 +443,8 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
 ---
 Last shoot one line changed everything
 Dont make it fake-pretty Make it real
+We stopped waiting for perfect light and followed the story
+The hardest beat often felt the warmest
 Which frame from your last project felt the most honest
 
 #CaseStudy #BehindTheScenes #JDStudioHK`,
@@ -468,9 +471,11 @@ Which frame from your last project felt the most honest
 邊一個習慣最難改
 
 ---
-Why do some frames have soul and others dont
-same scene
-Its rarely the camera
+Same scene
+Some frames have soul others dont
+People blame the camera
+Usually we lost the wait and the watch
+Mood before light story before volume
 Which habit was hardest to unlearn
 
 #PhotographyTips #CreativeLeadership #JDStudioHK`,
@@ -492,10 +497,10 @@ Which habit was hardest to unlearn
 最能說服老闆批 budget
 
 ---
-Carousels often outperform text
-but commercial buyers care about clarity and judgment
-not charts for charts sake
-What content format actually wins budget in your team
+Carousels often get finished more than plain text
+Buyers still wont fund a pile of pretty frames alone
+They fund clarity about risk and outcome not chart spam
+What content format actually wins budget on your team
 
 #DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,

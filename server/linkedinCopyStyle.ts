@@ -14,9 +14,19 @@ Use 「我們」/ we — never 「本公司」/ 「敝工作室」.
 Sound like talking to industry peers — not a brochure.
 
 LANGUAGE (Format A preferred):
-- Traditional Chinese full body first, then "---", then English summary (2–3 key points)
-- Do NOT translate word-for-word; natural 繁中 (light Cantonese OK) + conversational English
-- Hashtags: max 3–5 at the end only
+- Traditional Chinese full body first then "---" then English
+- Do NOT translate word-for-word natural 繁中 (light Cantonese OK) + conversational English
+- Hashtags max 3–5 at the end only
+
+ENGLISH after --- (mandatory mini-story — NOT weak bullets):
+- Must be a short story-shaped summary that carries the same arc as 繁中
+- Required beats in order (each 1–3 short lines no punctuation):
+  1) Hook with tension
+  2) Conflict or real moment
+  3) Insight
+  4) CTA question
+- FORBIDDEN: only 2 capability bullets empty paraphrase feature lists like Multi-camera coverage Event photography
+- Keep it shorter than 繁中 but complete as a mini narrative readers can feel without reading Chinese
 
 PUNCTUATION (strict — applies to post BODY only):
 - Do NOT use punctuation marks in Chinese or English body text
@@ -34,13 +44,18 @@ C) Number: concrete figure + surprising conclusion
 D) Question: what the reader is already thinking
 FORBIDDEN openers: 「很高興宣佈」「我想分享」「今天想講」「Excited to announce」「I want to share」
 
-CAPTION STRUCTURE (繁中 ~150–300 字 / EN summary short):
+CAPTION STRUCTURE (繁中 ~150–300 字 then --- then EN mini-story):
 [Hook 1–2 lines]
 [Scene setup 2–3 lines — context / challenge]
 [Core points — short lines with ✓ / ❌ / - ]
-[Real moment — difficulty, surprise, or emotion]
+[Real moment — difficulty surprise or emotion]
 [Insight — one level deeper]
 [CTA — one question]
+---
+[EN hook]
+[EN conflict or real moment]
+[EN insight]
+[EN CTA question]
 Max 3 lines per paragraph. Scannable. Max 3–5 emoji total.
 
 CTA — always a QUESTION that invites comments (easy to answer). Soft DM OK rarely.
