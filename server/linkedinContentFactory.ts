@@ -19,9 +19,9 @@ export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
 };
 
 export const CONTENT_TYPE_BLURBS: Record<LinkedInContentType, string> = {
-  carousel_case_study: "B2B 決策者最愛看成果；適合 carousel／多圖",
-  outsource_vs_inhire: "觸碰核心痛點，引發評論",
-  contrarian_take: "反常識立場，刺激辯論同演算法曝光",
+  carousel_case_study: "互動率高達 45.85%，B2B 決策者最愛看成果",
+  outsource_vs_inhire: "觸碰客戶核心痛點，引發大量評論",
+  contrarian_take: "引發辯論，演算法大力推廣",
 };
 
 /** ISO week key in HKT, e.g. 2026-W31 */
