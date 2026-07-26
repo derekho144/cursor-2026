@@ -51,6 +51,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   fashion: "時裝",
   commercial: "商業／人像",
   before_after: "前後對比",
+  event: "活動攝影",
   other: "其他",
 };
 

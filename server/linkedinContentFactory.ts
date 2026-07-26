@@ -33,6 +33,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   fashion: "時裝",
   commercial: "商業／人像",
   before_after: "前後對比",
+  event: "活動攝影",
   other: "其他",
 };
 
@@ -117,7 +118,7 @@ export async function ensureContentPostsTable(): Promise<void> {
         storage_key varchar(512) NOT NULL,
         file_name varchar(255) NOT NULL,
         mime_type varchar(128) NOT NULL,
-        li_asset_category enum('food','jewellery','product','fashion','commercial','before_after','other') NOT NULL DEFAULT 'other',
+        li_asset_category enum('food','jewellery','product','fashion','commercial','before_after','event','other') NOT NULL DEFAULT 'other',
         li_asset_preferred_for enum('any','carousel','debate','contrarian') NOT NULL DEFAULT 'any',
         caption text,
         ai_description text,
@@ -147,6 +148,16 @@ export async function ensureContentPostsTable(): Promise<void> {
       await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN buffer_error text NULL`);
     } catch {
       /* exists */
+    }
+    try {
+      await db.execute(sql`
+        ALTER TABLE linkedin_content_assets
+        MODIFY COLUMN li_asset_category ENUM(
+          'food','jewellery','product','fashion','commercial','before_after','event','other'
+        ) NOT NULL DEFAULT 'other'
+      `);
+    } catch (enumErr) {
+      console.warn("[ContentFactory] asset category enum migrate:", enumErr);
     }
     try {
       await db.execute(sql`

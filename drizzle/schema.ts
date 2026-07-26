@@ -742,6 +742,7 @@ export const linkedinAssetCategories = [
   "fashion",
   "commercial",
   "before_after",
+  "event",
   "other",
 ] as const;
 export type LinkedInAssetCategory = (typeof linkedinAssetCategories)[number];
@@ -767,6 +768,7 @@ export const linkedinContentAssets = mysqlTable("linkedin_content_assets", {
     "fashion",
     "commercial",
     "before_after",
+    "event",
     "other",
   ])
     .notNull()

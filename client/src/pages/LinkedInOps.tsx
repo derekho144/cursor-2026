@@ -35,6 +35,7 @@ const ASSET_CATEGORIES = [
   { value: "fashion", label: "時裝" },
   { value: "commercial", label: "商業／人像" },
   { value: "before_after", label: "前後對比" },
+  { value: "event", label: "活動攝影" },
   { value: "other", label: "其他" },
 ] as const;
 
