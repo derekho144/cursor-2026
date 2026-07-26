@@ -52,6 +52,45 @@ const PLAYBOOK_LABELS: Record<string, string> = {
   general: "一般開發",
 };
 
+function formatHkt(iso: string | Date | null | undefined) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("zh-HK", {
+    timeZone: "Asia/Hong_Kong",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** datetime-local value in Asia/Hong_Kong */
+function toHktDatetimeLocal(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
+}
+
+/** Treat datetime-local as HKT → UTC ISO */
+function fromHktDatetimeLocal(local: string): string | null {
+  const m = local.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m;
+  const utcMs = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:00+08:00`);
+  if (Number.isNaN(utcMs)) return null;
+  return new Date(utcMs).toISOString();
+}
+
 export default function LinkedInOps() {
   const [tab, setTab] = useState("today");
   const [listStage, setListStage] = useState("all");
@@ -223,7 +262,11 @@ export default function LinkedInOps() {
   const approvePost = trpc.linkedinContent.approve.useMutation({
     onSuccess: (d) => {
       if (d.bufferPushed) {
-        toast.success("已批准 → Buffer 已排程，到點自動發 LinkedIn");
+        toast.success(
+          d.scheduledBumpedTo
+            ? `已批准 → Buffer（原排程已過，自動改到 ${formatHkt(d.scheduledBumpedTo)} HKT）`
+            : "已批准 → Buffer 已排程，到點自動發 LinkedIn"
+        );
       } else if (d.bufferError) {
         toast.warning(`已批准，但 Buffer 失敗：${d.bufferError}`);
       } else {
@@ -238,7 +281,13 @@ export default function LinkedInOps() {
   });
   const pushBuffer = trpc.linkedinContent.pushToBuffer.useMutation({
     onSuccess: (d) => {
-      toast.success(d.alreadyQueued ? "已在 Buffer 排程" : "已推去 Buffer，到點自動發 LinkedIn");
+      if (d.alreadyQueued) {
+        toast.success("已在 Buffer 排程");
+      } else if (d.scheduledBumpedTo) {
+        toast.success(`已推去 Buffer（原排程已過，自動改到 ${formatHkt(d.scheduledBumpedTo)} HKT）`);
+      } else {
+        toast.success("已推去 Buffer，到點自動發 LinkedIn");
+      }
       utils.linkedinContent.listPosts.invalidate();
       utils.linkedinContent.dueToday.invalidate();
     },
@@ -856,16 +905,7 @@ export default function LinkedInOps() {
                     <span className="font-medium text-sm break-words">{p.title}</span>
                   </div>
                   <div className="text-xs text-muted-foreground shrink-0">
-                    {p.scheduledFor
-                      ? `排程 ${new Date(p.scheduledFor).toLocaleString("zh-HK", {
-                          timeZone: "Asia/Hong_Kong",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: false,
-                        })} HKT`
-                      : ""}
+                    {p.scheduledFor ? `排程 ${formatHkt(p.scheduledFor)} HKT` : ""}
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4 break-words">{p.body}</p>
@@ -999,6 +1039,20 @@ export default function LinkedInOps() {
                   onChange={(e) => setEditingPost({ ...editingPost, mediaHint: e.target.value })}
                 />
               </div>
+              <div>
+                <Label>排程時間（HKT）</Label>
+                <Input
+                  type="datetime-local"
+                  value={toHktDatetimeLocal(editingPost.scheduledFor)}
+                  onChange={(e) => {
+                    const iso = fromHktDatetimeLocal(e.target.value);
+                    setEditingPost({ ...editingPost, scheduledFor: iso });
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  若時間已過，批准／推 Buffer 會自動改去約 15 分鐘後
+                </p>
+              </div>
               {Array.isArray(editingPost.selectedMedia) && editingPost.selectedMedia.length > 0 && (
                 <div>
                   <Label>已抽庫存相</Label>
@@ -1033,6 +1087,7 @@ export default function LinkedInOps() {
                   title: editingPost.title,
                   body: editingPost.body,
                   mediaHint: editingPost.mediaHint,
+                  scheduledFor: editingPost.scheduledFor ?? null,
                 })
               }
               disabled={savePost.isPending}
@@ -1050,6 +1105,7 @@ export default function LinkedInOps() {
                       title: editingPost.title,
                       body: editingPost.body,
                       mediaHint: editingPost.mediaHint,
+                      scheduledFor: editingPost.scheduledFor ?? null,
                     },
                     { onSuccess: () => approvePost.mutate({ id: editingPost.id }) }
                   );

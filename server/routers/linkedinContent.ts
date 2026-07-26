@@ -73,11 +73,16 @@ function parseSelectedMedia(raw: string | null | undefined) {
   }
 }
 
+/** Buffer rejects past dueAt — bump overdue schedules to ~15 min from now. */
+const BUFFER_PAST_GRACE_MS = 60_000;
+const BUFFER_BUMP_AHEAD_MS = 15 * 60_000;
+
 async function pushPostToBuffer(postId: number): Promise<{
   success: boolean;
   bufferPostId?: string;
   bufferStatus: string;
   error?: string;
+  scheduledBumpedTo?: string;
 }> {
   const db = await getDb();
   if (!db) return { success: false, bufferStatus: "failed", error: "Database unavailable" };
@@ -106,12 +111,23 @@ async function pushPostToBuffer(postId: number): Promise<{
     return { success: false, bufferStatus: "failed", error: err };
   }
 
+  let dueAt = new Date(post.scheduledFor);
+  let scheduledBumpedTo: string | undefined;
+  if (dueAt.getTime() < Date.now() - BUFFER_PAST_GRACE_MS) {
+    dueAt = new Date(Date.now() + BUFFER_BUMP_AHEAD_MS);
+    scheduledBumpedTo = dueAt.toISOString();
+    await db
+      .update(linkedinContentPosts)
+      .set({ scheduledFor: dueAt })
+      .where(eq(linkedinContentPosts.id, postId));
+  }
+
   const media = parseSelectedMedia(post.selectedMedia);
   const imageUrls = media.map((m: any) => m?.url).filter(Boolean) as string[];
 
   const result = await schedulePostToBuffer({
     text: post.body,
-    dueAt: new Date(post.scheduledFor),
+    dueAt,
     imageUrls,
   });
 
@@ -124,14 +140,19 @@ async function pushPostToBuffer(postId: number): Promise<{
         bufferError: null,
       })
       .where(eq(linkedinContentPosts.id, postId));
-    return { success: true, bufferPostId: result.postId, bufferStatus: "queued" };
+    return {
+      success: true,
+      bufferPostId: result.postId,
+      bufferStatus: "queued",
+      scheduledBumpedTo,
+    };
   }
 
   await db
     .update(linkedinContentPosts)
     .set({ bufferStatus: "failed", bufferError: result.error })
     .where(eq(linkedinContentPosts.id, postId));
-  return { success: false, bufferStatus: "failed", error: result.error };
+  return { success: false, bufferStatus: "failed", error: result.error, scheduledBumpedTo };
 }
 
 function mapPostRow(p: typeof linkedinContentPosts.$inferSelect) {
@@ -508,6 +529,7 @@ export const linkedinContentRouter = router({
         bufferPostId: buffer.bufferPostId,
         bufferStatus: buffer.bufferStatus,
         bufferError: buffer.error,
+        scheduledBumpedTo: buffer.scheduledBumpedTo,
       };
     }),
 
@@ -561,6 +583,7 @@ export const linkedinContentRouter = router({
         bufferPostId: buffer.bufferPostId,
         bufferStatus: buffer.bufferStatus,
         alreadyQueued: false,
+        scheduledBumpedTo: buffer.scheduledBumpedTo,
       };
     }),
 
