@@ -2296,7 +2296,38 @@ export function calcTier(totalSpend: number): LoyaltyTier {
   return "silver";
 }
 
-/** 客戶終身已接受報價合計（與 Clients LTV 同一口徑） */
+/**
+ * 會員制：指定年度已接受報價合計（預設今年）。
+ * 有拍攝日按拍攝年；無拍攝日按開單年（與 Dashboard 成交歸屬一致）。
+ */
+export async function getClientMembershipYearSpend(
+  clientId: number,
+  year: number = new Date().getFullYear()
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const yearStart = `${year}-01-01 00:00:00`;
+  const yearEnd = `${year + 1}-01-01 00:00:00`;
+  const [row] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(CAST(${quotes.total} AS DECIMAL(12,2))), 0)`,
+    })
+    .from(quotes)
+    .where(
+      and(
+        eq(quotes.clientId, clientId),
+        eq(quotes.status, "accepted"),
+        sql`(
+          (shootingDate IS NOT NULL AND shootingDate != '' AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${year})
+          OR
+          ((shootingDate IS NULL OR shootingDate = '') AND ${quotes.createdAt} >= ${yearStart} AND ${quotes.createdAt} < ${yearEnd})
+        )`
+      )
+    );
+  return Number(row?.total ?? 0);
+}
+
+/** 客戶終身已接受報價合計（Clients 頁 LTV 口徑） */
 export async function getClientLifetimeAcceptedSpend(clientId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -2310,13 +2341,16 @@ export async function getClientLifetimeAcceptedSpend(clientId: number): Promise<
 }
 
 /**
- * 用終身已成交金額重算會員 totalSpend + tier（與 LTV 對齊，唔再只用當年）
+ * 用「當年」已成交金額重算會員 totalSpend + tier（會員制按年度）
  */
-export async function resyncClientMembershipFromQuotes(clientId: number): Promise<ClientMembership> {
+export async function resyncClientMembershipFromQuotes(
+  clientId: number,
+  year: number = new Date().getFullYear()
+): Promise<ClientMembership> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
 
-  const totalSpend = await getClientLifetimeAcceptedSpend(clientId);
+  const totalSpend = await getClientMembershipYearSpend(clientId, year);
   const newTier = calcTier(totalSpend);
   const existing = await getClientMembership(clientId);
   const tierChanged = existing ? existing.tier !== newTier : true;

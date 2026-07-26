@@ -64,32 +64,45 @@ export const loyaltyRouter = router({
     }))
     .mutation(async ({ input }) => {
       if (input.forceSync) {
-        // 重新計算客戶終身累計消費（與 LTV 同一口徑）
+        // 重新計算客戶「本年」累計消費（會員制按年度）
         return resyncClientMembershipFromQuotes(input.clientId);
       }
       return upsertClientMembership(input.clientId, input.additionalSpend ?? 0);
     }),
 
-  /** 同步所有客戶的會員資料（終身已成交合計，與 LTV 對齊） */
+  /** 同步所有客戶的會員資料（本年已成交合計；會員制按年度重置） */
   syncAll: protectedProcedure.mutation(async () => {
     const db = await getDb();
     if (!db) throw new Error("DB not available");
 
-    const clientTotals = await db
-      .select({
-        clientId: quotes.clientId,
-      })
+    const year = new Date().getFullYear();
+    const yearStart = `${year}-01-01 00:00:00`;
+    const yearEnd = `${year + 1}-01-01 00:00:00`;
+
+    // 本年有成交歸屬嘅客戶（拍攝年或無拍攝日嘅開單年）
+    const clientRows = await db
+      .select({ clientId: quotes.clientId })
       .from(quotes)
-      .where(and(eq(quotes.status, "accepted"), sql`${quotes.clientId} IS NOT NULL`))
+      .where(
+        and(
+          eq(quotes.status, "accepted"),
+          sql`${quotes.clientId} IS NOT NULL`,
+          sql`(
+            (shootingDate IS NOT NULL AND shootingDate != '' AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${year})
+            OR
+            ((shootingDate IS NULL OR shootingDate = '') AND ${quotes.createdAt} >= ${yearStart} AND ${quotes.createdAt} < ${yearEnd})
+          )`
+        )
+      )
       .groupBy(quotes.clientId);
 
     let synced = 0;
-    for (const row of clientTotals) {
+    for (const row of clientRows) {
       if (!row.clientId) continue;
-      await resyncClientMembershipFromQuotes(row.clientId);
+      await resyncClientMembershipFromQuotes(row.clientId, year);
       synced++;
     }
-    return { synced, basis: "lifetime" as const };
+    return { synced, year, basis: "calendar_year" as const };
   }),
 
   /** 取得等級定義 */

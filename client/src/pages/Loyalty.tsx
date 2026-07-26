@@ -155,7 +155,7 @@ export default function LoyaltyPage() {
             style={{ borderColor: "rgba(212,168,67,0.3)", color: "#d4a843" }}
           >
             <RefreshCw className={`h-4 w-4 ${syncAllMutation.isPending ? "animate-spin" : ""}`} />
-            {syncAllMutation.isPending ? "同步中..." : "從報價單同步所有會員（終身累計）"}
+            {syncAllMutation.isPending ? "同步中..." : "從報價單同步所有會員（本年累計）"}
           </Button>
         </div>
 
@@ -244,7 +244,7 @@ export default function LoyaltyPage() {
                           <span className="text-sm font-medium" style={{ color: "#d4a843" }}>
                             HK${Number(m.totalSpend).toLocaleString()}
                           </span>
-                          <span className="text-xs text-muted-foreground">累計消費</span>
+                          <span className="text-xs text-muted-foreground">本年累計消費</span>
                         </div>
                       </div>
                       <div className="mt-3">
@@ -333,7 +333,7 @@ export default function LoyaltyPage() {
                         <span className="leading-tight">{cfg.label}</span>
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">
-                        {tier === "silver" ? "首次成交即加入" : `累計消費 ≥ HK$${cfg.minSpend.toLocaleString()}`}
+                        {tier === "silver" ? "首次成交即加入" : `本年累計消費 ≥ HK$${cfg.minSpend.toLocaleString()}`}
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm">

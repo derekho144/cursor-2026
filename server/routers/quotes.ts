@@ -272,7 +272,7 @@ export const quotesRouter = router({
         ...(hasContentChange && { pdfUrl: null, pdfKey: null }),
       });
 
-      // 當狀態改為 accepted 時，自動同步會員等級（終身累計，與 LTV 對齊）
+      // 當狀態改為 accepted 時，自動同步會員等級（本年累計；會員制按年度）
       if (input.status === "accepted") {
         const quote = await getQuoteById(id);
         const clientId = (quote as any)?.clientId;
@@ -280,7 +280,7 @@ export const quotesRouter = router({
           try {
             const membership = await resyncClientMembershipFromQuotes(clientId);
             process.stderr.write(
-              `[Loyalty] Auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (lifetime)\n`
+              `[Loyalty] Auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (YTD)\n`
             );
           } catch (err) {
             console.error("[Loyalty] Auto-sync failed:", err);
@@ -607,13 +607,13 @@ ${itemsText}
         })();
       }
 
-      // 簽署即代表已接受，自動同步會員等級（終身累計，與 LTV 對齊）
+      // 簽署即代表已接受，自動同步會員等級（本年累計；會員制按年度）
       const clientId = (updatedQuote as any)?.clientId;
       if (clientId) {
         try {
           const membership = await resyncClientMembershipFromQuotes(clientId);
           process.stderr.write(
-            `[Loyalty] Sign auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (lifetime)\n`
+            `[Loyalty] Sign auto-synced client ${clientId}: HKD ${membership.totalSpend} → ${membership.tier} (YTD)\n`
           );
         } catch (err) {
           console.error("[Loyalty] Sign auto-sync failed:", err);
