@@ -492,7 +492,7 @@ export default function LoyaltyPage() {
                     </div>
                     <div className="p-3 rounded-lg" style={{ background: "#0d0d0d" }}>
                       <div className="flex justify-between mb-2">
-                        <span className="text-sm text-muted-foreground">累計消費</span>
+                        <span className="text-sm text-muted-foreground">本年累計消費</span>
                         <span className="text-sm font-medium" style={{ color: "#d4a843" }}>
                           HK${Number(clientDetail.membership.totalSpend).toLocaleString()}
                         </span>
