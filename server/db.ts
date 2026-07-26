@@ -1513,6 +1513,63 @@ export async function getEmailLogsByQuote(quoteId: number) {
     .orderBy(desc(emailLogs.sentAt));
 }
 
+/**
+ * Backfill quotes with leadSource = 'email_inquiry' (or empty) to a real PLATFORM_DEFS bucket.
+ * Uses linked email_inquiry when available; otherwise → Other.
+ */
+export async function backfillEmailInquiryLeadSources(): Promise<{
+  scanned: number;
+  updated: number;
+}> {
+  const db = await getDb();
+  if (!db) return { scanned: 0, updated: 0 };
+
+  const { resolveQuoteLeadSource } = await import("./_core/leadSource");
+
+  const badQuotes = await db
+    .select()
+    .from(quotes)
+    .where(
+      or(
+        eq(quotes.leadSource, "email_inquiry"),
+        sql`${quotes.leadSource} IS NULL OR TRIM(${quotes.leadSource}) = ''`
+      )
+    );
+
+  let updated = 0;
+  for (const q of badQuotes) {
+    let inquiry =
+      q.emailInquiryId != null
+        ? (await db.select().from(emailInquiries).where(eq(emailInquiries.id, q.emailInquiryId)).limit(1))[0]
+        : undefined;
+
+    if (!inquiry) {
+      const [byQuote] = await db
+        .select()
+        .from(emailInquiries)
+        .where(eq(emailInquiries.quoteId, q.id))
+        .limit(1);
+      inquiry = byQuote;
+    }
+
+    const newSource = inquiry
+      ? resolveQuoteLeadSource({
+          fromEmail: inquiry.fromEmail,
+          bodyText: inquiry.bodyText,
+          subject: inquiry.subject,
+          fhJobId: inquiry.fhJobId,
+        })
+      : "Other";
+
+    if (newSource !== (q.leadSource ?? "")) {
+      await db.update(quotes).set({ leadSource: newSource }).where(eq(quotes.id, q.id));
+      updated++;
+    }
+  }
+
+  return { scanned: badQuotes.length, updated };
+}
+
 // ─── Email Inquiries (郵件詢價) ──────────────────────────────────────────
 export async function createEmailInquiry(data: InsertEmailInquiry) {
   const db = await getDb();
@@ -2604,7 +2661,7 @@ export async function recordWhatsappClick(opts: {
 /** 取得 WhatsApp 轉化率統計（按月份和來源）*/
 export async function getWhatsappClickStats(opts: { year: number; month?: number }) {
   const db = await getDb();
-  if (!db) return { totalClicks: 0, bySource: [], conversionRate: 0 };
+  if (!db) return { totalClicks: 0, fhClicks: 0, bySource: [], emailsSent: 0, conversionRate: 0 };
 
   const conditions = [sql`YEAR(clicked_at) = ${opts.year}`];
   if (opts.month) conditions.push(sql`MONTH(clicked_at) = ${opts.month}`);
@@ -2619,23 +2676,30 @@ export async function getWhatsappClickStats(opts: { year: number; month?: number
     .groupBy(whatsappClickEvents.source);
 
   const totalClicks = clicksBySource.reduce((s, r) => s + Number(r.count), 0);
+  // FH outreach clicks only (matches denominator below)
+  const fhClicks = clicksBySource
+    .filter((r) => r.source === "fh_first_email" || r.source === "fh_follow_up")
+    .reduce((s, r) => s + Number(r.count), 0);
 
-  // 計算轉化率：WhatsApp 點擊數 / FH 已發第一封郵件數
+  // 分母：該期 FH 已發第一封郵件數（按 firstEmailSentAt，唔係全部 email_inquiries）
+  const firstEmailConditions = [
+    isNotNull(freehunterJobs.firstEmailSentAt),
+    sql`YEAR(${freehunterJobs.firstEmailSentAt}) = ${opts.year}`,
+  ];
+  if (opts.month) {
+    firstEmailConditions.push(sql`MONTH(${freehunterJobs.firstEmailSentAt}) = ${opts.month}`);
+  }
   const emailsSentResult = await db
     .select({ count: sql<number>`COUNT(*)` })
-    .from(emailInquiries)
-    .where(
-      and(
-        sql`YEAR(${emailInquiries.createdAt}) = ${opts.year}`,
-        opts.month ? sql`MONTH(${emailInquiries.createdAt}) = ${opts.month}` : sql`1=1`
-      )
-    );
+    .from(freehunterJobs)
+    .where(and(...firstEmailConditions));
   const emailsSent = Number(emailsSentResult[0]?.count ?? 0);
-  const conversionRate = emailsSent > 0 ? Math.round((totalClicks / emailsSent) * 100) : 0;
+  const conversionRate = emailsSent > 0 ? Math.round((fhClicks / emailsSent) * 100) : 0;
 
   return {
     totalClicks,
-    bySource: clicksBySource.map(r => ({ source: r.source, count: Number(r.count) })),
+    fhClicks,
+    bySource: clicksBySource.map((r) => ({ source: r.source, count: Number(r.count) })),
     emailsSent,
     conversionRate,
   };

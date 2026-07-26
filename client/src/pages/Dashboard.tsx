@@ -181,7 +181,7 @@ export default function Dashboard() {
           <StatCard
             label="WhatsApp 轉化率"
             value={waStats != null ? `${waStats.conversionRate}%` : "—"}
-            sub={waStats ? `${waStats.totalClicks} 次點擊 / ${waStats.emailsSent} 封郵件` : ""}
+            sub={waStats ? `${waStats.fhClicks ?? waStats.totalClicks} 次 FH 點擊 / ${waStats.emailsSent} 封第一封` : ""}
             valueColor="#25D366"
           />
         </div>

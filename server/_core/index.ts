@@ -8,7 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startScheduler } from "../scheduler";
-import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick } from "../db";
+import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources } from "../db";
 import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -334,6 +334,16 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
     // Start background scheduler (PRO360 auto-sync every 10 days)
     startScheduler();
+    // Self-heal legacy quote leadSource = email_inquiry (non-blocking)
+    setImmediate(() => {
+      backfillEmailInquiryLeadSources()
+        .then((r) => {
+          if (r.scanned > 0) {
+            console.log(`[Startup] leadSource backfill: updated ${r.updated}/${r.scanned} quotes`);
+          }
+        })
+        .catch((err) => console.error("[Startup] leadSource backfill failed:", err));
+    });
   });
 }
 

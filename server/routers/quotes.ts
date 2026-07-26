@@ -11,6 +11,7 @@ import {
   updateQuote,
   upsertClientFromQuote,
   searchClients,
+  backfillEmailInquiryLeadSources,
 } from "../db";
 import { invokeLLM, extractLLMText } from "../_core/llm";
 import { storagePut } from "../storage";
@@ -124,6 +125,11 @@ export const quotesRouter = router({
     .query(async ({ input }) => {
       return getQuotes(input);
     }),
+
+  /** One-shot / on-demand: remap legacy email_inquiry leadSource → real platforms */
+  backfillLeadSources: protectedProcedure.mutation(async () => {
+    return backfillEmailInquiryLeadSources();
+  }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
