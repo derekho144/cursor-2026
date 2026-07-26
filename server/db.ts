@@ -220,15 +220,20 @@ export async function getQuotes(opts: {
   if (opts.serviceType) conditions.push(eq(quotes.serviceType, opts.serviceType as any));
   if (opts.status) conditions.push(eq(quotes.status, opts.status as any));
   if (opts.leadSource) conditions.push(eq(quotes.leadSource, opts.leadSource));
-  // Month/Year filter: filter by shootingDate to match dashboard "已成交" logic
-  // Dashboard counts accepted quotes by shootingDate month, so we use the same field here
+  // Month/Year filter: align with Dashboard「已成交」歸屬
+  // 有拍攝日 → 按拍攝年月；無拍攝日 → 按開單年月 createdAt
   if (opts.year && opts.month) {
-    conditions.push(sql`shootingDate IS NOT NULL AND shootingDate != ''`);
-    conditions.push(sql`YEAR(STR_TO_DATE(${quotes.shootingDate}, '%Y-%m-%d')) = ${opts.year}`);
-    conditions.push(sql`MONTH(STR_TO_DATE(${quotes.shootingDate}, '%Y-%m-%d')) = ${opts.month}`);
+    conditions.push(sql`(
+      (shootingDate IS NOT NULL AND shootingDate != '' AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${opts.year} AND MONTH(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${opts.month})
+      OR
+      ((shootingDate IS NULL OR shootingDate = '') AND YEAR(createdAt) = ${opts.year} AND MONTH(createdAt) = ${opts.month})
+    )`);
   } else if (opts.year) {
-    conditions.push(sql`shootingDate IS NOT NULL AND shootingDate != ''`);
-    conditions.push(sql`YEAR(STR_TO_DATE(${quotes.shootingDate}, '%Y-%m-%d')) = ${opts.year}`);
+    conditions.push(sql`(
+      (shootingDate IS NOT NULL AND shootingDate != '' AND YEAR(STR_TO_DATE(shootingDate, '%Y-%m-%d')) = ${opts.year})
+      OR
+      ((shootingDate IS NULL OR shootingDate = '') AND YEAR(createdAt) = ${opts.year})
+    )`);
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -550,6 +555,7 @@ export async function getDashboardStats(year?: number, month?: number) {
   const [
     allQuotesForMonth,
     acceptedQuotesForMonth,
+    acceptedQuotesByCreatedAt,
     rejectedQuotesForMonth,
     monthlyAdSpend,
     monthlyAdSpendByPlatform,
@@ -560,7 +566,7 @@ export async function getDashboardStats(year?: number, month?: number) {
     monthlyExpensesResult,
     monthlyProjectCostsResult,
   ] = await Promise.all([
-    // All quotes for selected month (by createdAt)
+    // All quotes for selected month (by createdAt) — 總詢價／開單軸
     db
       .select({ count: sql<number>`COUNT(*)` })
       .from(quotes)
@@ -570,7 +576,7 @@ export async function getDashboardStats(year?: number, month?: number) {
           sql`MONTH(createdAt) = ${targetMonth}`
         )
       ),
-    // Accepted quotes for selected month (revenue):
+    // Accepted quotes for selected month (revenue / 已成交):
     // - If shootingDate exists: use shootingDate
     // - If no shootingDate: fall back to createdAt
     db
@@ -584,6 +590,17 @@ export async function getDashboardStats(year?: number, month?: number) {
             OR
             ((shootingDate IS NULL OR shootingDate = '') AND YEAR(createdAt) = ${targetYear} AND MONTH(createdAt) = ${targetMonth})
           )`
+        )
+      ),
+    // Accepted quotes by createdAt month — 成交率分母／分子同一開單軸
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(quotes)
+      .where(
+        and(
+          eq(quotes.status, "accepted"),
+          sql`YEAR(createdAt) = ${targetYear}`,
+          sql`MONTH(createdAt) = ${targetMonth}`
         )
       ),
     // Rejected quotes for selected month (by createdAt)
@@ -693,10 +710,12 @@ export async function getDashboardStats(year?: number, month?: number) {
 
   const totalQuotesCount = Number(allQuotesForMonth[0]?.count ?? 0);
   const acceptedCount = Number(acceptedQuotesForMonth[0]?.count ?? 0);
+  const acceptedByCreatedCount = Number(acceptedQuotesByCreatedAt[0]?.count ?? 0);
   const rejectedCount = Number(rejectedQuotesForMonth[0]?.count ?? 0);
   const monthlyRevenue = Number(acceptedQuotesForMonth[0]?.total ?? 0);
   const adSpend = Number(monthlyAdSpend[0]?.total ?? 0);
-  const conversionRate = totalQuotesCount > 0 ? Math.round((acceptedCount / totalQuotesCount) * 100) : 0;
+  // 成交率：本月開單中已接受比例（分子分母同一 createdAt 軸，避免 >100%）
+  const conversionRate = totalQuotesCount > 0 ? Math.round((acceptedByCreatedCount / totalQuotesCount) * 100) : 0;
   const costPerQuote = totalQuotesCount > 0 ? Math.round(adSpend / totalQuotesCount) : 0;
   const businessExpenses = Number(monthlyExpensesResult[0]?.total ?? 0);
   const projectCosts = Number(monthlyProjectCostsResult[0]?.total ?? 0);

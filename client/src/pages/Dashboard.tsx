@@ -152,16 +152,19 @@ export default function Dashboard() {
           <StatCard
             label="總詢價數"
             value={isLoading ? "—" : `${stats?.totalQuotes ?? 0}份`}
+            sub="本月開單"
             valueColor="#00D4AA"
           />
           <StatCard
             label="已成交"
             value={isLoading ? "—" : `${stats?.acceptedQuotes ?? 0}份`}
+            sub="本月拍攝／成交歸屬"
             valueColor="#4caf50"
           />
           <StatCard
             label="成交率"
             value={isLoading ? "—" : `${stats?.conversionRate ?? 0}%`}
+            sub="本月開單中已接受"
             valueColor="#ba68c8"
           />
           <StatCard
@@ -205,7 +208,7 @@ export default function Dashboard() {
               {[
                 { label: "已取得電郵", value: fhStats.emailFetched, color: "#00D4AA" },
                 { label: "已發第一封郵件", value: fhStats.firstEmailSent ?? 0, color: "#FFB800" },
-                { label: "已發第二封郵件", value: (fhStats as any).followUpSent ?? 0, color: "#7B8CFF" },
+                { label: "已發第二封郵件", value: fhStats.followUpSent ?? 0, color: "#7B8CFF" },
                 { label: "已匯入詢價", value: fhStats.imported, color: "#FF6B6B" },
               ].map((s) => (
                 <div key={s.label} className="text-center">

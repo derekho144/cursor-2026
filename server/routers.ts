@@ -17,7 +17,7 @@ import { followUpRouter } from "./routers/followUp";
 import { pitchOutreachRouter } from "./routers/pitchOutreach";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
 
 export const appRouter = router({
   system: systemRouter,
@@ -76,23 +76,35 @@ export const appRouter = router({
                 .where(eq(emailInquiries.status, "pending"))
                 .then((r) => Number(r[0]?.total ?? 0))
             : Promise.resolve(0),
-          // 5. Freehunter board stats (lightweight — aggregate only, no full job rows)
+          // 5. Freehunter board stats (status counts + follow-up sent)
           db
-            ? db
-                .select({
-                  status: freehunterJobs.status,
-                  count: sql<number>`COUNT(*)`,
-                })
-                .from(freehunterJobs)
-                .groupBy(freehunterJobs.status)
-                .then((rows) => ({
-                  total: rows.reduce((s, r) => s + Number(r.count), 0),
-                  new: Number(rows.find((r) => r.status === "new")?.count ?? 0),
-                  emailFetched: Number(rows.find((r) => r.status === "email_fetched")?.count ?? 0),
-                  firstEmailSent: Number(rows.find((r) => r.status === "first_email_sent")?.count ?? 0),
-                  imported: Number(rows.find((r) => r.status === "imported")?.count ?? 0),
-                  ignored: Number(rows.find((r) => r.status === "ignored")?.count ?? 0),
-                }))
+            ? Promise.all([
+                db
+                  .select({
+                    status: freehunterJobs.status,
+                    count: sql<number>`COUNT(*)`,
+                  })
+                  .from(freehunterJobs)
+                  .groupBy(freehunterJobs.status),
+                db
+                  .select({ count: sql<number>`COUNT(*)` })
+                  .from(freehunterJobs)
+                  .where(
+                    and(
+                      isNotNull(freehunterJobs.followUpSentAt),
+                      // Exclude claim SENTINEL (1970-01-01) if ever written on this column
+                      gt(freehunterJobs.followUpSentAt, new Date("1971-01-01T00:00:00.000Z"))
+                    )
+                  ),
+              ]).then(([rows, followUpRows]) => ({
+                total: rows.reduce((s, r) => s + Number(r.count), 0),
+                new: Number(rows.find((r) => r.status === "new")?.count ?? 0),
+                emailFetched: Number(rows.find((r) => r.status === "email_fetched")?.count ?? 0),
+                firstEmailSent: Number(rows.find((r) => r.status === "first_email_sent")?.count ?? 0),
+                followUpSent: Number(followUpRows[0]?.count ?? 0),
+                imported: Number(rows.find((r) => r.status === "imported")?.count ?? 0),
+                ignored: Number(rows.find((r) => r.status === "ignored")?.count ?? 0),
+              }))
             : Promise.resolve(null),
         ]);
 
