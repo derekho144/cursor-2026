@@ -569,7 +569,7 @@ export default function LinkedInOps() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  上傳後設分類／主題；輪播約 6 張，辯論／反常識約 1–2 張。
+                  上傳後設「適用主題」：標「輪播案例」嘅相會全部用喺輪播帖；辯論／反常識同理。標「全部主題」先作後備。
                 </p>
               </div>
               <label className="inline-flex w-full sm:w-auto">

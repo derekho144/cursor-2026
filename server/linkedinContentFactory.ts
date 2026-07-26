@@ -37,12 +37,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "其他",
 };
 
-const PREFERRED_MAP: Record<LinkedInContentType, string[]> = {
-  carousel_case_study: ["carousel", "any"],
-  outsource_vs_inhire: ["debate", "any"],
-  contrarian_take: ["contrarian", "any"],
-};
-
 export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
   carousel_case_study: "輪播成功案例",
   outsource_vs_inhire: "外包 vs 自聘辯論",
@@ -190,7 +184,19 @@ export async function ensureContentPostsTable(): Promise<void> {
   }
 }
 
-/** Least-used active assets, preferring theme match; carousel gets more slides. */
+/** preferredFor → content type（指定主題嘅相只會用喺對應帖） */
+const THEME_KEY: Record<LinkedInContentType, "carousel" | "debate" | "contrarian"> = {
+  carousel_case_study: "carousel",
+  outsource_vs_inhire: "debate",
+  contrarian_take: "contrarian",
+};
+
+/**
+ * 抽相規則：
+ * 1) 有標「輪播案例／外包辯論／反常識」→ 該主題用晒呢啲相（唔會借去其他主題）
+ * 2) 冇專屬相先先用「全部主題」
+ * 3) 唔會用其他主題嘅相
+ */
 export async function pickAssetsForType(
   type: LinkedInContentType
 ): Promise<LinkedInContentAsset[]> {
@@ -198,8 +204,8 @@ export async function pickAssetsForType(
   const db = await getDb();
   if (!db) return [];
 
-  const need = type === "carousel_case_study" ? 6 : 2;
-  const preferred = PREFERRED_MAP[type];
+  const theme = THEME_KEY[type];
+  const maxAssets = type === "carousel_case_study" ? 9 : 4;
 
   const rows = await db
     .select()
@@ -211,38 +217,14 @@ export async function pickAssetsForType(
       asc(linkedinContentAssets.lastUsedAt),
       desc(linkedinContentAssets.id)
     )
-    .limit(40);
+    .limit(200);
 
-  const scored = rows
-    .map((r) => ({
-      row: r,
-      score:
-        (preferred.includes(r.preferredFor) ? 0 : 10) +
-        r.timesUsed * 2 +
-        (r.preferredFor === preferred[0] ? 0 : 1),
-    }))
-    .sort((a, b) => a.score - b.score || a.row.id - b.row.id);
+  const exact = rows.filter((r) => r.preferredFor === theme);
+  const anyPool = rows.filter((r) => r.preferredFor === "any");
 
-  // Prefer category diversity for carousel
-  const picked: LinkedInContentAsset[] = [];
-  const seenCat = new Set<string>();
-  for (const { row } of scored) {
-    if (picked.length >= need) break;
-    if (type === "carousel_case_study" && seenCat.has(row.category) && picked.length < need - 1) {
-      // skip same category first pass unless we need fillers
-      continue;
-    }
-    picked.push(row);
-    seenCat.add(row.category);
-  }
-  if (picked.length < need) {
-    for (const { row } of scored) {
-      if (picked.length >= need) break;
-      if (picked.some((p) => p.id === row.id)) continue;
-      picked.push(row);
-    }
-  }
-  return picked;
+  // 有指定主題相 → 用晒（上限 maxAssets）；否則先用「全部主題」
+  const pool = exact.length > 0 ? exact : anyPool;
+  return pool.slice(0, maxAssets);
 }
 
 async function markAssetsUsed(ids: number[]): Promise<void> {
