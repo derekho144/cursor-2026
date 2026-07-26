@@ -301,28 +301,30 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   project_bts: {
-    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type A: 項目案例 + 幕後故事.
-Goal: show the real workflow (not a portfolio dump). Michele Galeotto pattern: project + deep reflection.
-BODY: Hook → scene/challenge → method (✓/❌) → one real BTS moment from PROVIDED PHOTOS → result (only real caption facts) → craft insight → CTA question.
-List 5–7 slide beats mapped to photo ids. Match actual shoot type (product/food/fashion/jewellery/event/commercial); never force wedding.`,
+    angle: `Write a LinkedIn post in Michele Galeotto style for JD STUDIO HK — Type A 項目案例 + 幕後.
+Feel: creative director reflecting on a real shoot with the team (we) — project first then thinking.
+Open on what happened last week / on set with a little friction — not a service summary.
+Include one honest challenge one vivid moment from PROVIDED PHOTOS then a quiet insight from THIS job.
+Soft CTA question. English after --- = mini-story (hook conflict/moment insight CTA) not weak bullets.
+5–7 slide beats in mediaHint. Match real shoot type never force wedding. No punctuation in body.`,
     mediaHint:
-      "輪播 Type A（5–7 頁）：P1 Hook → P2 場景/挑戰 → P3 方法 ✓ → P4 幕後真實時刻 → P5 結果 → P6 洞察 → P7 CTA 問題",
+      "輪播 Type A（5–7 頁）：P1 故事開場 → P2 真實挑戰 → P3 現場選擇 → P4 幕後一刻 → P5 結果（只用真實 caption）→ P6 思考 → P7 柔和 CTA",
   },
   photo_education: {
-    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type B: 攝影教育 + 行業洞察.
-Goal: thought leadership. Teach one craft/business truth about photography or video for HK brands.
-BODY: Hook as「為什麼…？」→ ❌ myth vs ✅ truth → concrete A/B/C example → 3 practical tips → one-line insight → CTA inviting experience share.
-5–6 slide beats. Ground in photos if provided. No hard sell.`,
+    angle: `Michele Galeotto style Type B 攝影教育 + 行業洞察 for JD STUDIO HK.
+Open like industry thinking from someone who just left a set — not a textbook tip list.
+One lived example (from photos if any) then what most teams get wrong then what you notice after years of shoots.
+Soft CTA. English after --- mini-story arc. No punctuation in body.`,
     mediaHint:
-      "輪播 Type B（5–6 頁）：P1 為什麼…？ → P2 ❌誤解 vs ✅真相 → P3 例子對比 → P4 3 個建議 → P5 洞察 → P6 CTA 分享經驗",
+      "輪播 Type B（5–6 頁）：P1 行業觀察開場 → P2 迷思 → P3 現場例子 → P4 我哋點睇 → P5 洞察 → P6 CTA",
   },
   data_viz: {
-    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type C: 數據 + 視覺化.
-Goal: attract commercial clients with credible numbers + insight (not fake JD performance claims).
-BODY: Cover with title+year → 1–2 key figures (use research-safe industry figures OR anonymised process numbers clearly framed as industry-typical — never invent fake named client ROI) → what the numbers mean for brand teams → CTA asking readers to share their own data/experience.
-4–5 slides. Photos as visual proof if provided. Question CTA only.`,
+    angle: `Michele Galeotto style Type C 數據 + 視覺化 for JD STUDIO HK.
+Start from a number or timeline that changed how you briefed or shot — then what it means for commercial buyers.
+Insight must feel like craft reflection not a marketing dashboard. Soft CTA.
+English after --- mini-story. No fake JD ROI. No punctuation in body.`,
     mediaHint:
-      "輪播 Type C（4–5 頁）：P1 標題+年份 → P2 關鍵數字 1 → P3 關鍵數字 2 → P4 洞察 → P5 CTA 分享你的數據",
+      "輪播 Type C（4–5 頁）：P1 有故事嘅數字 → P2 現場含義 → P3 對客戶意味住咩 → P4 思考 → P5 CTA",
   },
 };
 
@@ -366,15 +368,17 @@ ${
       messages: [
         {
           role: "system",
-          content: `You are the LinkedIn content writer for JD STUDIO HK (Hong Kong photography & videography: product, food, fashion, jewellery, event, commercial, video).
+          content: `You write LinkedIn posts for JD STUDIO HK in the voice of Michele Galeotto (HK creative director style): project + reflection story-first honest challenge we-voice soft invite.
 
 ${LINKEDIN_COPY_STYLE_PROMPT}
 
 Content type this run: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
 
-When photos are attached, ground every claim in those images and captions.
-CRITICAL: the "body" field must contain NO punctuation marks (no 。，！？、：；「」''""().,!?:; etc). Use line breaks instead.
-After --- the English block MUST be a mini-story (hook + conflict/moment + insight + CTA) — never only two weak bullets.
+When photos are attached ground every claim in those images and captions.
+CRITICAL:
+1) No punctuation marks in body
+2) Sound like Michele — not a case-report brochure
+3) English after --- = mini-story (hook + conflict/moment + insight + CTA) not weak bullets
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -424,28 +428,30 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (type === "project_bts") {
       return {
         title: "項目案例 + 幕後故事",
-        body: `上週拍攝
-客戶一句話改咗成個方向
-唔好靚到假 要真
+        body: `上個月我哋連續幾日跟住同一個現場節奏走
 
-我哋跟住故事走
-唔再等完美光線
+真正難嘅唔係架數
+而係每一個轉折都冇第二次
 
-✓ 現場即時對光
-✓ 少擺拍 多捕捉
-✓ 交精選 唔係交晒
+有一刻場內突然靜咗
+我哋冇追大景
+而係對準一個好細嘅動作
 
-最難嘅一刻往往先最有溫度
+拍完先明
+現場最有價值嘅往往唔係最靚嗰格
+而係最真嗰格
 
-你最近一次拍攝
-邊張相最有真
+你哋最近一次拍攝
+最記得邊一個冇得重來嘅瞬間
 
 ---
-Last shoot one line changed everything
-Dont make it fake-pretty Make it real
-We stopped waiting for perfect light and followed the story
-The hardest beat often felt the warmest
-Which frame from your last project felt the most honest
+Last month we spent days inside one live rhythm
+The hard part was never the kit count
+It was knowing every turn had no redo
+When the room went quiet we ignored the wide
+and held one small gesture
+After wrap we remembered the honest frame more than the pretty one
+What unrehearsed moment from your last shoot still sticks
 
 #CaseStudy #BehindTheScenes #JDStudioHK`,
         mediaHint: fallbackHint,
@@ -455,28 +461,29 @@ Which frame from your last project felt the most honest
     if (type === "photo_education") {
       return {
         title: "攝影教育 + 行業洞察",
-        body: `點解同一場景
-有啲相有靈魂
-有啲冇
+        body: `我哋做創作越耐
+越發現人哋問錯第一條問題
 
-❌ 唔係因為相機貴
-✓ 係因為有冇等同睇
+多數人會問邊部機
+現場真正分高下嘅
+往往係你肯唔肯等同你睇唔睇到
 
-三個可即用做法
-- 先定情緒 再定燈光
-- 少指令 多觀察
-- 交件講故事 唔係堆數量
+同一場景
+有人追完美光
+有人追故事轉折
+結果差好遠
 
-你學攝影時
+你學嘢到而家
 邊一個習慣最難改
 
 ---
+The longer we make work the clearer one thing gets
+People ask about the camera first
+On set the real split is whether you wait and whether you see
 Same scene
-Some frames have soul others dont
-People blame the camera
-Usually we lost the wait and the watch
-Mood before light story before volume
-Which habit was hardest to unlearn
+Some chase perfect light
+Some chase the turn in the story
+Which habit has been hardest for you to unlearn
 
 #PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
@@ -485,22 +492,26 @@ Which habit was hardest to unlearn
     }
     return {
       title: "數據 + 視覺化",
-      body: `行業常見數字
-輪播帖互動可遠高過純文字帖
+      body: `商業客戶好少因為相靚就批 budget
+佢哋批嘅係自己睇得明風險同結果
 
-但對商業客戶更重要嘅係
-- 決策者願意停低滑完
-- 複雜流程被拆成可消化頁面
-- 數字後面要有判斷 唔係堆 chart
+所以我哋越嚟越少堆圖
+多講每一段畫面解決咗咩問題
+
+數字有用
+但冇判斷嘅數字只係噪音
 
 你哋團隊而家用邊種內容
-最能說服老闆批 budget
+最能同老闆講清楚值不值得做
 
 ---
-Carousels often get finished more than plain text
-Buyers still wont fund a pile of pretty frames alone
-They fund clarity about risk and outcome not chart spam
-What content format actually wins budget on your team
+Commercial buyers rarely fund pretty frames alone
+They fund clarity about risk and outcome
+So we show fewer dumps and more
+what each sequence actually solved
+Numbers help
+Numbers without judgment are just noise
+What format helps your team explain value upstairs
 
 #DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,
