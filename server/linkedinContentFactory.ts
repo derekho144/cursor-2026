@@ -7,10 +7,40 @@
  * 你批核 → 排程 → 你或 Manus 發佈後標記 published
  */
 import { getDb } from "./db";
-import { linkedinContentPosts, type LinkedInContentType } from "../drizzle/schema";
-import { and, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { invokeLLM } from "./_core/llm";
+import {
+  linkedinContentPosts,
+  linkedinContentAssets,
+  type LinkedInContentType,
+  type LinkedInContentAsset,
+} from "../drizzle/schema";
+import { and, eq, gte, lte, inArray, sql, asc, desc } from "drizzle-orm";
+import { invokeLLM, type MessageContent } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
+
+export type SelectedMediaItem = {
+  id: number;
+  url: string;
+  fileName: string;
+  category: string;
+  caption: string | null;
+  slideOrder: number;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  food: "食物",
+  jewellery: "珠寶",
+  product: "產品",
+  fashion: "時裝",
+  commercial: "商業／人像",
+  before_after: "前後對比",
+  other: "其他",
+};
+
+const PREFERRED_MAP: Record<LinkedInContentType, string[]> = {
+  carousel_case_study: ["carousel", "any"],
+  outsource_vs_inhire: ["debate", "any"],
+  contrarian_take: ["contrarian", "any"],
+};
 
 export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
   carousel_case_study: "輪播成功案例",
@@ -71,6 +101,7 @@ export async function ensureContentPostsTable(): Promise<void> {
         title varchar(512) NOT NULL,
         body mediumtext NOT NULL,
         media_hint text,
+        selected_media mediumtext,
         scheduled_for timestamp NULL,
         published_at timestamp NULL,
         approved_at timestamp NULL,
@@ -79,6 +110,29 @@ export async function ensureContentPostsTable(): Promise<void> {
         updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS linkedin_content_assets (
+        id int AUTO_INCREMENT PRIMARY KEY,
+        url varchar(1024) NOT NULL,
+        storage_key varchar(512) NOT NULL,
+        file_name varchar(255) NOT NULL,
+        mime_type varchar(128) NOT NULL,
+        li_asset_category enum('food','jewellery','product','fashion','commercial','before_after','other') NOT NULL DEFAULT 'other',
+        li_asset_preferred_for enum('any','carousel','debate','contrarian') NOT NULL DEFAULT 'any',
+        caption text,
+        ai_description text,
+        times_used int NOT NULL DEFAULT 0,
+        last_used_at timestamp NULL,
+        active int NOT NULL DEFAULT 1,
+        createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN selected_media mediumtext`);
+    } catch {
+      // column may already exist
+    }
     try {
       await db.execute(sql`
         ALTER TABLE linkedin_content_posts
@@ -110,6 +164,99 @@ export async function ensureContentPostsTable(): Promise<void> {
   }
 }
 
+/** Least-used active assets, preferring theme match; carousel gets more slides. */
+export async function pickAssetsForType(
+  type: LinkedInContentType
+): Promise<LinkedInContentAsset[]> {
+  await ensureContentPostsTable();
+  const db = await getDb();
+  if (!db) return [];
+
+  const need = type === "carousel_case_study" ? 6 : 2;
+  const preferred = PREFERRED_MAP[type];
+
+  const rows = await db
+    .select()
+    .from(linkedinContentAssets)
+    .where(eq(linkedinContentAssets.active, 1))
+    .orderBy(
+      asc(linkedinContentAssets.timesUsed),
+      sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
+      asc(linkedinContentAssets.lastUsedAt),
+      desc(linkedinContentAssets.id)
+    )
+    .limit(40);
+
+  const scored = rows
+    .map((r) => ({
+      row: r,
+      score:
+        (preferred.includes(r.preferredFor) ? 0 : 10) +
+        r.timesUsed * 2 +
+        (r.preferredFor === preferred[0] ? 0 : 1),
+    }))
+    .sort((a, b) => a.score - b.score || a.row.id - b.row.id);
+
+  // Prefer category diversity for carousel
+  const picked: LinkedInContentAsset[] = [];
+  const seenCat = new Set<string>();
+  for (const { row } of scored) {
+    if (picked.length >= need) break;
+    if (type === "carousel_case_study" && seenCat.has(row.category) && picked.length < need - 1) {
+      // skip same category first pass unless we need fillers
+      continue;
+    }
+    picked.push(row);
+    seenCat.add(row.category);
+  }
+  if (picked.length < need) {
+    for (const { row } of scored) {
+      if (picked.length >= need) break;
+      if (picked.some((p) => p.id === row.id)) continue;
+      picked.push(row);
+    }
+  }
+  return picked;
+}
+
+async function markAssetsUsed(ids: number[]): Promise<void> {
+  if (!ids.length) return;
+  const db = await getDb();
+  if (!db) return;
+  const now = new Date();
+  for (const id of ids) {
+    await db
+      .update(linkedinContentAssets)
+      .set({
+        timesUsed: sql`${linkedinContentAssets.timesUsed} + 1`,
+        lastUsedAt: now,
+      })
+      .where(eq(linkedinContentAssets.id, id));
+  }
+}
+
+function assetsToSelectedMedia(assets: LinkedInContentAsset[]): SelectedMediaItem[] {
+  return assets.map((a, i) => ({
+    id: a.id,
+    url: a.url,
+    fileName: a.fileName,
+    category: a.category,
+    caption: a.caption,
+    slideOrder: i + 1,
+  }));
+}
+
+function buildAssetBrief(assets: LinkedInContentAsset[]): string {
+  if (!assets.length) return "";
+  return assets
+    .map((a, i) => {
+      const cat = CATEGORY_LABELS[a.category] || a.category;
+      const desc = a.aiDescription || a.caption || a.fileName;
+      return `Slide/Image ${i + 1} [id=${a.id}] (${cat}): ${desc}\nURL: ${a.url}`;
+    })
+    .join("\n");
+}
+
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   carousel_case_study: {
     angle: `Write a LinkedIn post designed to accompany a CAROUSEL (multi-slide) case study for JD STUDIO HK.
@@ -117,10 +264,11 @@ B2B decision-makers love proof of results — frame it as a success story they c
 Structure the BODY as:
 1) Hook line (result or transformation)
 2) Caption that teases the carousel (problem → approach → outcome)
-3) Explicit numbered slide beats (5–7 slides) a designer can turn into a carousel
+3) Explicit numbered slide beats matching the PROVIDED STUDIO PHOTOS (in order)
 4) Soft CTA to jdstudiohk.com
-Use a plausible anonymised brand scenario (product / food / fashion / jewellery / commercial). Do NOT invent fake named client testimonials.
-In mediaHint: list each suggested carousel slide in Chinese + short English labels.`,
+If real photos are provided, BASE the story on what you see / the captions — do NOT invent unrelated scenes.
+Do NOT invent fake named client testimonials.
+In mediaHint: list each slide in Chinese + English, referencing which library photo (id) goes on which slide.`,
     mediaHint:
       "輪播建議（5–7 頁）：封面成果 → Before → Brief → Shoot day → After → 效果 → CTA jdstudiohk.com",
   },
@@ -129,24 +277,55 @@ In mediaHint: list each suggested carousel slide in Chinese + short English labe
 Goal: hit the client's core pain points and invite comments (not a hard sell).
 Use a provocative question or "Team Outsource vs Team In-house" framing.
 Cover cost, downtime, equipment, peak seasons, creative range — then take a clear stance with room for disagreement.
+If studio photos are provided, use them as proof of specialist-studio quality in mediaHint / framing.
 End with a question that sparks replies. Soft mention of JD STUDIO HK / jdstudiohk.com.`,
     mediaHint: "配圖建議：對比圖（Outsource vs In-house 兩欄）、或「你會點揀？」投票式封面",
   },
   contrarian_take: {
     angle: `Write a CONTRARIAN LinkedIn take about brand photography / video / hiring creatives in Hong Kong or Asia.
 Pick ONE sharp anti-consensus claim. Structure: bold claim → why most people are wrong → nuance → invite debate in comments.
+If studio photos are provided, tie the claim to what the image shows (real craft / real results).
 Sound confident, not rude. Soft CTA to JD STUDIO HK only if natural.`,
     mediaHint: "配圖建議：大字報式 hook（一句反常識金句）、高對比爭議封面",
   },
 };
 
-async function generateOnePost(type: LinkedInContentType): Promise<{
+async function generateOnePost(
+  type: LinkedInContentType,
+  assets: LinkedInContentAsset[] = []
+): Promise<{
   title: string;
   body: string;
   mediaHint: string;
+  selectedMedia: SelectedMediaItem[];
 }> {
   const meta = TYPE_PROMPTS[type];
+  const selectedMedia = assetsToSelectedMedia(assets);
+  const assetBrief = buildAssetBrief(assets);
+
   try {
+    const userParts: MessageContent[] = [
+      {
+        type: "text",
+        text: `Content type: ${type} (${CONTENT_TYPE_LABELS[type]})
+
+${meta.angle}
+
+${
+  assets.length
+    ? `IMPORTANT — Write around these REAL JD STUDIO photos from our library (auto-picked for this week):\n${assetBrief}\n\nmediaHint must map each slide/cover to these photo ids/URLs.`
+    : `No library photos available — invent a plausible anonymised scenario and give design mediaHint only.\nDefault media hint if needed: ${meta.mediaHint}`
+}`,
+      },
+    ];
+
+    for (const a of assets.slice(0, 4)) {
+      userParts.push({
+        type: "image_url",
+        image_url: { url: a.url, detail: "low" },
+      });
+    }
+
     const response = await invokeLLM({
       messages: [
         {
@@ -160,12 +339,13 @@ Rules:
 - Short paragraphs, scannable
 - Max 3 hashtags at the end
 - No fake statistics or fake named client quotes
+- When photos are attached, ground the post in those images
 - Sound human and authoritative; for debate/contrarian types, invite comments
-- Output JSON: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief" }`,
+- Output JSON: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
           role: "user",
-          content: `Content type: ${type} (${CONTENT_TYPE_LABELS[type]})\n\n${meta.angle}\n\nDefault media hint if needed: ${meta.mediaHint}`,
+          content: userParts,
         },
       ],
       response_format: {
@@ -191,79 +371,43 @@ Rules:
     if (!raw) throw new Error("No LLM content");
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     const parsed = JSON.parse(text);
+    const mediaHint =
+      String(parsed.mediaHint || meta.mediaHint) +
+      (assets.length
+        ? `\n\n已抽庫存相：${assets.map((a) => `#${a.id} ${a.fileName}`).join(" · ")}`
+        : "");
     return {
       title: String(parsed.title || CONTENT_TYPE_LABELS[type]).slice(0, 500),
       body: String(parsed.body || ""),
-      mediaHint: String(parsed.mediaHint || meta.mediaHint),
+      mediaHint,
+      selectedMedia,
     };
   } catch (err: any) {
     console.error(`[ContentFactory] LLM failed for ${type}:`, err?.message);
+    const fallbackHint = assets.length
+      ? `用庫存相：${assets.map((a, i) => `${i + 1}=#${a.id}`).join(", ")}`
+      : meta.mediaHint;
     if (type === "carousel_case_study") {
       return {
         title: "Carousel case study",
-        body: `We don't sell "a photographer for a day".
-We sell a result you can swipe through.
-
-Carousel idea for this week:
-Slide 1 — The before (inconsistent catalogue shots)
-Slide 2 — The brief (what the brand actually needed)
-Slide 3 — Lighting / setup decisions
-Slide 4 — Shoot day
-Slide 5 — After (web + social ready set)
-Slide 6 — What changed for the brand
-Slide 7 — CTA
-
-If you're a B2B decision-maker comparing in-house hire vs a studio partner, case studies beat job descriptions.
-
-More work: https://www.jdstudiohk.com
-
-#CaseStudy #ProductPhotography #JDStudio`,
-        mediaHint: meta.mediaHint,
+        body: `We don't sell "a photographer for a day".\nWe sell a result you can swipe through.\n\nCarousel idea for this week:\nSlide 1 — The before\nSlide 2 — The brief\nSlide 3 — Lighting / setup\nSlide 4 — Shoot day\nSlide 5 — After\nSlide 6 — What changed\nSlide 7 — CTA\n\nMore work: https://www.jdstudiohk.com\n\n#CaseStudy #ProductPhotography #JDStudioHK`,
+        mediaHint: fallbackHint,
+        selectedMedia,
       };
     }
     if (type === "outsource_vs_inhire") {
       return {
         title: "Outsource vs in-house debate",
-        body: `Hot take for HK brand teams:
-
-Hiring an in-house photographer feels like control.
-Outsourcing to a studio feels like risk.
-
-Reality check — the "safe" hire often hides:
-• salary + MPF + downtime between campaigns
-• gear you still don't own
-• one person's taste across every SKU and channel
-
-A specialist studio (like JD STUDIO HK) looks "expensive" per shoot — until you compare annual cost and peak-season quality.
-
-Team Outsource or Team In-house?
-Drop your side in the comments — genuinely curious where marketers land in 2026.
-
-https://www.jdstudiohk.com
-
-#MarketingHK #CreativeOps #Photography`,
-        mediaHint: meta.mediaHint,
+        body: `Hot take for HK brand teams:\n\nHiring an in-house photographer feels like control.\nOutsourcing to a studio feels like risk.\n\nReality check — the "safe" hire often hides salary + downtime + gear you still don't own.\n\nTeam Outsource or Team In-house?\nDrop your side in the comments.\n\nhttps://www.jdstudiohk.com\n\n#MarketingHK #CreativeOps #Photography`,
+        mediaHint: fallbackHint,
+        selectedMedia,
       };
     }
     return {
       title: "Contrarian take",
-      body: `Unpopular opinion:
-
-A "Photographer wanted" job post is often not a hiring problem —
-it's a demand-for-visuals problem.
-
-Many teams hire full-time because campaigns spiked…
-then sit on quiet months with fixed cost.
-
-Sometimes the contrarian move is: don't hire.
-Build a flexible studio retainer instead.
-
-Agree or disagree? Argue with me in the comments.
-
-JD STUDIO HK — https://www.jdstudiohk.com
-
-#Contrarian #BrandVisuals #HongKong`,
-      mediaHint: meta.mediaHint,
+      body: `Unpopular opinion:\n\nA "Photographer wanted" job post is often not a hiring problem — it's a demand-for-visuals problem.\n\nSometimes the contrarian move is: don't hire. Build a flexible studio retainer instead.\n\nAgree or disagree?\n\nJD STUDIO HK — https://www.jdstudiohk.com\n\n#Contrarian #BrandVisuals #HongKong`,
+      mediaHint: fallbackHint,
+      selectedMedia,
     };
   }
 }
@@ -271,15 +415,16 @@ JD STUDIO HK — https://www.jdstudiohk.com
 export async function generateWeeklyContentBatch(opts?: {
   weekKey?: string;
   force?: boolean;
-}): Promise<{ weekKey: string; created: number; existing: number }> {
+}): Promise<{ weekKey: string; created: number; existing: number; assetsUsed: number }> {
   await ensureContentPostsTable();
   const db = await getDb();
-  if (!db) return { weekKey: "", created: 0, existing: 0 };
+  if (!db) return { weekKey: "", created: 0, existing: 0, assetsUsed: 0 };
 
   const weekKey = opts?.weekKey ?? getHktWeekKey();
   const monday = getMondayHkt();
   let created = 0;
   let existing = 0;
+  let assetsUsed = 0;
 
   for (const slot of WEEK_SLOTS) {
     const found = await db
@@ -298,6 +443,11 @@ export async function generateWeeklyContentBatch(opts?: {
       continue;
     }
 
+    const assets = await pickAssetsForType(slot.type);
+    const gen = await generateOnePost(slot.type, assets);
+    const selectedJson = JSON.stringify(gen.selectedMedia);
+    const scheduledFor = scheduledForSlot(monday, slot.dayOffset, slot.hourHkt);
+
     if (found.length && opts?.force) {
       const [row] = await db
         .select()
@@ -308,22 +458,23 @@ export async function generateWeeklyContentBatch(opts?: {
         existing++;
         continue;
       }
-      const gen = await generateOnePost(slot.type);
       await db
         .update(linkedinContentPosts)
         .set({
           title: gen.title,
           body: gen.body,
           mediaHint: gen.mediaHint,
+          selectedMedia: selectedJson,
           status: "pending_review",
-          scheduledFor: scheduledForSlot(monday, slot.dayOffset, slot.hourHkt),
+          scheduledFor,
         })
         .where(eq(linkedinContentPosts.id, found[0].id));
+      await markAssetsUsed(assets.map((a) => a.id));
+      assetsUsed += assets.length;
       created++;
       continue;
     }
 
-    const gen = await generateOnePost(slot.type);
     await db.insert(linkedinContentPosts).values({
       weekKey,
       contentType: slot.type,
@@ -331,12 +482,15 @@ export async function generateWeeklyContentBatch(opts?: {
       title: gen.title,
       body: gen.body,
       mediaHint: gen.mediaHint,
-      scheduledFor: scheduledForSlot(monday, slot.dayOffset, slot.hourHkt),
+      selectedMedia: selectedJson,
+      scheduledFor,
     });
+    await markAssetsUsed(assets.map((a) => a.id));
+    assetsUsed += assets.length;
     created++;
   }
 
-  return { weekKey, created, existing };
+  return { weekKey, created, existing, assetsUsed };
 }
 
 export async function runScheduledContentFactory(): Promise<void> {

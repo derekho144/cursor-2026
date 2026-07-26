@@ -717,6 +717,8 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   title: varchar("title", { length: 512 }).notNull(),
   body: mediumtext("body").notNull(),
   mediaHint: text("media_hint"), // 建議配圖／輪播說明
+  /** JSON: [{ id, url, fileName, category, caption, slideOrder }] */
+  selectedMedia: mediumtext("selected_media"),
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
   approvedAt: timestamp("approved_at"),
@@ -726,3 +728,59 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
 });
 export type LinkedInContentPost = typeof linkedinContentPosts.$inferSelect;
 export type InsertLinkedInContentPost = typeof linkedinContentPosts.$inferInsert;
+
+/** 內容工廠圖片庫 — 每週生成時自動抽相寫主題 */
+export const linkedinAssetCategories = [
+  "food",
+  "jewellery",
+  "product",
+  "fashion",
+  "commercial",
+  "before_after",
+  "other",
+] as const;
+export type LinkedInAssetCategory = (typeof linkedinAssetCategories)[number];
+
+export const linkedinAssetPreferredFor = [
+  "any",
+  "carousel",
+  "debate",
+  "contrarian",
+] as const;
+export type LinkedInAssetPreferredFor = (typeof linkedinAssetPreferredFor)[number];
+
+export const linkedinContentAssets = mysqlTable("linkedin_content_assets", {
+  id: int("id").autoincrement().primaryKey(),
+  url: varchar("url", { length: 1024 }).notNull(),
+  storageKey: varchar("storage_key", { length: 512 }).notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 128 }).notNull(),
+  category: mysqlEnum("li_asset_category", [
+    "food",
+    "jewellery",
+    "product",
+    "fashion",
+    "commercial",
+    "before_after",
+    "other",
+  ])
+    .notNull()
+    .default("other"),
+  preferredFor: mysqlEnum("li_asset_preferred_for", [
+    "any",
+    "carousel",
+    "debate",
+    "contrarian",
+  ])
+    .notNull()
+    .default("any"),
+  caption: text("caption"),
+  aiDescription: text("ai_description"),
+  timesUsed: int("times_used").notNull().default(0),
+  lastUsedAt: timestamp("last_used_at"),
+  active: int("active").notNull().default(1), // 1=active 0=archived
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type LinkedInContentAsset = typeof linkedinContentAssets.$inferSelect;
+export type InsertLinkedInContentAsset = typeof linkedinContentAssets.$inferInsert;

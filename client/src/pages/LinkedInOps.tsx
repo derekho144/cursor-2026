@@ -24,7 +24,26 @@ import {
   PenLine,
   Check,
   X,
+  ImagePlus,
+  Trash2,
 } from "lucide-react";
+
+const ASSET_CATEGORIES = [
+  { value: "food", label: "食物" },
+  { value: "jewellery", label: "珠寶" },
+  { value: "product", label: "產品" },
+  { value: "fashion", label: "時裝" },
+  { value: "commercial", label: "商業／人像" },
+  { value: "before_after", label: "前後對比" },
+  { value: "other", label: "其他" },
+] as const;
+
+const ASSET_PREFERRED = [
+  { value: "any", label: "全部主題" },
+  { value: "carousel", label: "輪播案例" },
+  { value: "debate", label: "外包辯論" },
+  { value: "contrarian", label: "反常識" },
+] as const;
 
 const PLAYBOOK_LABELS: Record<string, string> = {
   hire_signal: "招聘訊號",
@@ -89,10 +108,81 @@ export default function LinkedInOps() {
     refetchInterval: 30000,
   });
   const [editingPost, setEditingPost] = useState<any>(null);
+  const [uploadCategory, setUploadCategory] = useState<(typeof ASSET_CATEGORIES)[number]["value"]>("product");
+  const [uploadPreferred, setUploadPreferred] = useState<(typeof ASSET_PREFERRED)[number]["value"]>("any");
+  const [uploadCaption, setUploadCaption] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const { data: assets, isLoading: assetsLoading } = trpc.linkedinContent.listAssets.useQuery(undefined, {
+    enabled: tab === "content",
+  });
+
+  const uploadAsset = trpc.linkedinContent.uploadAsset.useMutation({
+    onSuccess: () => {
+      toast.success("已加入圖片庫");
+      utils.linkedinContent.listAssets.invalidate();
+      utils.linkedinContent.getStats.invalidate();
+      setUploadCaption("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateAsset = trpc.linkedinContent.updateAsset.useMutation({
+    onSuccess: () => {
+      utils.linkedinContent.listAssets.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const archiveAsset = trpc.linkedinContent.archiveAsset.useMutation({
+    onSuccess: () => {
+      toast.success("已移出圖片庫");
+      utils.linkedinContent.listAssets.invalidate();
+      utils.linkedinContent.getStats.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const readFileAsBase64 = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("讀取檔案失敗"));
+      reader.readAsDataURL(file);
+    });
+
+  const onUploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) {
+          toast.error(`${file.name} 唔係圖片`);
+          continue;
+        }
+        const dataUrl = await readFileAsBase64(file);
+        await uploadAsset.mutateAsync({
+          fileName: file.name,
+          fileBase64: dataUrl,
+          mimeType: file.type,
+          category: uploadCategory,
+          preferredFor: uploadPreferred,
+          caption: uploadCaption || undefined,
+        });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "上傳失敗");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const genWeek = trpc.linkedinContent.generateThisWeek.useMutation({
     onSuccess: (d) => {
-      toast.success(`本週內容：新增 ${d.created}，已有 ${d.existing}（${d.weekKey}）`);
+      const used = (d as any).assetsUsed ?? 0;
+      toast.success(
+        `本週內容：新增 ${d.created}，已有 ${d.existing}${used ? `，抽相 ${used} 張` : ""}（${d.weekKey}）`
+      );
       utils.linkedinContent.getStats.invalidate();
       utils.linkedinContent.listPosts.invalidate();
     },
@@ -410,6 +500,162 @@ export default function LinkedInOps() {
             )}
           </div>
 
+          {/* Image library */}
+          <div className="border rounded-lg p-4 bg-card space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="font-medium text-sm flex items-center gap-2">
+                  <ImagePlus className="w-4 h-4" style={{ color: "#d4a843" }} />
+                  圖片庫
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {contentStats?.libraryCount ?? assets?.length ?? 0} 張 · 生成時自動抽相寫主題
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  上傳作品後設分類／適用主題；輪播會抽約 6 張，辯論／反常識約 1–2 張（優先少用過嘅）。
+                </p>
+              </div>
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  disabled={uploading || uploadAsset.isPending}
+                  onChange={(e) => {
+                    void onUploadFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-1"
+                  disabled={uploading || uploadAsset.isPending}
+                  onClick={(e) => {
+                    const input = (e.currentTarget.parentElement as HTMLLabelElement)?.querySelector(
+                      'input[type="file"]'
+                    ) as HTMLInputElement | null;
+                    input?.click();
+                  }}
+                >
+                  {uploading || uploadAsset.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <ImagePlus className="w-3 h-3" />
+                  )}
+                  上傳相片
+                </Button>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs">分類</Label>
+                <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as any)}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">適用主題</Label>
+                <Select value={uploadPreferred} onValueChange={(v) => setUploadPreferred(v as any)}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_PREFERRED.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 flex-1 min-w-[160px]">
+                <Label className="text-xs">說明（可選）</Label>
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="例如：珠寶 before / 產品棚拍"
+                  value={uploadCaption}
+                  onChange={(e) => setUploadCaption(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {assetsLoading ? (
+              <div className="py-6 text-center">
+                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+              </div>
+            ) : (assets?.length ?? 0) === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground border border-dashed rounded-md">
+                未有相片 — 上傳後，「生成本週 3 篇」會自動抽相
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {assets?.map((a) => (
+                  <div key={a.id} className="border rounded-md overflow-hidden bg-muted/20 space-y-1">
+                    <a href={a.url} target="_blank" rel="noreferrer" className="block aspect-square bg-black/5">
+                      <img src={a.url} alt={a.fileName} className="w-full h-full object-cover" />
+                    </a>
+                    <div className="px-2 pb-2 space-y-1">
+                      <div className="text-[10px] text-muted-foreground truncate" title={a.fileName}>
+                        #{a.id} · 用過 {a.timesUsed} 次
+                      </div>
+                      <Select
+                        value={a.category}
+                        onValueChange={(v) => updateAsset.mutate({ id: a.id, category: v as any })}
+                      >
+                        <SelectTrigger className="h-7 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ASSET_CATEGORIES.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={a.preferredFor}
+                        onValueChange={(v) => updateAsset.mutate({ id: a.id, preferredFor: v as any })}
+                      >
+                        <SelectTrigger className="h-7 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ASSET_PREFERRED.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-full text-[10px] gap-1 text-muted-foreground"
+                        onClick={() => archiveAsset.mutate({ id: a.id })}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        移出
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <div className="flex flex-wrap gap-2 text-sm">
               <span className="px-2 py-1 rounded bg-card border">週次 {contentStats?.weekKey ?? "…"}</span>
@@ -506,6 +752,22 @@ export default function LinkedInOps() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{p.body}</p>
+                {Array.isArray(p.selectedMedia) && p.selectedMedia.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto py-1">
+                    {p.selectedMedia.map((m: any) => (
+                      <a
+                        key={`${p.id}-${m.id}-${m.slideOrder}`}
+                        href={m.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 w-16 h-16 rounded border overflow-hidden bg-muted"
+                        title={`#${m.id} ${m.fileName || ""}`}
+                      >
+                        <img src={m.url} alt="" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {p.mediaHint && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">配圖：{p.mediaHint}</p>
                 )}
@@ -578,6 +840,24 @@ export default function LinkedInOps() {
                   onChange={(e) => setEditingPost({ ...editingPost, mediaHint: e.target.value })}
                 />
               </div>
+              {Array.isArray(editingPost.selectedMedia) && editingPost.selectedMedia.length > 0 && (
+                <div>
+                  <Label>已抽庫存相</Label>
+                  <div className="flex gap-2 flex-wrap mt-1">
+                    {editingPost.selectedMedia.map((m: any) => (
+                      <a
+                        key={`edit-${m.id}`}
+                        href={m.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-20 h-20 rounded border overflow-hidden"
+                      >
+                        <img src={m.url} alt="" className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2 flex-wrap">

@@ -1,12 +1,19 @@
 /**
- * linkedinContent.ts — 內容工廠 API
+ * linkedinContent.ts — 內容工廠 API（含圖片庫）
  */
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { linkedinContentPosts } from "../../drizzle/schema";
+import {
+  linkedinContentPosts,
+  linkedinContentAssets,
+  linkedinAssetCategories,
+  linkedinAssetPreferredFor,
+} from "../../drizzle/schema";
 import { eq, and, desc, count, gte, lte, inArray } from "drizzle-orm";
+import { storagePut } from "../storage";
+import { nanoid } from "nanoid";
 import {
   ensureContentPostsTable,
   generateWeeklyContentBatch,
@@ -25,13 +32,42 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "已拒絕",
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  food: "食物",
+  jewellery: "珠寶",
+  product: "產品",
+  fashion: "時裝",
+  commercial: "商業／人像",
+  before_after: "前後對比",
+  other: "其他",
+};
+
+const PREFERRED_LABELS: Record<string, string> = {
+  any: "全部主題",
+  carousel: "輪播案例",
+  debate: "外包辯論",
+  contrarian: "反常識",
+};
+
+function parseSelectedMedia(raw: string | null | undefined) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const linkedinContentRouter = router({
   meta: protectedProcedure.query(() => ({
     typeLabels: CONTENT_TYPE_LABELS,
     typeBlurbs: CONTENT_TYPE_BLURBS,
     statusLabels: STATUS_LABELS,
+    categoryLabels: CATEGORY_LABELS,
+    preferredLabels: PREFERRED_LABELS,
     scheduleNote:
-      "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）",
+      "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）。有圖片庫時會自動抽相寫主題。",
   })),
 
   getStats: protectedProcedure.query(async () => {
@@ -74,6 +110,11 @@ export const linkedinContentRouter = router({
         )
       );
 
+    const [assetCount] = await db
+      .select({ cnt: count() })
+      .from(linkedinContentAssets)
+      .where(eq(linkedinContentAssets.active, 1));
+
     return {
       weekKey,
       pendingReview: counts["pending_review"] ?? 0,
@@ -82,6 +123,7 @@ export const linkedinContentRouter = router({
       published: counts["published"] ?? 0,
       approved: (counts["approved"] ?? 0) + (counts["scheduled"] ?? 0),
       byStatus: counts,
+      libraryCount: assetCount?.cnt ?? 0,
     };
   }),
 
@@ -116,6 +158,7 @@ export const linkedinContentRouter = router({
         weekKey: input.weekKey ?? getHktWeekKey(),
         posts: posts.map((p) => ({
           ...p,
+          selectedMedia: parseSelectedMedia(p.selectedMedia),
           typeLabel: CONTENT_TYPE_LABELS[p.contentType],
           statusLabel: STATUS_LABELS[p.status] ?? p.status,
         })),
@@ -127,6 +170,116 @@ export const linkedinContentRouter = router({
     .mutation(async ({ input }) => {
       const result = await generateWeeklyContentBatch({ force: input?.force });
       return result;
+    }),
+
+  listAssets: protectedProcedure
+    .input(z.object({ includeArchived: z.boolean().optional() }).optional())
+    .query(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const rows = input?.includeArchived
+        ? await db.select().from(linkedinContentAssets).orderBy(desc(linkedinContentAssets.id)).limit(200)
+        : await db
+            .select()
+            .from(linkedinContentAssets)
+            .where(eq(linkedinContentAssets.active, 1))
+            .orderBy(desc(linkedinContentAssets.id))
+            .limit(200);
+
+      return rows.map((r) => ({
+        ...r,
+        categoryLabel: CATEGORY_LABELS[r.category] ?? r.category,
+        preferredLabel: PREFERRED_LABELS[r.preferredFor] ?? r.preferredFor,
+      }));
+    }),
+
+  uploadAsset: protectedProcedure
+    .input(
+      z.object({
+        fileName: z.string().min(1).max(255),
+        fileBase64: z.string().min(1),
+        mimeType: z.string().regex(/^image\//),
+        category: z.enum(linkedinAssetCategories).default("other"),
+        preferredFor: z.enum(linkedinAssetPreferredFor).default("any"),
+        caption: z.string().max(1000).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const raw = input.fileBase64.includes(",")
+        ? input.fileBase64.split(",")[1]
+        : input.fileBase64;
+      const buf = Buffer.from(raw, "base64");
+      if (buf.length > 12 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "圖片請小於 12MB" });
+      }
+
+      const safeName = input.fileName.replace(/[^\w.\-]+/g, "_").slice(0, 120);
+      const fileKey = `linkedin-content/${Date.now()}-${nanoid(8)}-${safeName}`;
+      let url: string;
+      try {
+        ({ url } = await storagePut(fileKey, buf, input.mimeType));
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `上傳失敗：${err?.message || "storage error"}`,
+        });
+      }
+
+      await db.insert(linkedinContentAssets).values({
+        url,
+        storageKey: fileKey,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        category: input.category,
+        preferredFor: input.preferredFor,
+        caption: input.caption || null,
+        active: 1,
+      });
+
+      return { url, key: fileKey };
+    }),
+
+  updateAsset: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        category: z.enum(linkedinAssetCategories).optional(),
+        preferredFor: z.enum(linkedinAssetPreferredFor).optional(),
+        caption: z.string().max(1000).optional().nullable(),
+        active: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const patch: Record<string, unknown> = {};
+      if (input.category !== undefined) patch.category = input.category;
+      if (input.preferredFor !== undefined) patch.preferredFor = input.preferredFor;
+      if (input.caption !== undefined) patch.caption = input.caption;
+      if (input.active !== undefined) patch.active = input.active ? 1 : 0;
+      await db.update(linkedinContentAssets).set(patch).where(eq(linkedinContentAssets.id, input.id));
+      return { success: true };
+    }),
+
+  archiveAsset: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      await db
+        .update(linkedinContentAssets)
+        .set({ active: 0 })
+        .where(eq(linkedinContentAssets.id, input.id));
+      return { success: true };
     }),
 
   updatePost: protectedProcedure
@@ -205,7 +358,6 @@ export const linkedinContentRouter = router({
       return { success: true };
     }),
 
-  /** 今日應發（已批准／已排程） */
   dueToday: protectedProcedure.query(async () => {
     await ensureContentPostsTable();
     const db = await getDb();
@@ -230,6 +382,7 @@ export const linkedinContentRouter = router({
 
     return posts.map((p) => ({
       ...p,
+      selectedMedia: parseSelectedMedia(p.selectedMedia),
       typeLabel: CONTENT_TYPE_LABELS[p.contentType],
       statusLabel: STATUS_LABELS[p.status],
     }));
