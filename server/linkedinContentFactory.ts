@@ -373,6 +373,7 @@ ${LINKEDIN_COPY_STYLE_PROMPT}
 Content type this run: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
 
 When photos are attached, ground every claim in those images and captions.
+CRITICAL: the "body" field must contain NO punctuation marks (no 。，！？、：；「」''""().,!?:; etc). Use line breaks instead.
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -422,7 +423,28 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (type === "project_bts") {
       return {
         title: "項目案例 + 幕後故事",
-        body: `上週拍攝，客戶一句話改咗成個方向：「唔好靚到假，要真。」\n\n我哋跟住故事走，唔再等「完美光線」。\n\n✓ 現場即時對光\n✓ 少擺拍、多捕捉\n✓ 交精選，唔係交晒\n\n最難嘅一刻往往先最有溫度。\n\n你最近一次拍攝，邊張相最有「真」？\n\n---\nOne line changed the shoot: "Don't make it fake-pretty. Make it real."\nWhich frame from your last project felt the most honest?\n\n#CaseStudy #BehindTheScenes #JDStudioHK`,
+        body: `上週拍攝
+客戶一句話改咗成個方向
+唔好靚到假 要真
+
+我哋跟住故事走
+唔再等完美光線
+
+✓ 現場即時對光
+✓ 少擺拍 多捕捉
+✓ 交精選 唔係交晒
+
+最難嘅一刻往往先最有溫度
+
+你最近一次拍攝
+邊張相最有真
+
+---
+Last shoot one line changed everything
+Dont make it fake-pretty Make it real
+Which frame from your last project felt the most honest
+
+#CaseStudy #BehindTheScenes #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
@@ -430,14 +452,52 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (type === "photo_education") {
       return {
         title: "攝影教育 + 行業洞察",
-        body: `點解同一場景，有啲相有靈魂，有啲冇？\n\n❌ 唔係因為相機貴\n✓ 係因為有冇「等」同「睇」\n\n三個可即用做法：\n• 先定情緒，再定燈光\n• 少指令，多觀察\n• 交件講故事，唔係堆數量\n\n你學攝影時，邊一個習慣最難改？\n\n---\nWhy do some frames have soul and others don't — same scene?\nIt's rarely the camera.\nWhich habit was hardest to unlearn?\n\n#PhotographyTips #CreativeLeadership #JDStudioHK`,
+        body: `點解同一場景
+有啲相有靈魂
+有啲冇
+
+❌ 唔係因為相機貴
+✓ 係因為有冇等同睇
+
+三個可即用做法
+- 先定情緒 再定燈光
+- 少指令 多觀察
+- 交件講故事 唔係堆數量
+
+你學攝影時
+邊一個習慣最難改
+
+---
+Why do some frames have soul and others dont
+same scene
+Its rarely the camera
+Which habit was hardest to unlearn
+
+#PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
     }
     return {
       title: "數據 + 視覺化",
-      body: `行業常見數字：輪播帖互動可遠高過純文字帖。\n\n但對商業客戶更重要嘅係：\n• 決策者願意停低滑完\n• 複雜流程被拆成可消化頁面\n• 數字後面要有判斷，唔係堆 chart\n\n你哋團隊而家用邊種內容最能說服老闆批 budget？\n\n---\nCarousels often outperform text — but commercial buyers care about clarity and judgment, not charts for charts' sake.\nWhat content format actually wins budget in your team?\n\n#DataStorytelling #B2BMarketing #JDStudioHK`,
+      body: `行業常見數字
+輪播帖互動可遠高過純文字帖
+
+但對商業客戶更重要嘅係
+- 決策者願意停低滑完
+- 複雜流程被拆成可消化頁面
+- 數字後面要有判斷 唔係堆 chart
+
+你哋團隊而家用邊種內容
+最能說服老闆批 budget
+
+---
+Carousels often outperform text
+but commercial buyers care about clarity and judgment
+not charts for charts sake
+What content format actually wins budget in your team
+
+#DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,
       selectedMedia,
     };

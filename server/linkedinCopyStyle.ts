@@ -18,6 +18,15 @@ LANGUAGE (Format A preferred):
 - Do NOT translate word-for-word; natural 繁中 (light Cantonese OK) + conversational English
 - Hashtags: max 3–5 at the end only
 
+PUNCTUATION (strict — applies to post BODY only):
+- Do NOT use punctuation marks in Chinese or English body text
+- Forbidden: 。 ， 、 ！ ？ ： ； 「 』 『 』 （ ） … — – · and English . , ? ! : ; ' " ( ) / \\
+- Use line breaks and short lines instead of commas/periods
+- Questions: write as a line without ？ or ? (e.g. 你最近邊張相最有感覺)
+- Lists: start lines with ✓ ❌ or - only these markers OK no trailing punctuation
+- Hashtags at end are OK the --- bilingual separator is OK
+- mediaHint may use normal punctuation internal note only
+
 HOOK (first line — pick ONE):
 A) Story: [specific time/scene] + [conflict/challenge]
 B) Myth-bust: counter-intuitive claim + pause
@@ -28,7 +37,7 @@ FORBIDDEN openers: 「很高興宣佈」「我想分享」「今天想講」「E
 CAPTION STRUCTURE (繁中 ~150–300 字 / EN summary short):
 [Hook 1–2 lines]
 [Scene setup 2–3 lines — context / challenge]
-[Core points — short lines with ✓ / ❌ / • ]
+[Core points — short lines with ✓ / ❌ / - ]
 [Real moment — difficulty, surprise, or emotion]
 [Insight — one level deeper]
 [CTA — one question]
