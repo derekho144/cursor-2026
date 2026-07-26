@@ -134,10 +134,8 @@ export default function LinkedInOps() {
   const [contentFilter, setContentFilter] = useState<"all" | "pending_review" | "scheduled" | "published">("pending_review");
   const { data: contentList, isLoading: contentLoading } = trpc.linkedinContent.listPosts.useQuery(
     {
-      weekKey:
-        contentFilter === "published" || contentFilter === "all"
-          ? undefined
-          : contentStats?.weekKey,
+      // 「已發佈」睇歷史；其餘鎖定本週
+      weekKey: contentFilter === "published" ? undefined : contentStats?.weekKey,
       status: contentFilter === "all" ? "all" : contentFilter,
       limit: 20,
     },
@@ -233,9 +231,17 @@ export default function LinkedInOps() {
   const genWeek = trpc.linkedinContent.generateThisWeek.useMutation({
     onSuccess: (d) => {
       const used = (d as any).assetsUsed ?? 0;
-      toast.success(
-        `本週內容：新增 ${d.created}，已有 ${d.existing}${used ? `，抽相 ${used} 張` : ""}（${d.weekKey}）`
-      );
+      if (d.created === 0 && d.existing > 0) {
+        toast.success(
+          `本週已有 ${d.existing} 篇（${d.weekKey}）— 已切去「全部」顯示。若要重寫待批核稿，用「清空本週草稿」後再生成。`
+        );
+        setContentFilter("all");
+      } else {
+        toast.success(
+          `本週內容：新增 ${d.created}，已有 ${d.existing}${used ? `，抽相 ${used} 張` : ""}（${d.weekKey}）`
+        );
+        if (d.created > 0) setContentFilter("pending_review");
+      }
       utils.linkedinContent.getStats.invalidate();
       utils.linkedinContent.listPosts.invalidate();
     },
@@ -275,6 +281,7 @@ export default function LinkedInOps() {
       utils.linkedinContent.getStats.invalidate();
       utils.linkedinContent.listPosts.invalidate();
       utils.linkedinContent.dueToday.invalidate();
+      setContentFilter("scheduled");
       setEditingPost(null);
     },
     onError: (e) => toast.error(e.message),
@@ -877,8 +884,28 @@ export default function LinkedInOps() {
               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             </div>
           ) : (contentList?.posts.length ?? 0) === 0 ? (
-            <div className="py-12 text-center text-muted-foreground border rounded-lg">
-              未有內容 — 撳「生成本週 3 篇」或等週一上午自動產生
+            <div className="py-12 text-center text-muted-foreground border rounded-lg space-y-3 px-4">
+              {contentFilter === "pending_review" && (contentStats?.weekTotal ?? 0) > 0 ? (
+                <>
+                  <p>
+                    本週已有 {contentStats?.weekTotal} 篇，但冇待批核
+                    {(contentStats?.weekScheduled ?? 0) > 0
+                      ? `（${contentStats?.weekScheduled} 篇已排程）`
+                      : ""}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setContentFilter((contentStats?.weekScheduled ?? 0) > 0 ? "scheduled" : "all")
+                    }
+                  >
+                    睇{(contentStats?.weekScheduled ?? 0) > 0 ? "已排程" : "全部"}
+                  </Button>
+                </>
+              ) : (
+                <p>未有內容 — 撳「生成本週 3 篇」或等週一上午自動產生</p>
+              )}
             </div>
           ) : (
             contentList?.posts.map((p) => (

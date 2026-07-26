@@ -228,6 +228,21 @@ export const linkedinContentRouter = router({
         )
       );
 
+    const [weekTotal] = await db
+      .select({ cnt: count() })
+      .from(linkedinContentPosts)
+      .where(eq(linkedinContentPosts.weekKey, weekKey));
+
+    const [weekScheduled] = await db
+      .select({ cnt: count() })
+      .from(linkedinContentPosts)
+      .where(
+        and(
+          eq(linkedinContentPosts.weekKey, weekKey),
+          inArray(linkedinContentPosts.status, ["approved", "scheduled"])
+        )
+      );
+
     const [assetCount] = await db
       .select({ cnt: count() })
       .from(linkedinContentAssets)
@@ -237,6 +252,8 @@ export const linkedinContentRouter = router({
       weekKey,
       pendingReview: counts["pending_review"] ?? 0,
       weekPending: weekPending?.cnt ?? 0,
+      weekTotal: weekTotal?.cnt ?? 0,
+      weekScheduled: weekScheduled?.cnt ?? 0,
       dueToday: dueToday?.cnt ?? 0,
       published: counts["published"] ?? 0,
       approved: (counts["approved"] ?? 0) + (counts["scheduled"] ?? 0),
