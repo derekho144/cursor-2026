@@ -64,6 +64,12 @@ EN required beats:
 3) Insight
 4) Soft CTA question
 Forbidden EN: two capability bullets Multi-camera coverage Event photography empty paraphrase
+HARD RULE: body is INVALID if Chinese-only or if it ends with --- and no English after
+Always output:
+[繁中 full story]
+---
+[English mini-story]
+[#hashtags]
 
 ### Soft CTA
 Prefer curiosity e.g. 你哋最近一次現場最記得邊一刻

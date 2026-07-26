@@ -328,6 +328,93 @@ English after --- mini-story. No fake JD ROI. No punctuation in body.`,
   },
 };
 
+function stripHashtags(block: string): { text: string; tags: string } {
+  const lines = block.split("\n");
+  const tagLines: string[] = [];
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    if (/^\s*#/.test(line.trim())) tagLines.push(line.trim());
+    else bodyLines.push(line);
+  }
+  return {
+    text: bodyLines.join("\n").trim(),
+    tags: tagLines.join("\n"),
+  };
+}
+
+/** True if text after --- has enough Latin letters to count as English mini-story */
+function hasEnglishMiniStory(body: string): boolean {
+  const idx = body.indexOf("\n---\n");
+  const alt = idx < 0 ? body.indexOf("\n---") : idx;
+  if (alt < 0) return false;
+  const after = body.slice(alt).replace(/^[\s\-]+/, "");
+  const { text } = stripHashtags(after);
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  return latin >= 80;
+}
+
+async function generateEnglishMiniStory(zhBody: string): Promise<string> {
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: `Rewrite the Chinese LinkedIn post as an English mini-story summary for JD STUDIO HK.
+Rules:
+- No punctuation marks at all (no . , ? ! : ; ' " etc)
+- Use short line breaks
+- Structure exactly: hook then conflict/real moment then insight then soft CTA question
+- Conversational Michele Galeotto creative-director tone we-voice
+- Do not invent new facts beyond the Chinese
+- Output JSON { "english": "..." } only the English block without --- and without hashtags`,
+      },
+      {
+        role: "user",
+        content: `Chinese post:\n\n${zhBody}`,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "en_mini_story",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: { english: { type: "string" } },
+          required: ["english"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+  const raw = response?.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("No English LLM content");
+  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+  const parsed = JSON.parse(text);
+  return String(parsed.english || "").trim();
+}
+
+async function ensureBilingualBody(body: string): Promise<string> {
+  const trimmed = body.trim();
+  if (hasEnglishMiniStory(trimmed)) return trimmed;
+
+  // Split off trailing hashtags
+  const { text: main, tags } = stripHashtags(trimmed);
+  let zh = main;
+  const sep = zh.indexOf("\n---");
+  if (sep >= 0) zh = zh.slice(0, sep).trim();
+
+  try {
+    const en = await generateEnglishMiniStory(zh);
+    if ((en.match(/[A-Za-z]/g) || []).length < 40) return trimmed;
+    const parts = [zh, "---", en];
+    if (tags) parts.push("", tags);
+    return parts.join("\n");
+  } catch (err: any) {
+    console.warn("[ContentFactory] English mini-story repair failed:", err?.message);
+    return trimmed;
+  }
+}
+
 async function generateOnePost(
   type: LinkedInContentType,
   assets: LinkedInContentAsset[] = []
@@ -378,7 +465,7 @@ When photos are attached ground every claim in those images and captions.
 CRITICAL:
 1) No punctuation marks in body
 2) Sound like Michele — not a case-report brochure
-3) English after --- = mini-story (hook + conflict/moment + insight + CTA) not weak bullets
+3) body MUST be bilingual Format A: full 繁中 story then a line with only --- then English mini-story (hook + conflict/moment + insight + CTA). Never end after --- with empty English. Never Chinese-only.
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -409,6 +496,7 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (!raw) throw new Error("No LLM content");
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     const parsed = JSON.parse(text);
+    const body = await ensureBilingualBody(String(parsed.body || ""));
     const mediaHint =
       String(parsed.mediaHint || meta.mediaHint) +
       (assets.length
@@ -416,7 +504,7 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
         : "");
     return {
       title: String(parsed.title || CONTENT_TYPE_LABELS[type]).slice(0, 500),
-      body: String(parsed.body || ""),
+      body,
       mediaHint,
       selectedMedia,
     };
