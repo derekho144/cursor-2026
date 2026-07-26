@@ -365,7 +365,7 @@ ${enHint}
 Rules:
 - No punctuation marks at all
 - Short line breaks
-- Structure: hook then key middle beat then insight then soft CTA question
+- Structure: hook then key middle beat then insight then soft CTA question then end with exactly: Head to www.jdstudiohk.com for more case studies
 - Do not invent new facts beyond the Chinese
 - Output JSON { "english": "..." } without --- and without hashtags`,
       },
@@ -395,25 +395,46 @@ Rules:
   return String(parsed.english || "").trim();
 }
 
+async function ensureSiteCta(body: string): Promise<string> {
+  const ZH = "更多案例睇 www.jdstudiohk.com";
+  const EN = "Head to www.jdstudiohk.com for more case studies";
+  const { text: main, tags } = stripHashtags(body.trim());
+  const sep = main.search(/\n---\n?/);
+  if (sep < 0) {
+    let out = main.includes("jdstudiohk.com") ? main : `${main}\n\n${ZH}`;
+    if (tags) out += `\n\n${tags}`;
+    return out;
+  }
+  let zh = main.slice(0, sep).trim();
+  let en = main.slice(sep).replace(/^\n?---\n?/, "").trim();
+  if (!/jdstudiohk\.com/i.test(zh)) zh = `${zh}\n\n${ZH}`;
+  if (!/jdstudiohk\.com/i.test(en)) en = `${en}\n\n${EN}`;
+  const parts = [zh, "---", en];
+  if (tags) parts.push("", tags);
+  return parts.join("\n");
+}
+
 async function ensureBilingualBody(body: string, type: LinkedInContentType): Promise<string> {
   const trimmed = body.trim();
-  if (hasEnglishMiniStory(trimmed)) return trimmed;
+  let result = trimmed;
+  if (!hasEnglishMiniStory(trimmed)) {
+    const { text: main, tags } = stripHashtags(trimmed);
+    let zh = main;
+    const sep = zh.indexOf("\n---");
+    if (sep >= 0) zh = zh.slice(0, sep).trim();
 
-  const { text: main, tags } = stripHashtags(trimmed);
-  let zh = main;
-  const sep = zh.indexOf("\n---");
-  if (sep >= 0) zh = zh.slice(0, sep).trim();
-
-  try {
-    const en = await generateEnglishMiniStory(zh, type);
-    if ((en.match(/[A-Za-z]/g) || []).length < 40) return trimmed;
-    const parts = [zh, "---", en];
-    if (tags) parts.push("", tags);
-    return parts.join("\n");
-  } catch (err: any) {
-    console.warn("[ContentFactory] English mini-story repair failed:", err?.message);
-    return trimmed;
+    try {
+      const en = await generateEnglishMiniStory(zh, type);
+      if ((en.match(/[A-Za-z]/g) || []).length >= 40) {
+        const parts = [zh, "---", en];
+        if (tags) parts.push("", tags);
+        result = parts.join("\n");
+      }
+    } catch (err: any) {
+      console.warn("[ContentFactory] English mini-story repair failed:", err?.message);
+    }
   }
+  return ensureSiteCta(result);
 }
 
 async function generateOnePost(
@@ -532,6 +553,8 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
 你哋最近一次拍攝
 最記得邊一個冇得重來嘅瞬間
 
+更多案例睇 www.jdstudiohk.com
+
 ---
 Last month we spent days inside one live rhythm
 The hard part was never the kit count
@@ -540,6 +563,8 @@ When the room went quiet we ignored the wide
 and held one small gesture
 After wrap we remembered the honest frame more than the pretty one
 What unrehearsed moment from your last shoot still sticks
+
+Head to www.jdstudiohk.com for more case studies
 
 #CaseStudy #BehindTheScenes #JDStudioHK`,
         mediaHint: fallbackHint,
@@ -569,6 +594,8 @@ C 等對咗嗰下 先有感覺
 你最鍾意嘅相
 係擺拍定自然一刻
 
+更多案例睇 www.jdstudiohk.com
+
 ---
 Why do some frames from the same scene feel alive
 and others feel flat
@@ -582,6 +609,8 @@ Before your next shoot ask
 what is the story in this moment
 Which photos do you treasure more
 posed or unposed
+
+Head to www.jdstudiohk.com for more case studies
 
 #PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
@@ -603,6 +632,8 @@ posed or unposed
 你哋團隊而家用邊種內容
 最能同老闆講清楚值不值得做
 
+更多案例睇 www.jdstudiohk.com
+
 ---
 Commercial buyers rarely fund pretty frames alone
 They fund clarity about risk and outcome
@@ -612,6 +643,8 @@ not how many files we delivered
 Numbers help
 Numbers without judgment are noise
 What format helps your team explain value upstairs
+
+Head to www.jdstudiohk.com for more case studies
 
 #DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,

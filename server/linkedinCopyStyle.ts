@@ -12,14 +12,20 @@ Use line breaks ✓ ❌ - OK as markers Hashtags OK --- OK
 mediaHint may use normal punctuation
 
 LANGUAGE Format A (required):
-[繁中 full]
+[繁中 full ending with soft question CTA]
+更多案例睇 www.jdstudiohk.com
 ---
-[English mini-story: hook + conflict/or teaching beat + insight + CTA]
+[English mini-story ending with soft question CTA]
+Head to www.jdstudiohk.com for more case studies
 [#hashtags]
 HARD RULE: never Chinese-only never empty after ---
 Forbidden EN: two weak capability bullets
 
-Soft CTA curiosity only — no Book now 立即預約 Click the link Follow us
+Soft question CTA first then ALWAYS close with the site line (vary wording slightly OK):
+繁中 e.g. 更多案例睇 www.jdstudiohk.com
+EN e.g. Head to www.jdstudiohk.com for more case studies
+(Allowed fixed closing — URL line is an exception to punctuation ban; no other periods)
+Still forbid hard sell: Book now 立即預約 Click the link Follow us
 No fake named client quotes no fake JD stats
 Match photo type (product food fashion jewellery event commercial) — never force wedding
 `.trim();
@@ -42,7 +48,7 @@ Michele DNA:
 Openers like: 上個月我哋… / 現場真正難嘅唔係相機而係…
 Avoid service dump feature stacks Excited to announce
 
-繁中 arc: hook with friction → hard/unexpected → choices on set → vivid photo beat → quiet insight from THIS job → soft CTA
+繁中 arc: hook with friction → hard/unexpected → choices on set → vivid photo beat → quiet insight from THIS job → soft CTA → 更多案例睇 www.jdstudiohk.com
 `.trim();
 
 /**
@@ -65,7 +71,7 @@ Goal: change how the reader thinks about one craft myth then give usable framing
 3) Concrete contrast example A vs B vs C OR before/after thinking (can use photos as visual proof of the point not as a case diary)
 4) 2–3 practical questions or moves the reader can try next shoot
 5) One industry insight line (thought leadership)
-6) Soft CTA inviting their experience / preference
+6) Soft CTA inviting their experience / preference then 更多案例睇 www.jdstudiohk.com
 
 Tone differences vs Type A:
 - More declarative teaching less reflective diary
@@ -73,7 +79,7 @@ Tone differences vs Type A:
 - Less「我哋今次現場」more「多數團隊會… 但其實…」
 - Still we-voice for JD but the STAR is the idea not the shoot log
 
-English after --- must teach the same arc (hook myth contrast insight CTA) not a project recap
+English after --- must teach the same arc (hook myth contrast insight CTA) then Head to www.jdstudiohk.com for more case studies
 `.trim();
 
 /**
@@ -94,8 +100,9 @@ Voice: calm precise commercially literate — numbers with stakes then judgment
 3) What it means for buyers / brand teams (risk outcome retention speed)
 4) One JD craft judgment (why the number matters on set) — not a dashboard dump
 5) Soft CTA asking how their team allocates budget / measures visuals
+6) Close with 更多案例睇 www.jdstudiohk.com / Head to www.jdstudiohk.com for more case studies
 
-English after --- same commercial mini-arc
+English after --- same commercial mini-arc then site line
 No fake JD ROI — use industry-typical framing or process numbers clearly as typical not claimed JD KPIs
 `.trim();
 
