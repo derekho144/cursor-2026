@@ -100,8 +100,11 @@ export default function LinkedInOps() {
   const [uploadPreferred, setUploadPreferred] = useState<(typeof ASSET_PREFERRED)[number]["value"]>("any");
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [editingAssetId, setEditingAssetId] = useState<number | null>(null);
 
   const { data: assets, isLoading: assetsLoading } = trpc.linkedinContent.listAssets.useQuery(undefined);
+  const editingAsset = assets?.find((a) => a.id === editingAssetId) ?? null;
 
   const uploadAsset = trpc.linkedinContent.uploadAsset.useMutation({
     onSuccess: () => {
@@ -344,21 +347,30 @@ export default function LinkedInOps() {
           )}
         </div>
 
-        {/* Image library */}
+        {/* Image library — collapsed by default; open = compact scroll grid */}
         <div className="border rounded-lg p-3 sm:p-4 bg-card space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <div className="min-w-0">
+            <button
+              type="button"
+              className="min-w-0 text-left"
+              onClick={() => setLibraryOpen((o) => !o)}
+            >
               <div className="font-medium text-sm flex flex-wrap items-center gap-2">
                 <ImagePlus className="w-4 h-4 shrink-0" style={{ color: "#d4a843" }} />
                 圖片庫
                 <span className="text-xs font-normal text-muted-foreground">
-                  {contentStats?.libraryCount ?? assets?.length ?? 0} 張 · 生成時自動抽相
+                  {contentStats?.libraryCount ?? assets?.length ?? 0} 張
+                </span>
+                <span className="text-xs font-normal text-muted-foreground underline-offset-2 hover:underline">
+                  {libraryOpen ? "收起" : "展開管理"}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                上傳後設「適用主題」。生成時若庫存冇相，會自動去 jdstudiohk.com 服務頁抽圖入庫。
-              </p>
-            </div>
+              {!libraryOpen && (
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  生成時自動抽相；需要上傳／改主題／移出先展開。
+                </p>
+              )}
+            </button>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button
                 type="button"
@@ -366,9 +378,10 @@ export default function LinkedInOps() {
                 variant="outline"
                 className="gap-1 w-full sm:w-auto min-h-10"
                 disabled={harvestWebsite.isPending}
-                onClick={() =>
-                  harvestWebsite.mutate({ maxNew: 8, preferredFor: uploadPreferred })
-                }
+                onClick={() => {
+                  setLibraryOpen(true);
+                  harvestWebsite.mutate({ maxNew: 8, preferredFor: uploadPreferred });
+                }}
               >
                 {harvestWebsite.isPending ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -385,6 +398,7 @@ export default function LinkedInOps() {
                   className="hidden"
                   disabled={uploading || uploadAsset.isPending}
                   onChange={(e) => {
+                    setLibraryOpen(true);
                     void onUploadFiles(e.target.files);
                     e.target.value = "";
                   }}
@@ -412,110 +426,79 @@ export default function LinkedInOps() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:items-end">
-            <div className="space-y-1 min-w-0">
-              <Label className="text-xs">分類</Label>
-              <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as any)}>
-                <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ASSET_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1 min-w-0">
-              <Label className="text-xs">適用主題</Label>
-              <Select value={uploadPreferred} onValueChange={(v) => setUploadPreferred(v as any)}>
-                <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ASSET_PREFERRED.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1 min-w-0 sm:flex-1 sm:min-w-[160px]">
-              <Label className="text-xs">說明（可選）</Label>
-              <Input
-                className="h-10 sm:h-8 text-xs"
-                placeholder="例如：珠寶 before / 產品棚拍"
-                value={uploadCaption}
-                onChange={(e) => setUploadCaption(e.target.value)}
-              />
-            </div>
-          </div>
+          {libraryOpen && (
+            <>
+              <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:items-end">
+                <div className="space-y-1 min-w-0">
+                  <Label className="text-xs">分類</Label>
+                  <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as any)}>
+                    <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ASSET_CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <Label className="text-xs">適用主題</Label>
+                  <Select value={uploadPreferred} onValueChange={(v) => setUploadPreferred(v as any)}>
+                    <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ASSET_PREFERRED.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 min-w-0 sm:flex-1 sm:min-w-[160px]">
+                  <Label className="text-xs">說明（可選）</Label>
+                  <Input
+                    className="h-10 sm:h-8 text-xs"
+                    placeholder="例如：珠寶 before / 產品棚拍"
+                    value={uploadCaption}
+                    onChange={(e) => setUploadCaption(e.target.value)}
+                  />
+                </div>
+              </div>
 
-          {assetsLoading ? (
-            <div className="py-6 text-center">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-            </div>
-          ) : (assets?.length ?? 0) === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground border border-dashed rounded-md">
-              未有相片 — 上傳後，「生成本週 3 篇」會自動抽相
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {assets?.map((a) => (
-                <div key={a.id} className="border rounded-md overflow-hidden bg-muted/20 space-y-1">
-                  <a href={a.url} target="_blank" rel="noreferrer" className="block aspect-square bg-black/5">
-                    <img src={a.url} alt={a.fileName} className="w-full h-full object-cover" />
-                  </a>
-                  <div className="px-2 pb-2 space-y-1">
-                    <div className="text-[10px] text-muted-foreground truncate" title={a.fileName}>
-                      #{a.id} · 用過 {a.timesUsed} 次
-                    </div>
-                    <Select
-                      value={a.category}
-                      onValueChange={(v) => updateAsset.mutate({ id: a.id, category: v as any })}
-                    >
-                      <SelectTrigger className="h-7 text-[10px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ASSET_CATEGORIES.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={a.preferredFor}
-                      onValueChange={(v) => updateAsset.mutate({ id: a.id, preferredFor: v as any })}
-                    >
-                      <SelectTrigger className="h-7 text-[10px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ASSET_PREFERRED.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-full text-[10px] gap-1 text-muted-foreground"
-                      onClick={() => archiveAsset.mutate({ id: a.id })}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      移出
-                    </Button>
+              {assetsLoading ? (
+                <div className="py-6 text-center">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                </div>
+              ) : (assets?.length ?? 0) === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground border border-dashed rounded-md">
+                  未有相片 — 上傳後，「生成本週 3 篇」會自動抽相
+                </div>
+              ) : (
+                <div className="max-h-56 sm:max-h-64 overflow-y-auto rounded-md border bg-muted/10 p-2">
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+                    {assets?.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        title={`#${a.id} · 用過 ${a.timesUsed} 次 · 撳入去改`}
+                        className="relative aspect-square rounded border overflow-hidden bg-muted hover:ring-2 hover:ring-[#d4a843]/70 focus:outline-none focus:ring-2 focus:ring-[#d4a843]"
+                        onClick={() => setEditingAssetId(a.id)}
+                      >
+                        <img src={a.url} alt={a.fileName} className="w-full h-full object-cover" loading="lazy" />
+                        <span className="absolute bottom-0 inset-x-0 bg-black/55 text-[9px] text-white text-center truncate px-0.5">
+                          #{a.id}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -774,6 +757,88 @@ export default function LinkedInOps() {
           ))
         )}
       </div>
+
+      {/* Asset edit dialog */}
+      <Dialog open={!!editingAsset} onOpenChange={(o) => !o && setEditingAssetId(null)}>
+        <DialogContent className="max-w-sm p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              圖片 #{editingAsset?.id}
+            </DialogTitle>
+          </DialogHeader>
+          {editingAsset && (
+            <div className="space-y-3">
+              <a href={editingAsset.url} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={editingAsset.url}
+                  alt={editingAsset.fileName}
+                  className="w-full max-h-48 object-contain rounded border bg-muted"
+                />
+              </a>
+              <p className="text-xs text-muted-foreground truncate" title={editingAsset.fileName}>
+                {editingAsset.fileName} · 用過 {editingAsset.timesUsed} 次
+              </p>
+              <div className="space-y-1">
+                <Label className="text-xs">分類</Label>
+                <Select
+                  value={editingAsset.category}
+                  onValueChange={(v) => updateAsset.mutate({ id: editingAsset.id, category: v as any })}
+                >
+                  <SelectTrigger className="min-h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">適用主題</Label>
+                <Select
+                  value={editingAsset.preferredFor}
+                  onValueChange={(v) => updateAsset.mutate({ id: editingAsset.id, preferredFor: v as any })}
+                >
+                  <SelectTrigger className="min-h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSET_PREFERRED.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 flex-col-reverse sm:flex-row">
+            <Button variant="outline" className="min-h-10" onClick={() => setEditingAssetId(null)}>
+              關閉
+            </Button>
+            <Button
+              variant="ghost"
+              className="min-h-10 text-destructive gap-1"
+              onClick={() => {
+                if (!editingAsset) return;
+                if (confirm("移出圖片庫？")) {
+                  archiveAsset.mutate(
+                    { id: editingAsset.id },
+                    { onSuccess: () => setEditingAssetId(null) }
+                  );
+                }
+              }}
+            >
+              <Trash2 className="w-3 h-3" />
+              移出
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Content edit dialog */}
       <Dialog open={!!editingPost} onOpenChange={(o) => !o && setEditingPost(null)}>
