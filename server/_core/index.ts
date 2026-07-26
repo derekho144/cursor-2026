@@ -231,6 +231,19 @@ async function startServer() {
       .then(() => console.log("[Heartbeat/pitch-outreach] Done"))
       .catch((err) => console.error("[Heartbeat/pitch-outreach] Error:", err));
   });
+
+  // ─── Heartbeat: Loyalty remarketing — seasonal + winback (hourly) ───────────
+  app.post("/api/scheduled/loyalty-remarketing", async (req, res) => {
+    const { sdk: authSdk } = await import("./sdk");
+    let user: any = null;
+    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
+    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    res.json({ ok: true, started: true, time: new Date().toISOString() });
+    import("../scheduler")
+      .then(({ runScheduledLoyaltyRemarketing }) => runScheduledLoyaltyRemarketing())
+      .then(() => console.log("[Heartbeat/loyalty-remarketing] Done"))
+      .catch((err) => console.error("[Heartbeat/loyalty-remarketing] Error:", err));
+  });
   // ─── Google Ads OAuth2 Re-authorization ─────────────────────────────────
   // Step 1: Generate Google OAuth2 authorization URL and redirect
   app.get("/api/google-ads/auth-url", async (req, res) => {

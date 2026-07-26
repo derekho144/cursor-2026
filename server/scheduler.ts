@@ -735,19 +735,22 @@ async function runReviewInviteEmails(): Promise<void> {
 
 /**
  * Run loyalty remarketing emails for B2B corporate clients.
- * Triggers: day30/day90/day180 follow-up, anniversary, seasonal (CNY/summer/year-end), winback.
+ * Currently active: seasonal (CNY/summer/year-end) + winback (12 months idle).
+ * day90/day180/anniversary helpers exist in db.ts but are not sent yet.
  */
-async function runLoyaltyRemarketingEmails(): Promise<void> {
+export async function runScheduledLoyaltyRemarketing(): Promise<void> {
+  await withSchedulerLock("loyalty-remarketing", 55 * 60 * 1000, async () => {
   try {
-    const TIER_DISCOUNT: Record<string, number> = { silver: 5, golden: 8, diamond: 12 };
+    const TIER_DISCOUNT: Record<string, number> = { silver: 5, golden: 8, diamond: 12, black_diamond: 12 };
     const tierLabel: Record<string, string> = {
       silver: "銀鏡 Silver Lens",
       golden: "金鏡 Golden Lens",
       diamond: "鑽石鏡 Diamond Lens",
+      black_diamond: "黑鑽石鏡 Black Diamond Lens",
     };
 
 
-    // ── 季節性業務提醒（1月/6月/11月）──
+    // ── 季節性業務提醒（1月/6月/11月 首週）──
     const seasonalList = await getClientsForSeasonalEmail();
     const nowDate = new Date();
     const nowMonth = nowDate.getMonth() + 1;
@@ -757,23 +760,9 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
       : nowMonth === 6
       ? `下半年計劃拍攝 現在是好時機`
       : `年底前有拍攝需要嗎`;
-    const seasonBody = nowMonth === 1
-      ? `
-        <p>${`${(seasonalList[0] as any)?.clientName ?? ""}`} 你好</p>
-        <p>農曆新年快到 相信各公司都開始籌備新一年的宣傳物料</p>
-        <p>如有需要更新形象照 產品照或拍攝新年宣傳短片 歡迎盡早聯絡我們預留檔期 農曆新年前後的日子通常比較快滿</p>
-      `
-      : nowMonth === 6
-      ? `
-        <p>${`${(seasonalList[0] as any)?.clientName ?? ""}`} 你好</p>
-        <p>轉眼已到年中 不少公司都趣這個時候更新品牌影像 為下半年的推廣做好準備</p>
-        <p>如有形象照 產品照或影片的拍攝需求 歡迎聯絡我們安排</p>
-      `
-      : `
-        <p>${`${(seasonalList[0] as any)?.clientName ?? ""}`} 你好</p>
-        <p>年底將至 是時候為今年的業務成果留個記錄 或為明年的宣傳物料提早準備</p>
-        <p>無論是公司活動攝影 產品照更新 還是年終宣傳短片 我們都可以協助安排</p>
-      `;
+    if (seasonalList.length > 0) {
+      console.log(`[Scheduler] Loyalty seasonal: ${seasonalList.length} client(s) in window (month=${nowMonth})`);
+    }
     for (const c of seasonalList) {
       if (!c.clientEmail || !c.clientId) continue;
       const membership = await getClientMembership(c.clientId);
@@ -785,7 +774,7 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
       const perClientBody = nowMonth === 1
         ? `<p>${clientName} 你好</p><p>農曆新年快到 相信各公司都開始籌備新一年的宣傳物料</p><p>如有需要更新形象照 產品照或拍攝新年宣傳短片 歡迎盡早聯絡我們預留檔期 農曆新年前後的日子通常比較快滿</p>`
         : nowMonth === 6
-        ? `<p>${clientName} 你好</p><p>轉眼已到年中 不少公司都趣這個時候更新品牌影像 為下半年的推廣做好準備</p><p>如有形象照 產品照或影片的拍攝需求 歡迎聯絡我們安排</p>`
+        ? `<p>${clientName} 你好</p><p>轉眼已到年中 不少公司都在這個時候更新品牌影像 為下半年的推廣做好準備</p><p>如有形象照 產品照或影片的拍攝需求 歡迎聯絡我們安排</p>`
         : `<p>${clientName} 你好</p><p>年底將至 是時候為今年的業務成果留個記錄 或為明年的宣傳物料提早準備</p><p>無論是公司活動攝影 產品照更新 還是年終宣傳短片 我們都可以協助安排</p>`;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
@@ -795,7 +784,7 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
           <div style="padding:32px 24px">
             ${perClientBody}
             <div style="background:#f9f5ec;border-left:3px solid #d4a843;padding:16px;margin:20px 0">
-              <p style="margin:0;font-weight:bold;color:#1a1a1a">${tierLabel[tier]} 專屬回頭客優惠</p>
+              <p style="margin:0;font-weight:bold;color:#1a1a1a">${tierLabel[tier] ?? tier} 專屬回頭客優惠</p>
               <p style="margin:8px 0 0;color:#d4a843;font-size:20px;font-weight:bold">${discount}% 折扣</p>
               <p style="margin:4px 0 0;color:#666;font-size:12px">限期14天</p>
             </div>
@@ -814,6 +803,9 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
 
     // ── 長期未合作喚回郵件（12 個月未成交）──
     const winbackList = await getClientsForWinbackEmail();
+    if (winbackList.length > 0) {
+      console.log(`[Scheduler] Loyalty winback: ${winbackList.length} client(s)`);
+    }
     const waLinkWinback = `<a href="${buildWaTrackUrl("loyalty_winback")}" style="color:#d4a843;text-decoration:none">WhatsApp Derek 91531976</a>`;
     for (const c of winbackList) {
       if (!c.clientEmail || !c.clientId) continue;
@@ -847,6 +839,7 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
   } catch (err) {
     console.error("[Scheduler] Loyalty remarketing email error:", err);
   }
+  }); // end withSchedulerLock("loyalty-remarketing")
 }
 
 /**
@@ -958,7 +951,7 @@ export async function runScheduledPitchOutreach(): Promise<void> {
 export function startScheduler(): void {
   if (schedulerTimer) return; // already running
 
-  console.log("[Scheduler] Background scheduler started. PRO360 sync every 3 days, HelloToby/Google Ads sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT), Pitch Outreach daily (10:00 HKT).");
+  console.log("[Scheduler] Background scheduler started. PRO360 sync every 3 days, HelloToby/Google Ads sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT), Pitch Outreach daily (10:00 HKT), Loyalty remarketing hourly (seasonal + winback).");
 
   // On startup: reset any SENTINEL (1970-01-01) values left over from a previous server crash
   // This prevents follow-up emails from being permanently stuck if the server was killed mid-operation
@@ -993,9 +986,10 @@ export function startScheduler(): void {
     runFHHighConfidenceBackfill().catch(console.error); // also run backfill on startup
     runQuoteFollowUps().catch(console.error); // check quote follow-ups on startup
     runScheduledPitchOutreach().catch(console.error); // check pitch outreach on startup
+    runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback
   }, 30_000);
 
-  // Ad platform sync + FH follow-up check + review invites + FH high-confidence backfill + watchdog: every hour
+  // Ad platform sync + FH follow-up check + review invites + FH high-confidence backfill + watchdog + loyalty: every hour
   schedulerTimer = setInterval(() => {
     checkAndSync().catch(console.error);
     runFHFollowUpEmails().catch(console.error);
@@ -1003,6 +997,7 @@ export function startScheduler(): void {
     runFHHighConfidenceBackfill().catch(console.error);
     runQuoteFollowUps().catch(console.error); // quote follow-up check every hour
     runWatchdog().catch(console.error); // system health watchdog every hour
+    runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback (windowed; lock + dedupe)
   }, CHECK_INTERVAL_MS);
 
   // Gmail scan: every 30 minutes (with time-of-day guard inside)

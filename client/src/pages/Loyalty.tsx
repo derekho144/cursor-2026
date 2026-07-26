@@ -398,25 +398,28 @@ export default function LoyaltyPage() {
                 <div className="space-y-3">
                   {[
                     {
-                      trigger: "季節性業務提醒（1月/6月/11月）",
-                      subject: "💼 即將來臨，預訂貴公司年度拍攝項目！",
-                      content: "農曆新年企业影像 / 夏季活動影像 / 年底年報影像提醒",
-                      offer: "季節專屬優惠（詳情另議）",
+                      trigger: "季節性業務提醒（1月/6月/11月 首週）",
+                      subject: "新年將至 / 下半年計劃 / 年底前有拍攝需要嗎",
+                      content: "已啟用：每日排程檢查；窗口內每位客戶每年每季節只寄一次",
+                      offer: "按會員等級 5–12% 折扣（限期14天）",
                       color: "#d4a843",
+                      active: true,
                     },
                     {
-                      trigger: "長期未合作（12 個月）",
-                      subject: "👋 我們想念貴公司！",
-                      content: "長期未合作關係激活，分享最新作品集並提供回頭專屬優惠",
+                      trigger: "長期未合作（12–13 個月）",
+                      subject: "好久不見 有任何拍攝需要嗎",
+                      content: "已啟用：最後成交落在 12–13 個月窗口時寄出；每位客戶只寄一次",
                       offer: "10% 回頭專屬折扣（30天限期）",
                       color: "#60a5fa",
+                      active: true,
                     },
                     {
                       trigger: "升等通知",
-                      subject: "🎉 恭喜升級！",
-                      content: "升等恭賀 + 新等級福利說明",
+                      subject: "恭喜升級！",
+                      content: "尚未接排程（稍後開啟）",
                       offer: "升等禮遇",
-                      color: "#60a5fa",
+                      color: "#666",
+                      active: false,
                     },
                   ].map((item, i) => (
                     <div
@@ -430,7 +433,7 @@ export default function LoyaltyPage() {
                           className="text-xs whitespace-nowrap"
                           style={{ borderColor: item.color, color: item.color }}
                         >
-                          {item.trigger}
+                          {item.active ? "運行中 · " : "未開 · "}{item.trigger}
                         </Badge>
                       </div>
                       <div className="flex-1 min-w-0 space-y-1">
@@ -446,7 +449,7 @@ export default function LoyaltyPage() {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-4 p-3 rounded" style={{ background: "#0d0d0d" }}>
-                  💡 再行銷郵件由系統排程自動觸發，每日凌晨檢查符合條件的客戶。所有觸發機制均針對公司客戶設計，每位客戶每種類型的郵件只會發送一次，避免重複打擾。
+                  💡 目前已接上每日排程：季節提醒 + 12 個月 winback。升等通知稍後再開。系統每小時檢查（有 lock + 已寄過記錄），每位客戶每種類型只寄一次，避免重複打擾。
                 </p>
               </CardContent>
             </Card>
