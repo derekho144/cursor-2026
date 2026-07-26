@@ -1,6 +1,9 @@
 /**
  * LinkedIn Content Factory — Authority 內容工廠
- * 每週自動產出 3 類草稿：作品案例 / 外判 vs in-house / 行業觀察
+ * 每週自動產出 3 類高互動草稿：
+ * 1) Carousel Case Study（輪播成功案例）
+ * 2) 外包 vs 自聘辯論
+ * 3) 反常識觀點（Contrarian Take）
  * 你批核 → 排程 → 你或 Manus 發佈後標記 published
  */
 import { getDb } from "./db";
@@ -10,16 +13,21 @@ import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
 
 export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
-  case_study: "作品案例",
-  outsource_vs_inhire: "外判 vs In-house",
-  industry_insight: "行業／客戶觀察",
+  carousel_case_study: "輪播成功案例",
+  outsource_vs_inhire: "外包 vs 自聘辯論",
+  contrarian_take: "反常識觀點",
+};
+
+export const CONTENT_TYPE_BLURBS: Record<LinkedInContentType, string> = {
+  carousel_case_study: "B2B 決策者最愛看成果；適合 carousel／多圖",
+  outsource_vs_inhire: "觸碰核心痛點，引發評論",
+  contrarian_take: "反常識立場，刺激辯論同演算法曝光",
 };
 
 /** ISO week key in HKT, e.g. 2026-W31 */
 export function getHktWeekKey(date = new Date()): string {
   const hkt = new Date(date.getTime() + 8 * 60 * 60 * 1000);
   const target = new Date(Date.UTC(hkt.getUTCFullYear(), hkt.getUTCMonth(), hkt.getUTCDate()));
-  // Thursday in current week decides the year
   const dayNum = target.getUTCDay() || 7;
   target.setUTCDate(target.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
@@ -27,25 +35,21 @@ export function getHktWeekKey(date = new Date()): string {
   return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
-/** Monday 00:00 HKT of the week containing `date` */
 function getMondayHkt(date = new Date()): Date {
   const hkt = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-  const day = hkt.getUTCDay(); // 0 Sun … 6 Sat in HKT wall clock via UTC fields
+  const day = hkt.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
   const monday = new Date(Date.UTC(hkt.getUTCFullYear(), hkt.getUTCMonth(), hkt.getUTCDate() + diff, 0, 0, 0));
-  // monday is UTC representing HKT midnight Monday → convert to real UTC instant
   return new Date(monday.getTime() - 8 * 60 * 60 * 1000);
 }
 
-/** Schedule slots relative to Monday of week (HKT hours) */
 const WEEK_SLOTS: Array<{ type: LinkedInContentType; dayOffset: number; hourHkt: number }> = [
-  { type: "case_study", dayOffset: 1, hourHkt: 10 }, // Tue 10:00
-  { type: "outsource_vs_inhire", dayOffset: 3, hourHkt: 10 }, // Thu 10:00
-  { type: "industry_insight", dayOffset: 5, hourHkt: 11 }, // Sat 11:00
+  { type: "carousel_case_study", dayOffset: 1, hourHkt: 10 }, // Tue
+  { type: "outsource_vs_inhire", dayOffset: 3, hourHkt: 10 }, // Thu
+  { type: "contrarian_take", dayOffset: 5, hourHkt: 11 }, // Sat
 ];
 
 export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt: number): Date {
-  // weekMondayUtc is real UTC instant of Monday 00:00 HKT
   const hktMidnight = weekMondayUtc.getTime() + 8 * 60 * 60 * 1000;
   const slotHkt = hktMidnight + dayOffset * 86400000 + hourHkt * 3600000;
   return new Date(slotHkt - 8 * 60 * 60 * 1000);
@@ -62,7 +66,7 @@ export async function ensureContentPostsTable(): Promise<void> {
       CREATE TABLE IF NOT EXISTS linkedin_content_posts (
         id int AUTO_INCREMENT PRIMARY KEY,
         week_key varchar(16) NOT NULL,
-        li_content_type enum('case_study','outsource_vs_inhire','industry_insight') NOT NULL,
+        li_content_type enum('carousel_case_study','outsource_vs_inhire','contrarian_take','case_study','industry_insight') NOT NULL,
         li_content_status enum('draft','pending_review','approved','scheduled','published','rejected') NOT NULL DEFAULT 'pending_review',
         title varchar(512) NOT NULL,
         body mediumtext NOT NULL,
@@ -75,30 +79,64 @@ export async function ensureContentPostsTable(): Promise<void> {
         updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+    try {
+      await db.execute(sql`
+        ALTER TABLE linkedin_content_posts
+        MODIFY COLUMN li_content_type ENUM(
+          'case_study','outsource_vs_inhire','industry_insight',
+          'carousel_case_study','contrarian_take'
+        ) NOT NULL
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_posts SET li_content_type = 'carousel_case_study'
+        WHERE li_content_type = 'case_study'
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_posts SET li_content_type = 'contrarian_take'
+        WHERE li_content_type = 'industry_insight'
+      `);
+      await db.execute(sql`
+        ALTER TABLE linkedin_content_posts
+        MODIFY COLUMN li_content_type ENUM(
+          'carousel_case_study','outsource_vs_inhire','contrarian_take'
+        ) NOT NULL
+      `);
+    } catch (migrateErr) {
+      console.warn("[ContentFactory] enum migrate (may already be current):", migrateErr);
+    }
     tableReady = true;
   } catch (err) {
     console.error("[ContentFactory] ensureTable error:", err);
   }
 }
 
-const TYPE_PROMPTS: Record<
-  LinkedInContentType,
-  { angle: string; mediaHint: string }
-> = {
-  case_study: {
-    angle:
-      "Write a LinkedIn post showcasing a photography/video case study vibe for JD STUDIO HK (product, food, fashion, jewellery, or commercial). Structure: hook → what the brand needed → what we shot / approach → outcome. Invent a plausible anonymised or generic brand scenario (do not claim fake client names as real testimonials). Include a soft CTA to visit jdstudiohk.com. Suggest a before/after or shoot-day photo in media_hint.",
-    mediaHint: "配圖建議：before/after 或 shoot day 現場／成品圖",
+const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
+  carousel_case_study: {
+    angle: `Write a LinkedIn post designed to accompany a CAROUSEL (multi-slide) case study for JD STUDIO HK.
+B2B decision-makers love proof of results — frame it as a success story they can swipe through.
+Structure the BODY as:
+1) Hook line (result or transformation)
+2) Caption that teases the carousel (problem → approach → outcome)
+3) Explicit numbered slide beats (5–7 slides) a designer can turn into a carousel
+4) Soft CTA to jdstudiohk.com
+Use a plausible anonymised brand scenario (product / food / fashion / jewellery / commercial). Do NOT invent fake named client testimonials.
+In mediaHint: list each suggested carousel slide in Chinese + short English labels.`,
+    mediaHint:
+      "輪播建議（5–7 頁）：封面成果 → Before → Brief → Shoot day → After → 效果 → CTA jdstudiohk.com",
   },
   outsource_vs_inhire: {
-    angle:
-      "Write a LinkedIn post arguing why Hong Kong brands should outsource photography/video to a specialist studio (JD STUDIO HK) instead of hiring a full-time in-house photographer. Cover cost, flexibility, equipment, creative breadth, and peak seasons. Professional, not salesy. Soft CTA.",
-    mediaHint: "配圖建議：工作室簡表／工作室 vs 攝影師對比圖，或工作室環境",
+    angle: `Write a LinkedIn DEBATE-style post: Outsourcing photography/video to a specialist studio (JD STUDIO HK) vs hiring in-house.
+Goal: hit the client's core pain points and invite comments (not a hard sell).
+Use a provocative question or "Team Outsource vs Team In-house" framing.
+Cover cost, downtime, equipment, peak seasons, creative range — then take a clear stance with room for disagreement.
+End with a question that sparks replies. Soft mention of JD STUDIO HK / jdstudiohk.com.`,
+    mediaHint: "配圖建議：對比圖（Outsource vs In-house 兩欄）、或「你會點揀？」投票式封面",
   },
-  industry_insight: {
-    angle:
-      "Write a LinkedIn post with a sharp industry or client observation relevant to HK brand visual content (e.g. e-commerce imagery standards, food photography trends, jewellery lighting, hiring photographer roles as a signal). Thought-leadership tone. Soft CTA to JD STUDIO HK.",
-    mediaHint: "配圖建議：行業相關視覺／mood board／細節特寫",
+  contrarian_take: {
+    angle: `Write a CONTRARIAN LinkedIn take about brand photography / video / hiring creatives in Hong Kong or Asia.
+Pick ONE sharp anti-consensus claim. Structure: bold claim → why most people are wrong → nuance → invite debate in comments.
+Sound confident, not rude. Soft CTA to JD STUDIO HK only if natural.`,
+    mediaHint: "配圖建議：大字報式 hook（一句反常識金句）、高對比爭議封面",
   },
 };
 
@@ -114,15 +152,16 @@ async function generateOnePost(type: LinkedInContentType): Promise<{
         {
           role: "system",
           content: `You are the content strategist for JD STUDIO HK, a Hong Kong creative studio specialising in product, food, fashion, jewellery photography and video production.
-Write LinkedIn posts in English (can include light Cantonese flavour in one short phrase if natural, but mostly English for LinkedIn reach).
+Write LinkedIn posts in English (light Cantonese flavour OK in one short phrase).
+Content type focus: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
 Rules:
-- 150–220 words
-- Strong first line hook
+- 150–280 words (carousel posts can be slightly longer to include slide beats)
+- Strong first-line hook
 - Short paragraphs, scannable
-- No hashtag spam (max 3 relevant hashtags at end)
-- No fake statistics
-- Sound human and authoritative
-- Output JSON: { "title": "short internal label", "body": "full post text", "mediaHint": "what image to attach" }`,
+- Max 3 hashtags at the end
+- No fake statistics or fake named client quotes
+- Sound human and authoritative; for debate/contrarian types, invite comments
+- Output JSON: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief" }`,
         },
         {
           role: "user",
@@ -159,57 +198,76 @@ Rules:
     };
   } catch (err: any) {
     console.error(`[ContentFactory] LLM failed for ${type}:`, err?.message);
-    // Fallback templates
-    if (type === "case_study") {
+    if (type === "carousel_case_study") {
       return {
-        title: "Shoot day case study",
-        body: `Most brands don't need a full-time photographer on payroll — they need consistent, on-brand images when campaigns move.
+        title: "Carousel case study",
+        body: `We don't sell "a photographer for a day".
+We sell a result you can swipe through.
 
-Last shoot week we helped a product brand refresh their catalogue visuals: cleaner lighting, tighter composition, and assets ready for both web and social in one session.
+Carousel idea for this week:
+Slide 1 — The before (inconsistent catalogue shots)
+Slide 2 — The brief (what the brand actually needed)
+Slide 3 — Lighting / setup decisions
+Slide 4 — Shoot day
+Slide 5 — After (web + social ready set)
+Slide 6 — What changed for the brand
+Slide 7 — CTA
 
-If you're hiring for in-house photo/video capacity, it might be worth comparing that cost with a flexible studio partner.
+If you're a B2B decision-maker comparing in-house hire vs a studio partner, case studies beat job descriptions.
 
-Happy to share relevant work: https://www.jdstudiohk.com
+More work: https://www.jdstudiohk.com
 
-#ProductPhotography #HongKong #JDStudio`,
+#CaseStudy #ProductPhotography #JDStudio`,
         mediaHint: meta.mediaHint,
       };
     }
     if (type === "outsource_vs_inhire") {
       return {
-        title: "Outsource vs in-house",
-        body: `Hiring an in-house photographer looks simple — until you factor in salary, equipment, peak-season overload, and the days when there's nothing to shoot.
+        title: "Outsource vs in-house debate",
+        body: `Hot take for HK brand teams:
 
-A specialist studio like JD STUDIO HK gives you senior-level output, the right kit for product / food / fashion / jewellery, and the freedom to scale up or pause without HR overhead.
+Hiring an in-house photographer feels like control.
+Outsourcing to a studio feels like risk.
 
-When you see companies posting photographer roles, it's often a signal of visual demand — not necessarily that full-time is the best model.
+Reality check — the "safe" hire often hides:
+• salary + MPF + downtime between campaigns
+• gear you still don't own
+• one person's taste across every SKU and channel
 
-Curious how outsourcing compares for your calendar? https://www.jdstudiohk.com
+A specialist studio (like JD STUDIO HK) looks "expensive" per shoot — until you compare annual cost and peak-season quality.
 
-#CreativeStudio #HongKongBusiness #Photography`,
+Team Outsource or Team In-house?
+Drop your side in the comments — genuinely curious where marketers land in 2026.
+
+https://www.jdstudiohk.com
+
+#MarketingHK #CreativeOps #Photography`,
         mediaHint: meta.mediaHint,
       };
     }
     return {
-      title: "Industry observation",
-      body: `A quiet trend we're seeing: more HK brands are raising the bar on everyday product imagery — not just campaign heroes.
+      title: "Contrarian take",
+      body: `Unpopular opinion:
 
-Shoppers decide in a scroll. Lighting, consistency, and detail matter as much as the product itself.
+A "Photographer wanted" job post is often not a hiring problem —
+it's a demand-for-visuals problem.
 
-That's why "hire a photographer" postings keep appearing — and why many teams still get better ROI from a trusted external studio than a single in-house generalist.
+Many teams hire full-time because campaigns spiked…
+then sit on quiet months with fixed cost.
 
-We specialise in making brand visuals work harder: https://www.jdstudiohk.com
+Sometimes the contrarian move is: don't hire.
+Build a flexible studio retainer instead.
 
-#BrandVisuals #Ecommerce #JDStudio`,
+Agree or disagree? Argue with me in the comments.
+
+JD STUDIO HK — https://www.jdstudiohk.com
+
+#Contrarian #BrandVisuals #HongKong`,
       mediaHint: meta.mediaHint,
     };
   }
 }
 
-/**
- * Ensure this week has all 3 content types as pending_review (or keep existing).
- * Returns how many were newly created.
- */
 export async function generateWeeklyContentBatch(opts?: {
   weekKey?: string;
   force?: boolean;
@@ -220,8 +278,6 @@ export async function generateWeeklyContentBatch(opts?: {
 
   const weekKey = opts?.weekKey ?? getHktWeekKey();
   const monday = getMondayHkt();
-  // If generating for a specific weekKey matching current, monday is fine;
-  // for simplicity always use current week's monday for schedule slots when weekKey is current.
   let created = 0;
   let existing = 0;
 
@@ -243,7 +299,6 @@ export async function generateWeeklyContentBatch(opts?: {
     }
 
     if (found.length && opts?.force) {
-      // regenerate rejected/draft only when force — skip if already approved/published
       const [row] = await db
         .select()
         .from(linkedinContentPosts)
@@ -285,9 +340,8 @@ export async function generateWeeklyContentBatch(opts?: {
 }
 
 export async function runScheduledContentFactory(): Promise<void> {
-  // Only Mon–Tue morning HKT to seed the week (and catch missed Monday)
   const hkt = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const day = hkt.getUTCDay(); // 0 Sun
+  const day = hkt.getUTCDay();
   const hour = hkt.getUTCHours();
   if (!((day === 1 || day === 2) && hour >= 9 && hour < 12)) {
     console.log("[ContentFactory] Skip weekly generate (outside Mon/Tue 09–12 HKT)");
@@ -304,9 +358,10 @@ export async function runScheduledContentFactory(): Promise<void> {
         title: `✍️ LinkedIn 內容工廠：本週 ${result.created} 篇草稿待批核`,
         content: [
           `週次：${result.weekKey}`,
+          `主題：輪播案例 · 外包vs自聘 · 反常識`,
           `新增草稿：${result.created}`,
           `已有（略過）：${result.existing}`,
-          `請到「LinkedIn 營運 → 內容工廠」批核。批核後按排程發佈（系統會提示今日要發）。`,
+          `請到「LinkedIn 營運 → 內容工廠」批核。`,
         ].join("\n"),
       });
     } catch {
@@ -314,7 +369,6 @@ export async function runScheduledContentFactory(): Promise<void> {
     }
   }
 
-  // Also nudge if there are approved posts due today
   await notifyDuePublishes();
 }
 
@@ -347,7 +401,7 @@ export async function notifyDuePublishes(): Promise<void> {
       content: due
         .map(
           (p) =>
-            `• [${CONTENT_TYPE_LABELS[p.contentType]}] ${p.title}\n${(p.body || "").slice(0, 120)}…`
+            `• [${CONTENT_TYPE_LABELS[p.contentType] ?? p.contentType}] ${p.title}\n${(p.body || "").slice(0, 120)}…`
         )
         .join("\n\n"),
     });

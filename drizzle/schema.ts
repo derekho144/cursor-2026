@@ -682,9 +682,9 @@ export type InsertLinkedInAction = typeof linkedinActions.$inferInsert;
 
 // ─── LinkedIn Content Factory（Authority 內容工廠）──────────────────────────
 export const linkedinContentTypes = [
-  "case_study", // 作品案例
-  "outsource_vs_inhire", // 外判 vs in-house
-  "industry_insight", // 客戶／行業觀察
+  "carousel_case_study", // 輪播成功案例
+  "outsource_vs_inhire", // 外包 vs 自聘辯論
+  "contrarian_take", // 反常識觀點
 ] as const;
 export type LinkedInContentType = (typeof linkedinContentTypes)[number];
 
@@ -702,9 +702,9 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   id: int("id").autoincrement().primaryKey(),
   weekKey: varchar("week_key", { length: 16 }).notNull(), // e.g. 2026-W31
   contentType: mysqlEnum("li_content_type", [
-    "case_study",
+    "carousel_case_study",
     "outsource_vs_inhire",
-    "industry_insight",
+    "contrarian_take",
   ]).notNull(),
   status: mysqlEnum("li_content_status", [
     "draft",
@@ -716,7 +716,7 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   ]).notNull().default("pending_review"),
   title: varchar("title", { length: 512 }).notNull(),
   body: mediumtext("body").notNull(),
-  mediaHint: text("media_hint"), // 建議配圖說明
+  mediaHint: text("media_hint"), // 建議配圖／輪播說明
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
   approvedAt: timestamp("approved_at"),

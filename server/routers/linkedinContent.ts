@@ -12,6 +12,7 @@ import {
   generateWeeklyContentBatch,
   getHktWeekKey,
   CONTENT_TYPE_LABELS,
+  CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
 } from "../linkedinContentFactory";
 
@@ -27,8 +28,10 @@ const STATUS_LABELS: Record<string, string> = {
 export const linkedinContentRouter = router({
   meta: protectedProcedure.query(() => ({
     typeLabels: CONTENT_TYPE_LABELS,
+    typeBlurbs: CONTENT_TYPE_BLURBS,
     statusLabels: STATUS_LABELS,
-    scheduleNote: "每週自動：Tue 作品案例 · Thu 外判 vs In-house · Sat 行業觀察（HKT）",
+    scheduleNote:
+      "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）",
   })),
 
   getStats: protectedProcedure.query(async () => {

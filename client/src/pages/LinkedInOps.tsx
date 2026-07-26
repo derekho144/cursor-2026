@@ -399,8 +399,15 @@ export default function LinkedInOps() {
 
         <TabsContent value="content" className="mt-4 space-y-4">
           <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            每週自動產出 3 篇：作品案例 · 外判 vs In-house · 行業觀察。你批核後按排程發佈（複製貼上 LinkedIn），再標記已發。
+            每週 3 篇高互動主題：🥇 輪播成功案例 · 🥈 外包 vs 自聘辯論 · 🥉 反常識觀點。你批核後按排程發佈（複製貼上 LinkedIn），再標記已發。
             <div className="text-xs mt-1">{contentMeta?.scheduleNote}</div>
+            {contentMeta?.typeBlurbs && (
+              <ul className="text-xs mt-2 space-y-1 list-none">
+                <li>🥇 輪播成功案例 — {(contentMeta.typeBlurbs as any).carousel_case_study}</li>
+                <li>🥈 外包 vs 自聘 — {(contentMeta.typeBlurbs as any).outsource_vs_inhire}</li>
+                <li>🥉 反常識觀點 — {(contentMeta.typeBlurbs as any).contrarian_take}</li>
+              </ul>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 items-center justify-between">
