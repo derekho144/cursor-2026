@@ -70,9 +70,9 @@ function getMondayHkt(date = new Date()): Date {
 }
 
 const WEEK_SLOTS: Array<{ type: LinkedInContentType; dayOffset: number; hourHkt: number }> = [
-  { type: "project_bts", dayOffset: 1, hourHkt: 16 }, // Tue 4pm
-  { type: "photo_education", dayOffset: 2, hourHkt: 16 }, // Wed 4pm
-  { type: "data_viz", dayOffset: 3, hourHkt: 17 }, // Thu 5pm
+  { type: "project_bts", dayOffset: 1, hourHkt: 8 }, // Tue 8–9am → 08:00
+  { type: "photo_education", dayOffset: 2, hourHkt: 12 }, // Wed 12–1pm → 12:00
+  { type: "data_viz", dayOffset: 4, hourHkt: 16 }, // Fri 4–5pm → 16:00
 ];
 
 export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt: number): Date {
