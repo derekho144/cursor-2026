@@ -56,6 +56,7 @@ import {
   Users,
   Crown,
   Target,
+  Linkedin,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -77,6 +78,7 @@ const DEFAULT_MENU_ITEMS = [
   { id: "expenses", icon: TrendingDown, label: "收入及支出", path: "/expenses" },
   { id: "follow-up", icon: Mail, label: "報價跟進", path: "/follow-up" },
   { id: "pitch-outreach", icon: Target, label: "開拓客戶", path: "/pitch-outreach" },
+  { id: "linkedin-ops", icon: Linkedin, label: "LinkedIn 營運", path: "/linkedin-ops" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "jd-sidebar-width";
@@ -101,6 +103,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "loyalty": Crown,
   "follow-up": Mail,
   "pitch-outreach": Target,
+  "linkedin-ops": Linkedin,
 };
 
 // Safe localStorage wrapper – returns null if unavailable (e.g. iframe, SSR, blocked storage)

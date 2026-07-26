@@ -586,3 +586,96 @@ export const pitchSendLog = mysqlTable("pitch_send_log", {
 });
 export type PitchSendLog = typeof pitchSendLog.$inferSelect;
 export type InsertPitchSendLog = typeof pitchSendLog.$inferInsert;
+
+// ─── LinkedIn Marketing Ops（LinkedIn 營運中台 MVP）──────────────────────────
+/** 暖場／DM 階段 */
+export const linkedinContactStages = [
+  "new",
+  "warm_view",
+  "warm_like",
+  "connected",
+  "dm_sent",
+  "replied",
+  "meeting",
+  "won",
+  "paused",
+  "skipped",
+] as const;
+export type LinkedInContactStage = (typeof linkedinContactStages)[number];
+
+export const linkedinPlaybooks = [
+  "hire_signal", // 見佢哋請攝影師 → 外判
+  "winback",
+  "general",
+] as const;
+export type LinkedInPlaybook = (typeof linkedinPlaybooks)[number];
+
+export const linkedinActionTypes = [
+  "viewed",
+  "liked",
+  "commented",
+  "connected",
+  "dm_sent",
+  "follow_up",
+  "replied",
+  "meeting",
+  "won",
+  "note",
+] as const;
+export type LinkedInActionType = (typeof linkedinActionTypes)[number];
+
+/** LinkedIn 聯絡人（一人一間公司／一個訊號） */
+export const linkedinContacts = mysqlTable("linkedin_contacts", {
+  id: int("id").autoincrement().primaryKey(),
+  pitchLeadId: int("pitch_lead_id"), // 可選：來自招聘訊號
+  companyName: varchar("company_name", { length: 255 }).notNull(),
+  personName: varchar("person_name", { length: 255 }),
+  personTitle: varchar("person_title", { length: 255 }),
+  linkedInProfileUrl: varchar("linkedin_profile_url", { length: 1024 }),
+  linkedInSearchUrl: varchar("linkedin_search_url", { length: 1024 }),
+  jobTitle: varchar("job_title", { length: 255 }), // 招聘職位（訊號）
+  jobUrl: varchar("job_url", { length: 1024 }),
+  stage: mysqlEnum("li_stage", [
+    "new",
+    "warm_view",
+    "warm_like",
+    "connected",
+    "dm_sent",
+    "replied",
+    "meeting",
+    "won",
+    "paused",
+    "skipped",
+  ]).notNull().default("new"),
+  playbook: mysqlEnum("li_playbook", ["hire_signal", "winback", "general"]).notNull().default("hire_signal"),
+  dmDraft: mediumtext("dm_draft"),
+  nextActionAt: timestamp("next_action_at"),
+  lastActionAt: timestamp("last_action_at"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type LinkedInContact = typeof linkedinContacts.$inferSelect;
+export type InsertLinkedInContact = typeof linkedinContacts.$inferInsert;
+
+/** LinkedIn 動作日誌 */
+export const linkedinActions = mysqlTable("linkedin_actions", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contact_id").notNull(),
+  actionType: mysqlEnum("li_action_type", [
+    "viewed",
+    "liked",
+    "commented",
+    "connected",
+    "dm_sent",
+    "follow_up",
+    "replied",
+    "meeting",
+    "won",
+    "note",
+  ]).notNull(),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type LinkedInAction = typeof linkedinActions.$inferSelect;
+export type InsertLinkedInAction = typeof linkedinActions.$inferInsert;

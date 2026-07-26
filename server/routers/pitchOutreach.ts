@@ -7,7 +7,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { pitchLeads, pitchSendLog } from "../../drizzle/schema";
-import { eq, and, desc, count, gte, lte, like, or, inArray } from "drizzle-orm";
+import { eq, and, desc, count, gte, lte, like, or, inArray, sql } from "drizzle-orm";
 import { runOutreachPipeline, getTodayContactedCount, generatePitchEmail, linkedInPeopleSearchUrl, linkedInCompanySearchUrl, expireStaleLeads, isLeadExpired, JOB_LISTING_MAX_AGE_DAYS, fallbackJobSearchUrl } from "../scrapers/pitchOutreach";
 import { extractEmailFromCompanyWebsite, extractEmailFromJobPage } from "../scrapers/emailFinder";
 import { extractDomain } from "../scrapers/jobScraper";

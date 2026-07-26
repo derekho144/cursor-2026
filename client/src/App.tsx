@@ -31,6 +31,7 @@ const LoyaltyPage = lazy(() => import("./pages/Loyalty"));
 const ReceiptPrintPage = lazy(() => import("./pages/ReceiptPrintPage"));
 const QuoteFollowUp = lazy(() => import("./pages/QuoteFollowUp"));
 const PitchOutreach = lazy(() => import("./pages/PitchOutreach"));
+const LinkedInOps = lazy(() => import("./pages/LinkedInOps"));
 
 // Minimal spinner shown while lazy chunks are loading
 function PageLoader() {
@@ -67,6 +68,7 @@ function Router() {
         <Route path="/loyalty" component={LoyaltyPage} />
         <Route path="/follow-up" component={QuoteFollowUp} />
         <Route path="/pitch-outreach" component={PitchOutreach} />
+        <Route path="/linkedin-ops" component={LinkedInOps} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
