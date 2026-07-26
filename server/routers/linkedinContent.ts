@@ -22,6 +22,11 @@ import {
   CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
 } from "../linkedinContentFactory";
+import {
+  getBufferLinkedInMeta,
+  isBufferConfigured,
+  schedulePostToBuffer,
+} from "../bufferClient";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -30,6 +35,13 @@ const STATUS_LABELS: Record<string, string> = {
   scheduled: "已排程",
   published: "已發佈",
   rejected: "已拒絕",
+};
+
+const BUFFER_STATUS_LABELS: Record<string, string> = {
+  none: "未推送",
+  queued: "已排程 Buffer",
+  failed: "Buffer 失敗",
+  sent: "已發 LinkedIn",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -59,16 +71,99 @@ function parseSelectedMedia(raw: string | null | undefined) {
   }
 }
 
+async function pushPostToBuffer(postId: number): Promise<{
+  success: boolean;
+  bufferPostId?: string;
+  bufferStatus: string;
+  error?: string;
+}> {
+  const db = await getDb();
+  if (!db) return { success: false, bufferStatus: "failed", error: "Database unavailable" };
+
+  const [post] = await db
+    .select()
+    .from(linkedinContentPosts)
+    .where(eq(linkedinContentPosts.id, postId))
+    .limit(1);
+  if (!post) return { success: false, bufferStatus: "failed", error: "帖文不存在" };
+
+  if (post.bufferPostId && post.bufferStatus === "queued") {
+    return {
+      success: true,
+      bufferPostId: post.bufferPostId,
+      bufferStatus: "queued",
+    };
+  }
+
+  if (!post.scheduledFor) {
+    const err = "未設定排程時間（scheduledFor）";
+    await db
+      .update(linkedinContentPosts)
+      .set({ bufferStatus: "failed", bufferError: err })
+      .where(eq(linkedinContentPosts.id, postId));
+    return { success: false, bufferStatus: "failed", error: err };
+  }
+
+  const media = parseSelectedMedia(post.selectedMedia);
+  const imageUrls = media.map((m: any) => m?.url).filter(Boolean) as string[];
+
+  const result = await schedulePostToBuffer({
+    text: post.body,
+    dueAt: new Date(post.scheduledFor),
+    imageUrls,
+  });
+
+  if (result.ok) {
+    await db
+      .update(linkedinContentPosts)
+      .set({
+        bufferPostId: result.postId,
+        bufferStatus: "queued",
+        bufferError: null,
+      })
+      .where(eq(linkedinContentPosts.id, postId));
+    return { success: true, bufferPostId: result.postId, bufferStatus: "queued" };
+  }
+
+  await db
+    .update(linkedinContentPosts)
+    .set({ bufferStatus: "failed", bufferError: result.error })
+    .where(eq(linkedinContentPosts.id, postId));
+  return { success: false, bufferStatus: "failed", error: result.error };
+}
+
+function mapPostRow(p: typeof linkedinContentPosts.$inferSelect) {
+  return {
+    ...p,
+    selectedMedia: parseSelectedMedia(p.selectedMedia),
+    typeLabel: CONTENT_TYPE_LABELS[p.contentType],
+    statusLabel: STATUS_LABELS[p.status] ?? p.status,
+    bufferStatusLabel:
+      BUFFER_STATUS_LABELS[p.bufferStatus || "none"] ?? p.bufferStatus ?? "未推送",
+  };
+}
+
 export const linkedinContentRouter = router({
-  meta: protectedProcedure.query(() => ({
-    typeLabels: CONTENT_TYPE_LABELS,
-    typeBlurbs: CONTENT_TYPE_BLURBS,
-    statusLabels: STATUS_LABELS,
-    categoryLabels: CATEGORY_LABELS,
-    preferredLabels: PREFERRED_LABELS,
-    scheduleNote:
-      "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）。有圖片庫時會自動抽相寫主題。",
-  })),
+  meta: protectedProcedure.query(async () => {
+    const buffer = await getBufferLinkedInMeta().catch((err: any) => ({
+      configured: isBufferConfigured(),
+      channelId: null,
+      displayName: null,
+      type: null,
+      error: err?.message || String(err),
+    }));
+    return {
+      typeLabels: CONTENT_TYPE_LABELS,
+      typeBlurbs: CONTENT_TYPE_BLURBS,
+      statusLabels: STATUS_LABELS,
+      categoryLabels: CATEGORY_LABELS,
+      preferredLabels: PREFERRED_LABELS,
+      bufferStatusLabels: BUFFER_STATUS_LABELS,
+      buffer,
+      scheduleNote:
+        "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）。批准後推去 Buffer，到點自動發 LinkedIn。",
+    };
+  }),
 
   getStats: protectedProcedure.query(async () => {
     await ensureContentPostsTable();
@@ -156,12 +251,7 @@ export const linkedinContentRouter = router({
 
       return {
         weekKey: input.weekKey ?? getHktWeekKey(),
-        posts: posts.map((p) => ({
-          ...p,
-          selectedMedia: parseSelectedMedia(p.selectedMedia),
-          typeLabel: CONTENT_TYPE_LABELS[p.contentType],
-          statusLabel: STATUS_LABELS[p.status] ?? p.status,
-        })),
+        posts: posts.map(mapPostRow),
       };
     }),
 
@@ -325,7 +415,67 @@ export const linkedinContentRouter = router({
         })
         .where(eq(linkedinContentPosts.id, input.id));
 
-      return { success: true };
+      const buffer = await pushPostToBuffer(input.id);
+      return {
+        success: true,
+        bufferPushed: buffer.success,
+        bufferPostId: buffer.bufferPostId,
+        bufferStatus: buffer.bufferStatus,
+        bufferError: buffer.error,
+      };
+    }),
+
+  /** 重試推去 Buffer（已批准／已排程、未成功 queued 嘅帖） */
+  pushToBuffer: protectedProcedure
+    .input(z.object({ id: z.number(), force: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [post] = await db
+        .select()
+        .from(linkedinContentPosts)
+        .where(eq(linkedinContentPosts.id, input.id))
+        .limit(1);
+      if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "帖文不存在" });
+
+      if (!["approved", "scheduled"].includes(post.status)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "只可對已批准／已排程帖推 Buffer",
+        });
+      }
+
+      if (post.bufferPostId && post.bufferStatus === "queued" && !input.force) {
+        return {
+          success: true,
+          bufferPostId: post.bufferPostId,
+          bufferStatus: "queued",
+          alreadyQueued: true,
+        };
+      }
+
+      if (input.force) {
+        await db
+          .update(linkedinContentPosts)
+          .set({ bufferPostId: null, bufferStatus: null, bufferError: null })
+          .where(eq(linkedinContentPosts.id, input.id));
+      }
+
+      const buffer = await pushPostToBuffer(input.id);
+      if (!buffer.success) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: buffer.error || "推 Buffer 失敗",
+        });
+      }
+      return {
+        success: true,
+        bufferPostId: buffer.bufferPostId,
+        bufferStatus: buffer.bufferStatus,
+        alreadyQueued: false,
+      };
     }),
 
   reject: protectedProcedure
@@ -380,12 +530,7 @@ export const linkedinContentRouter = router({
       )
       .orderBy(linkedinContentPosts.scheduledFor);
 
-    return posts.map((p) => ({
-      ...p,
-      selectedMedia: parseSelectedMedia(p.selectedMedia),
-      typeLabel: CONTENT_TYPE_LABELS[p.contentType],
-      statusLabel: STATUS_LABELS[p.status],
-    }));
+    return posts.map(mapPostRow);
   }),
 
   nudgeDue: protectedProcedure.mutation(async () => {

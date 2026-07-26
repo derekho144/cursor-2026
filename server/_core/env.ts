@@ -11,4 +11,8 @@ export const ENV = {
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   appBaseUrl: process.env.APP_BASE_URL ?? "https://jdsys.manus.space",
+  /** Buffer API key — push approved content to LinkedIn via Buffer */
+  bufferAccessToken: process.env.BUFFER_ACCESS_TOKEN ?? "",
+  /** Optional; if empty, first linkedin channel is auto-selected */
+  bufferLinkedInChannelId: process.env.BUFFER_LINKEDIN_CHANNEL_ID ?? "",
 };

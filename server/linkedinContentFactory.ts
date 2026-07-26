@@ -134,6 +134,21 @@ export async function ensureContentPostsTable(): Promise<void> {
       // column may already exist
     }
     try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN buffer_post_id varchar(64) NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN buffer_status varchar(32) NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN buffer_error text NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
       await db.execute(sql`
         ALTER TABLE linkedin_content_posts
         MODIFY COLUMN li_content_type ENUM(

@@ -719,6 +719,11 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   mediaHint: text("media_hint"), // 建議配圖／輪播說明
   /** JSON: [{ id, url, fileName, category, caption, slideOrder }] */
   selectedMedia: mediumtext("selected_media"),
+  /** Buffer post id after push */
+  bufferPostId: varchar("buffer_post_id", { length: 64 }),
+  /** none | queued | failed | sent */
+  bufferStatus: varchar("buffer_status", { length: 32 }),
+  bufferError: text("buffer_error"),
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
   approvedAt: timestamp("approved_at"),

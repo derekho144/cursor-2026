@@ -189,13 +189,28 @@ export default function LinkedInOps() {
     onError: (e) => toast.error(e.message),
   });
   const approvePost = trpc.linkedinContent.approve.useMutation({
-    onSuccess: () => {
-      toast.success("已批准並排程");
+    onSuccess: (d) => {
+      if (d.bufferPushed) {
+        toast.success("已批准 → Buffer 已排程，到點自動發 LinkedIn");
+      } else if (d.bufferError) {
+        toast.warning(`已批准，但 Buffer 失敗：${d.bufferError}`);
+      } else {
+        toast.success("已批准並排程");
+      }
       utils.linkedinContent.getStats.invalidate();
       utils.linkedinContent.listPosts.invalidate();
       utils.linkedinContent.dueToday.invalidate();
       setEditingPost(null);
     },
+    onError: (e) => toast.error(e.message),
+  });
+  const pushBuffer = trpc.linkedinContent.pushToBuffer.useMutation({
+    onSuccess: (d) => {
+      toast.success(d.alreadyQueued ? "已在 Buffer 排程" : "已推去 Buffer，到點自動發 LinkedIn");
+      utils.linkedinContent.listPosts.invalidate();
+      utils.linkedinContent.dueToday.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
   });
   const rejectPost = trpc.linkedinContent.reject.useMutation({
     onSuccess: () => {
@@ -498,6 +513,25 @@ export default function LinkedInOps() {
                 <li>🥉 反常識觀點 — {(contentMeta.typeBlurbs as any).contrarian_take}</li>
               </ul>
             )}
+            {(contentMeta as any)?.buffer && (
+              <div className="text-xs mt-2 pt-2 border-t border-border/60">
+                Buffer → LinkedIn：{" "}
+                {(contentMeta as any).buffer.configured ? (
+                  (contentMeta as any).buffer.error ? (
+                    <span className="text-destructive">{(contentMeta as any).buffer.error}</span>
+                  ) : (
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      已連接 {(contentMeta as any).buffer.displayName}
+                      {(contentMeta as any).buffer.type
+                        ? `（${(contentMeta as any).buffer.type}）`
+                        : ""}
+                    </span>
+                  )
+                ) : (
+                  <span className="text-amber-700">未設定 BUFFER_ACCESS_TOKEN</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Image library */}
@@ -736,6 +770,19 @@ export default function LinkedInOps() {
                       {p.typeLabel}
                     </span>
                     <span className="text-xs px-2 py-0.5 rounded bg-muted">{p.statusLabel}</span>
+                    {p.bufferStatus && (
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded border ${
+                          p.bufferStatus === "queued"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : p.bufferStatus === "failed"
+                              ? "bg-red-50 text-red-800 border-red-200"
+                              : "bg-muted"
+                        }`}
+                      >
+                        {(p as any).bufferStatusLabel || p.bufferStatus}
+                      </span>
+                    )}
                     <span className="font-medium text-sm">{p.title}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -771,6 +818,9 @@ export default function LinkedInOps() {
                 {p.mediaHint && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">配圖：{p.mediaHint}</p>
                 )}
+                {p.bufferError && (
+                  <p className="text-xs text-destructive">Buffer：{p.bufferError}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => setEditingPost(p)}>
                     編輯／批核
@@ -783,7 +833,7 @@ export default function LinkedInOps() {
                     <>
                       <Button size="sm" className="gap-1" onClick={() => approvePost.mutate({ id: p.id })}>
                         <Check className="w-3 h-3" />
-                        批准
+                        批准 → Buffer
                       </Button>
                       <Button
                         size="sm"
@@ -796,6 +846,21 @@ export default function LinkedInOps() {
                       </Button>
                     </>
                   )}
+                  {(p.status === "scheduled" || p.status === "approved") &&
+                    p.bufferStatus !== "queued" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        disabled={pushBuffer.isPending}
+                        onClick={() => pushBuffer.mutate({ id: p.id })}
+                      >
+                        {pushBuffer.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : null}
+                        重試推 Buffer
+                      </Button>
+                    )}
                   {(p.status === "scheduled" || p.status === "approved") && (
                     <Button size="sm" className="gap-1" onClick={() => publishPost.mutate({ id: p.id })}>
                       標記已發佈
@@ -894,7 +959,7 @@ export default function LinkedInOps() {
                   );
                 }}
               >
-                儲存並批准
+                儲存並批准 → Buffer
               </Button>
             )}
           </DialogFooter>
