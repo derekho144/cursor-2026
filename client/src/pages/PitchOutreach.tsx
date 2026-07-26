@@ -160,7 +160,7 @@ export default function PitchOutreach() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">客戶開拓</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            每日掃描招聘平台「請攝影師／攝錄師」公司 → 你用 LinkedIn 聯絡 HR，建議外判畀 JD Studio
+            每日掃描 JobsDB / Indeed / CTgoodjobs「請攝影師／攝錄師」公司 → 你用 LinkedIn 聯絡 HR，建議外判畀 JD Studio
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {statsLoading

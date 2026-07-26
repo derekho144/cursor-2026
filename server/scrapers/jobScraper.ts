@@ -271,6 +271,92 @@ async function scrapeLinkedInJobsOld(keyword: string): Promise<ScrapedJob[]> {
   return results;
 }
 
+// ─── CTgoodjobs (direct HTML — RSC payload embeds job JSON) ─────────────────
+// Prefer keyword slug pages (`?search=` returns mostly irrelevant jobs — was why we disabled it).
+const CTGOODJOBS_LIST_URLS = [
+  "https://jobs.ctgoodjobs.hk/jobs/photographer-jobs",
+  "https://jobs.ctgoodjobs.hk/jobs/videographer-jobs",
+  "https://jobs.ctgoodjobs.hk/jobs/%E6%94%9D%E5%BD%B1%E5%B8%AB-jobs", // 攝影師
+  "https://jobs.ctgoodjobs.hk/jobs/%E6%94%9D%E9%8C%84%E5%B8%AB-jobs", // 攝錄師
+];
+
+function stripCtHtml(text: string): string {
+  return text
+    .replace(/\\u003c\/?strong\\u003e/gi, "")
+    .replace(/<\/?strong>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+async function scrapeCTgoodjobsListPage(listUrl: string): Promise<ScrapedJob[]> {
+  const results: ScrapedJob[] = [];
+  try {
+    const resp = await axios.get(listUrl, {
+      headers: { ...HEADERS, Accept: "text/html,application/xhtml+xml" },
+      timeout: 25000,
+      maxRedirects: 5,
+    });
+    let html = typeof resp.data === "string" ? resp.data : String(resp.data ?? "");
+    // RSC payload often stores JSON inside a JS string → quotes appear as \"
+    if (html.includes('\\"jobId\\"')) {
+      html = html.replace(/\\"/g, '"');
+    }
+
+    // {"jobId":"…","jobTitle":"…","url":"…","companyId":"…","companyName":"…",…}
+    const re =
+      /\{"jobId":"(\d+)","jobTitle":"((?:\\.|[^"\\])*)","url":"(https:\/\/jobs\.ctgoodjobs\.hk\/job\/\d+\/[^"]+)","companyId":"[^"]*","companyName":"((?:\\.|[^"\\])*)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      let jobTitle = m[2];
+      let companyName = m[4];
+      try {
+        jobTitle = JSON.parse(`"${jobTitle}"`);
+        companyName = JSON.parse(`"${companyName}"`);
+      } catch {
+        // keep raw
+      }
+      jobTitle = stripCtHtml(String(jobTitle));
+      companyName = stripCtHtml(String(companyName));
+      const jobUrl = m[3].split("?")[0];
+      if (jobTitle && companyName && jobUrl) {
+        results.push({
+          companyName,
+          jobTitle,
+          jobUrl,
+          source: "ctgoodjobs",
+        });
+      }
+    }
+    console.log(`[JobScraper/CTgoodjobs] ${listUrl} → ${results.length} jobs`);
+  } catch (err: any) {
+    console.error(`[JobScraper/CTgoodjobs] Error for ${listUrl}:`, err?.message);
+  }
+  return results;
+}
+
+/** Scrape CTgoodjobs photographer/videographer listing pages (once per pipeline run). */
+export async function scrapeCTgoodjobs(): Promise<ScrapedJob[]> {
+  const all: ScrapedJob[] = [];
+  const seen = new Set<string>();
+  for (const url of CTGOODJOBS_LIST_URLS) {
+    const batch = await scrapeCTgoodjobsListPage(url);
+    for (const job of batch) {
+      if (!seen.has(job.jobUrl)) {
+        seen.add(job.jobUrl);
+        all.push(job);
+      }
+    }
+    await sleep(1200);
+  }
+  console.log(`[JobScraper/CTgoodjobs] Total unique jobs: ${all.length}`);
+  return all;
+}
+
 // ─── 主入口：抓取所有平台 ──────────────────────────────────────────────────
 export async function scrapeAllJobBoards(): Promise<ScrapedJob[]> {
   const allJobs: ScrapedJob[] = [];
@@ -299,21 +385,29 @@ export async function scrapeAllJobBoards(): Promise<ScrapedJob[]> {
     console.log(`[JobScraper/Indeed] Found ${indeedResults.length} jobs for "${keyword}"`);
     await sleep(1500);
 
-    // CTgoodjobs - 已禁用
-    const ctResults: ScrapedJob[] = [];
-    console.log(`[JobScraper/CTgoodjobs] Disabled (search results not relevant)`);
-
-    // LinkedIn: disabled — stubbed scraper; use Manus / dedicated tools for LinkedIn ops
+    // LinkedIn: disabled
     const linkedinResults: ScrapedJob[] = [];
-    console.log(`[JobScraper/LinkedIn] Skipped (not used for automated pitch; prefer Manus / dedicated tools)`);
 
-    const combined = [...jobsdbResults, ...indeedResults, ...ctResults, ...linkedinResults];
+    const combined = [...jobsdbResults, ...indeedResults, ...linkedinResults];
     for (const job of combined) {
       if (!seen.has(job.jobUrl) && job.companyName && job.jobTitle) {
         seen.add(job.jobUrl);
         allJobs.push(job);
       }
     }
+  }
+
+  // CTgoodjobs: dedicated photo/video listing pages (once — not per keyword)
+  try {
+    const ctResults = await scrapeCTgoodjobs();
+    for (const job of ctResults) {
+      if (!seen.has(job.jobUrl) && job.companyName && job.jobTitle) {
+        seen.add(job.jobUrl);
+        allJobs.push(job);
+      }
+    }
+  } catch (err: any) {
+    console.error(`[JobScraper/CTgoodjobs] Batch error:`, err?.message);
   }
 
   console.log(`[JobScraper] Total unique jobs found: ${allJobs.length}`);
