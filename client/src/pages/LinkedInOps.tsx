@@ -144,6 +144,19 @@ export default function LinkedInOps() {
     onError: (e) => toast.error(e.message),
   });
 
+  const harvestWebsite = trpc.linkedinContent.harvestFromWebsite.useMutation({
+    onSuccess: (d) => {
+      toast.success(
+        d.imported > 0
+          ? `已從 jdstudiohk.com 匯入 ${d.imported} 張`
+          : "官網冇新相可匯入（可能已全部入庫）"
+      );
+      utils.linkedinContent.listAssets.invalidate();
+      utils.linkedinContent.getStats.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const readFileAsBase64 = (file: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -569,9 +582,27 @@ export default function LinkedInOps() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  上傳後設「適用主題」：標「項目＋幕後」嘅相會用喺項目帖；教育／數據同理。標「全部主題」先作後備。
+                  上傳後設「適用主題」。生成時若庫存冇相，會自動去 jdstudiohk.com 服務頁抽圖入庫。
                 </p>
               </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 w-full sm:w-auto min-h-10"
+                  disabled={harvestWebsite.isPending}
+                  onClick={() =>
+                    harvestWebsite.mutate({ maxNew: 8, preferredFor: uploadPreferred })
+                  }
+                >
+                  {harvestWebsite.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <ExternalLink className="w-3 h-3" />
+                  )}
+                  從官網抽相
+                </Button>
               <label className="inline-flex w-full sm:w-auto">
                 <input
                   type="file"
@@ -604,6 +635,7 @@ export default function LinkedInOps() {
                   上傳相片
                 </Button>
               </label>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:items-end">

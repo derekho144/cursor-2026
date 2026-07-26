@@ -22,6 +22,7 @@ import {
   CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
 } from "../linkedinContentFactory";
+import { harvestJdStudioWebsiteImages } from "../jdStudioWebsiteImages";
 import {
   getBufferLinkedInMeta,
   isBufferConfigured,
@@ -338,6 +339,36 @@ export const linkedinContentRouter = router({
         categoryLabel: CATEGORY_LABELS[r.category] ?? r.category,
         preferredLabel: PREFERRED_LABELS[r.preferredFor] ?? r.preferredFor,
       }));
+    }),
+
+  /** 從 jdstudiohk.com 服務頁抽相入圖片庫 */
+  harvestFromWebsite: protectedProcedure
+    .input(
+      z
+        .object({
+          maxNew: z.number().min(1).max(24).default(8),
+          preferredFor: z.enum(linkedinAssetPreferredFor).default("any"),
+        })
+        .optional()
+    )
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      try {
+        const imported = await harvestJdStudioWebsiteImages({
+          maxNew: input?.maxNew ?? 8,
+          preferredFor: input?.preferredFor ?? "any",
+        });
+        return {
+          imported: imported.length,
+          ids: imported.map((a) => a.id),
+          fileNames: imported.map((a) => a.fileName),
+        };
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err?.message || "官網抽相失敗",
+        });
+      }
     }),
 
   uploadAsset: protectedProcedure

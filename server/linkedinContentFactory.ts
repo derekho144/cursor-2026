@@ -230,6 +230,7 @@ const THEME_KEY: Record<LinkedInContentType, "project" | "education" | "data"> =
  * 1) 有標「項目／教育／數據」→ 該主題用晒呢啲相（唔會借去其他主題）
  * 2) 冇專屬相先先用「全部主題」
  * 3) 唔會用其他主題嘅相
+ * 4) 仍然冇相 → 自動去 jdstudiohk.com 服務頁抽圖入庫再抽
  */
 export async function pickAssetsForType(
   type: LinkedInContentType
@@ -241,24 +242,43 @@ export async function pickAssetsForType(
   const theme = THEME_KEY[type];
   const maxAssets = type === "project_bts" ? 9 : type === "photo_education" ? 6 : 5;
 
-  const rows = await db
-    .select()
-    .from(linkedinContentAssets)
-    .where(eq(linkedinContentAssets.active, 1))
-    .orderBy(
-      asc(linkedinContentAssets.timesUsed),
-      sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
-      asc(linkedinContentAssets.lastUsedAt),
-      desc(linkedinContentAssets.id)
-    )
-    .limit(200);
+  const selectPool = async (): Promise<LinkedInContentAsset[]> => {
+    const rows = await db
+      .select()
+      .from(linkedinContentAssets)
+      .where(eq(linkedinContentAssets.active, 1))
+      .orderBy(
+        asc(linkedinContentAssets.timesUsed),
+        sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
+        asc(linkedinContentAssets.lastUsedAt),
+        desc(linkedinContentAssets.id)
+      )
+      .limit(200);
 
-  const exact = rows.filter((r) => r.preferredFor === theme);
-  const anyPool = rows.filter((r) => r.preferredFor === "any");
+    const exact = rows.filter((r) => r.preferredFor === theme);
+    const anyPool = rows.filter((r) => r.preferredFor === "any");
+    const pool = exact.length > 0 ? exact : anyPool;
+    return pool.slice(0, maxAssets);
+  };
 
-  // 有指定主題相 → 用晒（上限 maxAssets）；否則先用「全部主題」
-  const pool = exact.length > 0 ? exact : anyPool;
-  return pool.slice(0, maxAssets);
+  let picked = await selectPool();
+  if (picked.length > 0) return picked;
+
+  try {
+    const { harvestJdStudioWebsiteImages } = await import("./jdStudioWebsiteImages");
+    const imported = await harvestJdStudioWebsiteImages({
+      maxNew: Math.max(maxAssets, 6),
+      preferredFor: theme,
+    });
+    console.log(
+      `[ContentFactory] website harvest for ${type}: imported ${imported.length}`
+    );
+  } catch (err: any) {
+    console.warn("[ContentFactory] website harvest failed:", err?.message);
+  }
+
+  picked = await selectPool();
+  return picked;
 }
 
 async function markAssetsUsed(ids: number[]): Promise<void> {
