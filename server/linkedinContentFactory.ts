@@ -321,9 +321,11 @@ export async function pickAssetsForType(
 
   try {
     const { harvestJdStudioWebsiteImages } = await import("./jdStudioWebsiteImages");
+    // Always tag harvested stock as "any" so all 3 themes can use them.
+    // (Theme-specific tags are for manually curated uploads.)
     const imported = await harvestJdStudioWebsiteImages({
-      maxNew: Math.max(maxAssets, 6),
-      preferredFor: theme,
+      maxNew: Math.max(maxAssets * 2, 8),
+      preferredFor: "any",
     });
     console.log(
       `[ContentFactory] website harvest for ${type}: imported ${imported.length}`
@@ -333,7 +335,21 @@ export async function pickAssetsForType(
   }
 
   picked = await selectPool();
-  return picked;
+  if (picked.length > 0) return picked;
+
+  // Last resort: ignore preferredFor and take any active photo
+  const fallback = await db
+    .select()
+    .from(linkedinContentAssets)
+    .where(eq(linkedinContentAssets.active, 1))
+    .orderBy(
+      asc(linkedinContentAssets.timesUsed),
+      sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
+      asc(linkedinContentAssets.lastUsedAt),
+      desc(linkedinContentAssets.id)
+    )
+    .limit(maxAssets);
+  return fallback;
 }
 
 async function markAssetsUsed(ids: number[]): Promise<void> {
@@ -352,7 +368,7 @@ async function markAssetsUsed(ids: number[]): Promise<void> {
   }
 }
 
-function assetsToSelectedMedia(assets: LinkedInContentAsset[]): SelectedMediaItem[] {
+export function assetsToSelectedMedia(assets: LinkedInContentAsset[]): SelectedMediaItem[] {
   return assets.map((a, i) => ({
     id: a.id,
     url: a.url,
@@ -361,6 +377,16 @@ function assetsToSelectedMedia(assets: LinkedInContentAsset[]): SelectedMediaIte
     caption: a.caption,
     slideOrder: i + 1,
   }));
+}
+
+/** Pick (and if needed harvest) photos for a content type; returns selectedMedia JSON items. */
+export async function ensureSelectedMediaForType(
+  type: LinkedInContentType
+): Promise<SelectedMediaItem[]> {
+  const assets = await pickAssetsForType(type);
+  if (!assets.length) return [];
+  await markAssetsUsed(assets.map((a) => a.id));
+  return assetsToSelectedMedia(assets);
 }
 
 function buildAssetBrief(assets: LinkedInContentAsset[]): string {

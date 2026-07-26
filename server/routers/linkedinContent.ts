@@ -20,6 +20,7 @@ import {
   getHktWeekKey,
   resolveContentWeek,
   resetSchedulesAndRegenerate,
+  ensureSelectedMediaForType,
   CONTENT_TYPE_LABELS,
   CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
@@ -29,6 +30,7 @@ import {
   getBufferLinkedInMeta,
   isBufferConfigured,
   schedulePostToBuffer,
+  deleteBufferPost,
 } from "../bufferClient";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -124,8 +126,31 @@ async function pushPostToBuffer(postId: number): Promise<{
       .where(eq(linkedinContentPosts.id, postId));
   }
 
-  const media = parseSelectedMedia(post.selectedMedia);
+  let media = parseSelectedMedia(post.selectedMedia);
+  if (!media.length) {
+    try {
+      media = await ensureSelectedMediaForType(post.contentType as any);
+      if (media.length) {
+        await db
+          .update(linkedinContentPosts)
+          .set({ selectedMedia: JSON.stringify(media) })
+          .where(eq(linkedinContentPosts.id, postId));
+      }
+    } catch (err: any) {
+      console.warn("[linkedinContent] ensure media failed:", err?.message);
+    }
+  }
+
   const imageUrls = media.map((m: any) => m?.url).filter(Boolean) as string[];
+  if (!imageUrls.length) {
+    const err =
+      "冇配圖：推 Buffer 前請先上傳／「從官網抽相」，或重新生成帶相嘅草稿";
+    await db
+      .update(linkedinContentPosts)
+      .set({ bufferStatus: "failed", bufferError: err })
+      .where(eq(linkedinContentPosts.id, postId));
+    return { success: false, bufferStatus: "failed", error: err, scheduledBumpedTo };
+  }
 
   const result = await schedulePostToBuffer({
     text: post.body,
@@ -592,6 +617,12 @@ export const linkedinContentRouter = router({
       }
 
       if (input.force) {
+        if (post.bufferPostId) {
+          const del = await deleteBufferPost(post.bufferPostId);
+          if (!del.ok) {
+            console.warn("[linkedinContent] Buffer delete before re-push:", del.error);
+          }
+        }
         await db
           .update(linkedinContentPosts)
           .set({ bufferPostId: null, bufferStatus: null, bufferError: null })

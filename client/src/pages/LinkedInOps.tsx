@@ -975,7 +975,7 @@ export default function LinkedInOps() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4 break-words">{p.body}</p>
-                {Array.isArray(p.selectedMedia) && p.selectedMedia.length > 0 && (
+                {Array.isArray(p.selectedMedia) && p.selectedMedia.length > 0 ? (
                   <div className="flex gap-2 overflow-x-auto py-1 -mx-1 px-1">
                     {p.selectedMedia.map((m: any) => (
                       <a
@@ -990,6 +990,8 @@ export default function LinkedInOps() {
                       </a>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-xs text-destructive">未配圖 — Buffer 只會出文字；請撳「補相並重推 Buffer」</p>
                 )}
                 {p.mediaHint && (
                   <p className="text-xs text-amber-700 dark:text-amber-400 break-words">配圖：{p.mediaHint}</p>
@@ -1046,21 +1048,26 @@ export default function LinkedInOps() {
                       刪除
                     </Button>
                   )}
-                  {(p.status === "scheduled" || p.status === "approved") &&
-                    p.bufferStatus !== "queued" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1"
-                        disabled={pushBuffer.isPending}
-                        onClick={() => pushBuffer.mutate({ id: p.id })}
-                      >
-                        {pushBuffer.isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : null}
-                        重試推 Buffer
-                      </Button>
-                    )}
+                  {(p.status === "scheduled" || p.status === "approved") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1"
+                      disabled={pushBuffer.isPending}
+                      onClick={() => pushBuffer.mutate({ id: p.id, force: true })}
+                    >
+                      {pushBuffer.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <ImagePlus className="w-3 h-3" />
+                      )}
+                      {!(Array.isArray(p.selectedMedia) && p.selectedMedia.length)
+                        ? "補相並重推 Buffer"
+                        : p.bufferStatus === "queued"
+                          ? "重推 Buffer（含相）"
+                          : "推 Buffer"}
+                    </Button>
+                  )}
                   {(p.status === "scheduled" || p.status === "approved") && (
                     <Button size="sm" className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1" onClick={() => publishPost.mutate({ id: p.id })}>
                       標記已發佈
