@@ -320,21 +320,21 @@ export default function LinkedInOps() {
   const renderContactRow = (c: any) => (
     <div
       key={c.id}
-      className="border rounded-lg p-4 bg-card flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
+      className="border rounded-lg p-3 sm:p-4 bg-card flex flex-col gap-3"
     >
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-foreground">{c.companyName}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+          <span className="font-medium text-foreground text-sm sm:text-base break-words">{c.companyName}</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 shrink-0">
             {c.stageLabel}
           </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+          <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
             {PLAYBOOK_LABELS[c.playbook] ?? c.playbook}
           </span>
         </div>
-        {c.jobTitle && <p className="text-sm text-muted-foreground">訊號職位：{c.jobTitle}</p>}
+        {c.jobTitle && <p className="text-sm text-muted-foreground break-words">訊號職位：{c.jobTitle}</p>}
         {(c.personName || c.personTitle) && (
-          <p className="text-sm text-foreground">
+          <p className="text-sm text-foreground break-words">
             {c.personName ?? "（未填姓名）"}
             {c.personTitle ? ` · ${c.personTitle}` : ""}
           </p>
@@ -343,28 +343,28 @@ export default function LinkedInOps() {
           <p className="text-xs text-muted-foreground">下一步：{c.nextStageLabel}</p>
         )}
       </div>
-      <div className="flex flex-wrap gap-2 shrink-0">
-        <Button variant="outline" size="sm" className="gap-1" asChild>
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+        <Button variant="outline" size="sm" className="gap-1 min-h-10 sm:min-h-0 justify-center" asChild>
           <a href={c.searchUrl || c.linkedInProfileUrl} target="_blank" rel="noopener noreferrer">
             <Linkedin className="w-3.5 h-3.5" />
             {c.linkedInProfileUrl ? "開 Profile" : "搵人"}
           </a>
         </Button>
         {c.jobUrl && (
-          <Button variant="ghost" size="sm" className="gap-1" asChild>
+          <Button variant="ghost" size="sm" className="gap-1 min-h-10 sm:min-h-0 justify-center border sm:border-0" asChild>
             <a href={c.jobUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="w-3.5 h-3.5" />
               職位
             </a>
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={() => openDetail(c)}>
+        <Button variant="ghost" size="sm" className="min-h-10 sm:min-h-0 justify-center border sm:border-0" onClick={() => openDetail(c)}>
           詳情
         </Button>
         {c.nextStage && (
           <Button
             size="sm"
-            className="gap-1"
+            className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1 justify-center"
             onClick={() => advance.mutate({ id: c.id })}
             disabled={advance.isPending}
           >
@@ -377,31 +377,32 @@ export default function LinkedInOps() {
   );
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">LinkedIn 營運</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            招聘訊號 → 暖場 → 連線 → DM。系統管進度同草稿；你（或 Manus）喺 LinkedIn 執行。
+    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">LinkedIn 營運</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
+            招聘訊號 → 暖場 → 連線 → DM。系統管進度同草稿；你喺 LinkedIn 執行。
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" />
-            手動新增
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="gap-2 min-h-10" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="truncate">手動新增</span>
           </Button>
           <Button
-            className="gap-2"
+            className="gap-2 min-h-10"
             onClick={() => sync.mutate()}
             disabled={sync.isPending}
           >
-            {sync.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            從開拓客戶同步
+            {sync.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <RefreshCw className="w-4 h-4 shrink-0" />}
+            <span className="truncate sm:hidden">同步</span>
+            <span className="hidden sm:inline">從開拓客戶同步</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
         {[
           { label: "今日待辦", value: stats?.dueToday ?? 0, color: "text-amber-600" },
           { label: "總聯絡", value: stats?.total ?? 0, color: "text-foreground" },
@@ -409,32 +410,35 @@ export default function LinkedInOps() {
           { label: "有回覆", value: stats?.replied ?? 0, color: "text-purple-600" },
           { label: "成交", value: stats?.won ?? 0, color: "text-emerald-600" },
         ].map((s) => (
-          <div key={s.label} className="bg-card border rounded-lg p-3 text-center">
-            <div className={`text-2xl font-bold ${s.color}`}>{statsLoading ? "…" : s.value}</div>
-            <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+          <div key={s.label} className="bg-card border rounded-lg p-2.5 sm:p-3 text-center">
+            <div className={`text-xl sm:text-2xl font-bold ${s.color}`}>{statsLoading ? "…" : s.value}</div>
+            <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="today" className="gap-1.5">
-            <ListTodo className="w-3.5 h-3.5" />
-            今日任務
-          </TabsTrigger>
-          <TabsTrigger value="all" className="gap-1.5">
-            <Users className="w-3.5 h-3.5" />
-            全部聯絡
-          </TabsTrigger>
-          <TabsTrigger value="playbooks" className="gap-1.5">
-            <BookOpen className="w-3.5 h-3.5" />
-            劇本
-          </TabsTrigger>
-          <TabsTrigger value="content" className="gap-1.5">
-            <PenLine className="w-3.5 h-3.5" />
-            內容工廠
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="gap-0">
+        <div className="-mx-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="inline-flex w-max min-w-full sm:min-w-0 h-auto p-1 gap-0.5">
+            <TabsTrigger value="today" className="gap-1 px-2.5 py-2 text-xs sm:text-sm shrink-0">
+              <ListTodo className="w-3.5 h-3.5" />
+              今日
+              <span className="hidden sm:inline">任務</span>
+            </TabsTrigger>
+            <TabsTrigger value="all" className="gap-1 px-2.5 py-2 text-xs sm:text-sm shrink-0">
+              <Users className="w-3.5 h-3.5" />
+              聯絡
+            </TabsTrigger>
+            <TabsTrigger value="playbooks" className="gap-1 px-2.5 py-2 text-xs sm:text-sm shrink-0">
+              <BookOpen className="w-3.5 h-3.5" />
+              劇本
+            </TabsTrigger>
+            <TabsTrigger value="content" className="gap-1 px-2.5 py-2 text-xs sm:text-sm shrink-0">
+              <PenLine className="w-3.5 h-3.5" />
+              內容工廠
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="today" className="space-y-3 mt-4">
           {dueLoading ? (
@@ -462,7 +466,7 @@ export default function LinkedInOps() {
                 setPage(1);
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40 min-h-10 sm:min-h-9">
                 <SelectValue placeholder="階段" />
               </SelectTrigger>
               <SelectContent>
@@ -503,18 +507,18 @@ export default function LinkedInOps() {
         </TabsContent>
 
         <TabsContent value="content" className="mt-4 space-y-4">
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            每週 3 篇高互動主題：🥇 輪播成功案例 · 🥈 外包 vs 自聘辯論 · 🥉 反常識觀點。你批核後按排程發佈（複製貼上 LinkedIn），再標記已發。
-            <div className="text-xs mt-1">{contentMeta?.scheduleNote}</div>
+          <div className="rounded-lg border bg-muted/30 px-3 py-3 sm:px-4 text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
+            每週 3 篇：輪播案例 · 外包 vs 自聘 · 反常識。批准後經 Buffer 自動發 LinkedIn。
+            <div className="text-xs mt-1 break-words">{contentMeta?.scheduleNote}</div>
             {contentMeta?.typeBlurbs && (
-              <ul className="text-xs mt-2 space-y-1 list-none">
-                <li>🥇 輪播成功案例 — {(contentMeta.typeBlurbs as any).carousel_case_study}</li>
-                <li>🥈 外包 vs 自聘 — {(contentMeta.typeBlurbs as any).outsource_vs_inhire}</li>
-                <li>🥉 反常識觀點 — {(contentMeta.typeBlurbs as any).contrarian_take}</li>
+              <ul className="text-xs mt-2 space-y-1.5 list-none">
+                <li>🥇 輪播 — {(contentMeta.typeBlurbs as any).carousel_case_study}</li>
+                <li>🥈 外包 — {(contentMeta.typeBlurbs as any).outsource_vs_inhire}</li>
+                <li>🥉 反常識 — {(contentMeta.typeBlurbs as any).contrarian_take}</li>
               </ul>
             )}
             {(contentMeta as any)?.buffer && (
-              <div className="text-xs mt-2 pt-2 border-t border-border/60">
+              <div className="text-xs mt-2 pt-2 border-t border-border/60 break-words">
                 Buffer → LinkedIn：{" "}
                 {(contentMeta as any).buffer.configured ? (
                   (contentMeta as any).buffer.error ? (
@@ -535,21 +539,21 @@ export default function LinkedInOps() {
           </div>
 
           {/* Image library */}
-          <div className="border rounded-lg p-4 bg-card space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="font-medium text-sm flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4" style={{ color: "#d4a843" }} />
+          <div className="border rounded-lg p-3 sm:p-4 bg-card space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="font-medium text-sm flex flex-wrap items-center gap-2">
+                  <ImagePlus className="w-4 h-4 shrink-0" style={{ color: "#d4a843" }} />
                   圖片庫
                   <span className="text-xs font-normal text-muted-foreground">
-                    {contentStats?.libraryCount ?? assets?.length ?? 0} 張 · 生成時自動抽相寫主題
+                    {contentStats?.libraryCount ?? assets?.length ?? 0} 張 · 生成時自動抽相
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  上傳作品後設分類／適用主題；輪播會抽約 6 張，辯論／反常識約 1–2 張（優先少用過嘅）。
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  上傳後設分類／主題；輪播約 6 張，辯論／反常識約 1–2 張。
                 </p>
               </div>
-              <label className="inline-flex">
+              <label className="inline-flex w-full sm:w-auto">
                 <input
                   type="file"
                   accept="image/*"
@@ -564,7 +568,7 @@ export default function LinkedInOps() {
                 <Button
                   type="button"
                   size="sm"
-                  className="gap-1"
+                  className="gap-1 w-full sm:w-auto min-h-10"
                   disabled={uploading || uploadAsset.isPending}
                   onClick={(e) => {
                     const input = (e.currentTarget.parentElement as HTMLLabelElement)?.querySelector(
@@ -583,11 +587,11 @@ export default function LinkedInOps() {
               </label>
             </div>
 
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="space-y-1">
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:items-end">
+              <div className="space-y-1 min-w-0">
                 <Label className="text-xs">分類</Label>
                 <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as any)}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,10 +603,10 @@ export default function LinkedInOps() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label className="text-xs">適用主題</Label>
                 <Select value={uploadPreferred} onValueChange={(v) => setUploadPreferred(v as any)}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectTrigger className="w-full sm:w-36 h-10 sm:h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -614,10 +618,10 @@ export default function LinkedInOps() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 flex-1 min-w-[160px]">
+              <div className="space-y-1 min-w-0 sm:flex-1 sm:min-w-[160px]">
                 <Label className="text-xs">說明（可選）</Label>
                 <Input
-                  className="h-8 text-xs"
+                  className="h-10 sm:h-8 text-xs"
                   placeholder="例如：珠寶 before / 產品棚拍"
                   value={uploadCaption}
                   onChange={(e) => setUploadCaption(e.target.value)}
@@ -690,8 +694,8 @@ export default function LinkedInOps() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2 items-center justify-between">
-            <div className="flex flex-wrap gap-2 text-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 text-xs sm:text-sm">
               <span className="px-2 py-1 rounded bg-card border">週次 {contentStats?.weekKey ?? "…"}</span>
               <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200">
                 待批核 {contentStats?.weekPending ?? 0}
@@ -704,7 +708,7 @@ export default function LinkedInOps() {
               </span>
             </div>
             <Button
-              className="gap-2"
+              className="gap-2 w-full sm:w-auto min-h-10"
               onClick={() => genWeek.mutate({})}
               disabled={genWeek.isPending}
             >
@@ -719,17 +723,17 @@ export default function LinkedInOps() {
                 今日要發佈
               </div>
               {duePosts?.map((p) => (
-                <div key={p.id} className="flex flex-wrap gap-2 items-center justify-between text-sm bg-card rounded p-2 border">
-                  <div>
+                <div key={p.id} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between text-sm bg-card rounded p-2 border">
+                  <div className="min-w-0 break-words">
                     <span className="font-medium">{p.typeLabel}</span>
                     <span className="text-muted-foreground ml-2">{p.title}</span>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" className="gap-1" onClick={() => copy(p.body)}>
+                  <div className="grid grid-cols-2 sm:flex gap-2">
+                    <Button size="sm" variant="outline" className="gap-1 min-h-10 sm:min-h-0" onClick={() => copy(p.body)}>
                       <Copy className="w-3 h-3" />
                       複製
                     </Button>
-                    <Button size="sm" className="gap-1" onClick={() => publishPost.mutate({ id: p.id })}>
+                    <Button size="sm" className="gap-1 min-h-10 sm:min-h-0" onClick={() => publishPost.mutate({ id: p.id })}>
                       <Check className="w-3 h-3" />
                       已發佈
                     </Button>
@@ -741,7 +745,7 @@ export default function LinkedInOps() {
 
           <div className="flex gap-2">
             <Select value={contentFilter} onValueChange={(v) => setContentFilter(v as typeof contentFilter)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40 min-h-10 sm:min-h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -763,16 +767,16 @@ export default function LinkedInOps() {
             </div>
           ) : (
             contentList?.posts.map((p) => (
-              <div key={p.id} className="border rounded-lg p-4 bg-card space-y-2">
-                <div className="flex flex-wrap gap-2 items-center justify-between">
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: "#1a1a1a", color: "#d4a843" }}>
+              <div key={p.id} className="border rounded-lg p-3 sm:p-4 bg-card space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap gap-2 items-center min-w-0">
+                    <span className="text-xs px-2 py-0.5 rounded shrink-0" style={{ background: "#1a1a1a", color: "#d4a843" }}>
                       {p.typeLabel}
                     </span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-muted">{p.statusLabel}</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-muted shrink-0">{p.statusLabel}</span>
                     {p.bufferStatus && (
                       <span
-                        className={`text-xs px-2 py-0.5 rounded border ${
+                        className={`text-xs px-2 py-0.5 rounded border shrink-0 ${
                           p.bufferStatus === "queued"
                             ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                             : p.bufferStatus === "failed"
@@ -783,9 +787,9 @@ export default function LinkedInOps() {
                         {(p as any).bufferStatusLabel || p.bufferStatus}
                       </span>
                     )}
-                    <span className="font-medium text-sm">{p.title}</span>
+                    <span className="font-medium text-sm break-words">{p.title}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground shrink-0">
                     {p.scheduledFor
                       ? `排程 ${new Date(p.scheduledFor).toLocaleString("zh-HK", {
                           timeZone: "Asia/Hong_Kong",
@@ -798,9 +802,9 @@ export default function LinkedInOps() {
                       : ""}
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{p.body}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4 break-words">{p.body}</p>
                 {Array.isArray(p.selectedMedia) && p.selectedMedia.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto py-1">
+                  <div className="flex gap-2 overflow-x-auto py-1 -mx-1 px-1">
                     {p.selectedMedia.map((m: any) => (
                       <a
                         key={`${p.id}-${m.id}-${m.slideOrder}`}
@@ -816,29 +820,29 @@ export default function LinkedInOps() {
                   </div>
                 )}
                 {p.mediaHint && (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">配圖：{p.mediaHint}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 break-words">配圖：{p.mediaHint}</p>
                 )}
                 {p.bufferError && (
-                  <p className="text-xs text-destructive">Buffer：{p.bufferError}</p>
+                  <p className="text-xs text-destructive break-words">Buffer：{p.bufferError}</p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setEditingPost(p)}>
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="min-h-10 sm:min-h-0" onClick={() => setEditingPost(p)}>
                     編輯／批核
                   </Button>
-                  <Button size="sm" variant="ghost" className="gap-1" onClick={() => copy(p.body)}>
+                  <Button size="sm" variant="ghost" className="gap-1 min-h-10 sm:min-h-0 border sm:border-0" onClick={() => copy(p.body)}>
                     <Copy className="w-3 h-3" />
                     複製
                   </Button>
                   {p.status === "pending_review" && (
                     <>
-                      <Button size="sm" className="gap-1" onClick={() => approvePost.mutate({ id: p.id })}>
+                      <Button size="sm" className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1" onClick={() => approvePost.mutate({ id: p.id })}>
                         <Check className="w-3 h-3" />
                         批准 → Buffer
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="gap-1 text-muted-foreground"
+                        className="gap-1 text-muted-foreground min-h-10 sm:min-h-0 border sm:border-0"
                         onClick={() => rejectPost.mutate({ id: p.id })}
                       >
                         <X className="w-3 h-3" />
@@ -851,7 +855,7 @@ export default function LinkedInOps() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="gap-1"
+                        className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1"
                         disabled={pushBuffer.isPending}
                         onClick={() => pushBuffer.mutate({ id: p.id })}
                       >
@@ -862,7 +866,7 @@ export default function LinkedInOps() {
                       </Button>
                     )}
                   {(p.status === "scheduled" || p.status === "approved") && (
-                    <Button size="sm" className="gap-1" onClick={() => publishPost.mutate({ id: p.id })}>
+                    <Button size="sm" className="gap-1 min-h-10 sm:min-h-0 col-span-2 sm:col-span-1" onClick={() => publishPost.mutate({ id: p.id })}>
                       標記已發佈
                     </Button>
                   )}
@@ -875,9 +879,9 @@ export default function LinkedInOps() {
 
       {/* Content edit dialog */}
       <Dialog open={!!editingPost} onOpenChange={(o) => !o && setEditingPost(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="pr-8 text-base sm:text-lg break-words">
               {editingPost?.typeLabel} · {editingPost?.title}
             </DialogTitle>
           </DialogHeader>
@@ -893,7 +897,7 @@ export default function LinkedInOps() {
               <div>
                 <Label>帖文</Label>
                 <textarea
-                  className="w-full min-h-[200px] rounded-md border bg-muted/40 p-3 text-sm"
+                  className="w-full min-h-[160px] sm:min-h-[200px] rounded-md border bg-muted/40 p-3 text-sm"
                   value={editingPost.body}
                   onChange={(e) => setEditingPost({ ...editingPost, body: e.target.value })}
                 />
@@ -925,12 +929,13 @@ export default function LinkedInOps() {
               )}
             </div>
           )}
-          <DialogFooter className="gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setEditingPost(null)}>
+          <DialogFooter className="gap-2 flex-col-reverse sm:flex-row sm:flex-wrap">
+            <Button variant="outline" className="w-full sm:w-auto min-h-10" onClick={() => setEditingPost(null)}>
               關閉
             </Button>
             <Button
               variant="outline"
+              className="w-full sm:w-auto min-h-10"
               onClick={() =>
                 editingPost &&
                 savePost.mutate({
@@ -946,6 +951,7 @@ export default function LinkedInOps() {
             </Button>
             {editingPost?.status === "pending_review" && (
               <Button
+                className="w-full sm:w-auto min-h-10"
                 onClick={() => {
                   if (!editingPost) return;
                   savePost.mutate(
@@ -968,13 +974,13 @@ export default function LinkedInOps() {
 
       {/* Detail */}
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{selected?.companyName}</DialogTitle>
+            <DialogTitle className="pr-8 break-words text-base sm:text-lg">{selected?.companyName}</DialogTitle>
           </DialogHeader>
           {selected && (
             <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <span className="text-muted-foreground">階段：</span>
                   {selected.stageLabel}
@@ -987,18 +993,21 @@ export default function LinkedInOps() {
               <div className="space-y-2">
                 <Label>聯絡人姓名</Label>
                 <Input
+                  className="min-h-10"
                   value={selected.personName ?? ""}
                   onChange={(e) => setSelected({ ...selected, personName: e.target.value })}
                   placeholder="例如 Mary Chan"
                 />
                 <Label>職稱</Label>
                 <Input
+                  className="min-h-10"
                   value={selected.personTitle ?? ""}
                   onChange={(e) => setSelected({ ...selected, personTitle: e.target.value })}
                   placeholder="HR Manager / Founder"
                 />
                 <Label>LinkedIn Profile URL</Label>
                 <Input
+                  className="min-h-10"
                   value={selected.linkedInProfileUrl ?? ""}
                   onChange={(e) => setSelected({ ...selected, linkedInProfileUrl: e.target.value })}
                   placeholder="https://www.linkedin.com/in/…"
@@ -1006,6 +1015,7 @@ export default function LinkedInOps() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto min-h-10"
                   onClick={() =>
                     update.mutate({
                       id: selected.id,
@@ -1020,11 +1030,11 @@ export default function LinkedInOps() {
                 </Button>
               </div>
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
                   <Label>DM 草稿</Label>
-                  <div className="flex gap-1">
+                  <div className="grid grid-cols-2 sm:flex gap-2">
                     {selected.dmDraft && (
-                      <Button variant="ghost" size="sm" className="gap-1" onClick={() => copy(selected.dmDraft)}>
+                      <Button variant="ghost" size="sm" className="gap-1 min-h-10 border sm:border-0" onClick={() => copy(selected.dmDraft)}>
                         <Copy className="w-3 h-3" />
                         複製
                       </Button>
@@ -1032,7 +1042,7 @@ export default function LinkedInOps() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="gap-1"
+                      className="gap-1 min-h-10 border sm:border-0"
                       onClick={() => genDm.mutate({ id: selected.id })}
                       disabled={genDm.isPending}
                     >
@@ -1054,13 +1064,13 @@ export default function LinkedInOps() {
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setShowDetail(false)}>
+          <DialogFooter className="gap-2 flex-col-reverse sm:flex-row sm:flex-wrap">
+            <Button variant="outline" className="w-full sm:w-auto min-h-10" onClick={() => setShowDetail(false)}>
               關閉
             </Button>
             <Button
               variant="ghost"
-              className="text-muted-foreground gap-1"
+              className="text-muted-foreground gap-1 w-full sm:w-auto min-h-10"
               onClick={() => selected && skip.mutate({ id: selected.id })}
             >
               <SkipForward className="w-4 h-4" />
@@ -1068,12 +1078,12 @@ export default function LinkedInOps() {
             </Button>
             {selected?.nextStage && (
               <Button
-                className="gap-1"
+                className="gap-1 w-full sm:w-auto min-h-10"
                 onClick={() => advance.mutate({ id: selected.id })}
                 disabled={advance.isPending}
               >
                 <ChevronRight className="w-4 h-4" />
-                完成這步 → {selected.nextStageLabel}
+                <span className="truncate">完成這步 → {selected.nextStageLabel}</span>
               </Button>
             )}
           </DialogFooter>
@@ -1082,7 +1092,7 @@ export default function LinkedInOps() {
 
       {/* Create */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>手動新增 LinkedIn 聯絡</DialogTitle>
           </DialogHeader>
@@ -1090,6 +1100,7 @@ export default function LinkedInOps() {
             <div>
               <Label>公司 *</Label>
               <Input
+                className="min-h-10"
                 value={createForm.companyName}
                 onChange={(e) => setCreateForm({ ...createForm, companyName: e.target.value })}
               />
@@ -1097,6 +1108,7 @@ export default function LinkedInOps() {
             <div>
               <Label>聯絡人</Label>
               <Input
+                className="min-h-10"
                 value={createForm.personName}
                 onChange={(e) => setCreateForm({ ...createForm, personName: e.target.value })}
               />
@@ -1104,6 +1116,7 @@ export default function LinkedInOps() {
             <div>
               <Label>職稱</Label>
               <Input
+                className="min-h-10"
                 value={createForm.personTitle}
                 onChange={(e) => setCreateForm({ ...createForm, personTitle: e.target.value })}
               />
@@ -1111,6 +1124,7 @@ export default function LinkedInOps() {
             <div>
               <Label>Profile URL</Label>
               <Input
+                className="min-h-10"
                 value={createForm.linkedInProfileUrl}
                 onChange={(e) => setCreateForm({ ...createForm, linkedInProfileUrl: e.target.value })}
               />
@@ -1123,7 +1137,7 @@ export default function LinkedInOps() {
                   setCreateForm({ ...createForm, playbook: v as typeof createForm.playbook })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="min-h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1134,11 +1148,12 @@ export default function LinkedInOps() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" className="w-full sm:w-auto min-h-10" onClick={() => setShowCreate(false)}>
               取消
             </Button>
             <Button
+              className="w-full sm:w-auto min-h-10"
               disabled={!createForm.companyName || create.isPending}
               onClick={() => create.mutate(createForm)}
             >
