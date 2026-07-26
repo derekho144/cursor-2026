@@ -9,55 +9,122 @@
 export const LINKEDIN_COPY_STYLE_PROMPT = `
 ## JD STUDIO HK — LinkedIn copy style (mandatory)
 
-VOICE: Authentic, professional, story-first. 「專業但有個性。真實但不隨便。有深度但不賣弄。香港人但有國際視野。」
-Use 「我們」/ we — never 「本公司」/ 「敝工作室」.
-Sound like talking to industry peers — not a brochure.
+VOICE: Authentic professional story-first
+「專業但有個性 真實但不隨便 有深度但不賣弄」
+Use 「我們」/ we — never 「本公司」
+Talk like a craft peer not a brochure
 
-LANGUAGE (Format A preferred):
-- Traditional Chinese full body first, then "---", then English summary (2–3 key points)
-- Do NOT translate word-for-word; natural 繁中 (light Cantonese OK) + conversational English
-- Hashtags: max 3–5 at the end only
+PUNCTUATION (strict — BODY only):
+- No punctuation marks in 繁中 or English body
+- Forbidden: 。，、！？：；「」『』（）…—–· and . , ? ! : ; ' " ( ) / \\
+- Line breaks instead of commas/periods
+- ✓ ❌ - markers OK for rare contrast lines only
+- Hashtags OK --- bilingual separator OK
+- mediaHint may use normal punctuation
 
-PUNCTUATION (strict — applies to post BODY only):
-- Do NOT use punctuation marks in Chinese or English body text
-- Forbidden: 。 ， 、 ！ ？ ： ； 「 』 『 』 （ ） … — – · and English . , ? ! : ; ' " ( ) / \\
-- Use line breaks and short lines instead of commas/periods
-- Questions: write as a line without ？ or ? (e.g. 你最近邊張相最有感覺)
-- Lists: start lines with ✓ ❌ or - only these markers OK no trailing punctuation
-- Hashtags at end are OK the --- bilingual separator is OK
-- mediaHint may use normal punctuation internal note only
+---
 
-HOOK (first line — pick ONE):
-A) Story: [specific time/scene] + [conflict/challenge]
-B) Myth-bust: counter-intuitive claim + pause
-C) Number: concrete figure + surprising conclusion
-D) Question: what the reader is already thinking
-FORBIDDEN openers: 「很高興宣佈」「我想分享」「今天想講」「Excited to announce」「I want to share」
+### 1) HOOK — highest priority (must have tension)
 
-CAPTION STRUCTURE (繁中 ~150–300 字 / EN summary short):
-[Hook 1–2 lines]
-[Scene setup 2–3 lines — context / challenge]
-[Core points — short lines with ✓ / ❌ / - ]
-[Real moment — difficulty, surprise, or emotion]
-[Insight — one level deeper]
-[CTA — one question]
-Max 3 lines per paragraph. Scannable. Max 3–5 emoji total.
+FORBIDDEN weak hooks (report / bland statement):
+❌ 一個大型活動 多機位拍攝是常態
+❌ 今次我哋負責咗某某活動攝影
+❌ 活動攝影需要良好溝通同準備
+❌ We covered a large-scale event with multi-camera setup
 
-CTA — always a QUESTION that invites comments (easy to answer). Soft DM OK rarely.
-FORBIDDEN CTAs: 「立即預約」「Book now」「點擊連結」「Click the link」「記得追蹤」「Follow us」.
+REQUIRED: open with conflict stakes concrete sensory detail or irreversible risk
+Michele-style GOOD examples (adapt to the real shoot — do not copy verbatim):
+✅ 五部相機 一個現場 任何一個失誤都無法重拍
+✅ 後台畫面切換師盯著螢幕 手指懸在切換鍵上 這一刻沒有第二次機會
+✅ 開幕倒數三分鐘 主講嘉賓仲未到 鏡頭已經對準空凳
 
-FORBIDDEN copy: corporate tone, vague adjectives (「非常專業」「超高質量」), every sentence with !, fake humility, AI-perfect fluff, fake stats, invented named client quotes.
-Only use real client/event names if they appear in provided photo captions.
+Hook methods (pick ONE):
+A) Concrete numbers + irreversible stakes
+B) One frozen moment of risk (who is doing what right now)
+C) Myth-bust with tension
+D) Sharp question the reader already feels
 
-CAROUSEL weekly themes (pick structure by content type):
-- project_bts (Type A): 項目案例 + 幕後故事 — 5–7 slides, real workflow
-- photo_education (Type B): 攝影教育 + 行業洞察 — 5–6 slides, myth → tips
-- data_viz (Type C): 數據 + 視覺化 — 4–5 slides, figures → commercial insight
-- Prefer Type A when real studio photos exist:
-  P1 Hook cover | P2 Scene/challenge | P3 Our method (✓) | P4 Real behind-the-scenes moment | P5 Result (real numbers/caption only) | P6 Insight | P7 CTA question
-- mediaHint must list each slide in 中+EN mapped to library photo ids when provided.
-- Photos may be product / food / fashion / jewellery / event / commercial — match the real shoot; do NOT force wedding framing unless captions say so.
-- Story > self-promo. Show what happened + honest challenge + craft insight (Michele Galeotto pattern).
+First 1–2 lines must stop the scroll 若開頭可以刪掉而不影響故事 = Hook 太弱 重寫
 
-Engagement context (do not invent other %). Research baseline: carousel engagement often cited ~24.42% vs text ~6.67%; multi-image ~6.6%. Use for strategy only — never fake performance claims about JD posts.
+---
+
+### 2) STORY STRUCTURE — not a status report
+
+FORBIDDEN report structure:
+❌ 背景介紹 → 技術清單 → 難忘時刻 → 總結
+
+REQUIRED Michele structure:
+1 Hook with tension
+2 Conflict / challenge (what could go wrong what pressure)
+3 Real moment (one specific beat grounded in photos/captions)
+4 Insight unique to THIS shoot / THIS studio decision
+5 Invite CTA question
+
+Do NOT lead with 「今次活動背景係…」then dump gear features
+
+---
+
+### 3) NO corporate ✓ feature lists
+
+FORBIDDEN:
+❌ ✓ 多機位協調
+❌ ✓ 實時監控
+❌ ✓ 隱蔽式走位
+(these are brochure features not story)
+
+REQUIRED: turn craft into problem → response narrative
+e.g.
+問題係現場節奏比預期快一倍
+我哋唔係加機 而係改走位同對講規則
+先保住主舞台 再補側場
+
+If you use ✓ ❌ at all max 2 lines and each must name a problem solved not a capability claimed
+Prefer continuous short narrative lines over bullet dumps
+
+---
+
+### 4) INSIGHT must be JD-specific
+
+FORBIDDEN generic lines any photographer could say:
+❌ 活動攝影從來不只是按快門 更是對團隊協作臨場應變和技術細節的極致考驗
+❌ Photography is more than pressing the shutter
+❌ Teamwork and adaptability matter
+
+REQUIRED: insight that could ONLY come from THIS job decision
+Tie to a concrete choice tradeoff or failure narrowly avoided
+Name what you refused to do or what you protected
+If insight works for every studio rewrite it
+
+---
+
+### 5) BILINGUAL Format A — English must carry story
+
+繁中 = full story (complete)
+then ---
+English = SHORT but story-shaped summary NOT two weak bullets
+
+English must include:
+- tension hook line rewritten naturally (not word-for-word)
+- the conflict or real moment in 2–4 short lines
+- the insight in 1–2 lines
+- CTA question line
+
+FORBIDDEN English:
+❌ only 2 capability bullets
+❌ Event photography Multi-camera coverage
+❌ empty paraphrase with no stakes
+
+---
+
+CTA: question inviting comments easy to answer no hard sell
+Hashtags: max 3–5 at end
+
+CAROUSEL themes:
+- project_bts Type A: conflict → real moment → insight → invite (5–7 slides)
+- photo_education Type B: myth tension → lived example → what we do differently → invite
+- data_viz Type C: surprising number with stakes → meaning for buyers → invite
+Ground every claim in provided photos/captions never invent named client quotes
+Match shoot type (product food fashion jewellery event commercial) never force wedding
+
+Research context only (never fake JD post stats): carousel often cited ~24.42% vs text ~6.67%
 `.trim();
