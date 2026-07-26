@@ -682,9 +682,9 @@ export type InsertLinkedInAction = typeof linkedinActions.$inferInsert;
 
 // ─── LinkedIn Content Factory（Authority 內容工廠）──────────────────────────
 export const linkedinContentTypes = [
-  "carousel_case_study", // 輪播成功案例
-  "outsource_vs_inhire", // 外包 vs 自聘辯論
-  "contrarian_take", // 反常識觀點
+  "project_bts", // 項目案例 + 幕後故事
+  "photo_education", // 攝影教育 + 行業洞察
+  "data_viz", // 數據 + 視覺化
 ] as const;
 export type LinkedInContentType = (typeof linkedinContentTypes)[number];
 
@@ -702,9 +702,9 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   id: int("id").autoincrement().primaryKey(),
   weekKey: varchar("week_key", { length: 16 }).notNull(), // e.g. 2026-W31
   contentType: mysqlEnum("li_content_type", [
-    "carousel_case_study",
-    "outsource_vs_inhire",
-    "contrarian_take",
+    "project_bts",
+    "photo_education",
+    "data_viz",
   ]).notNull(),
   status: mysqlEnum("li_content_status", [
     "draft",
@@ -749,9 +749,9 @@ export type LinkedInAssetCategory = (typeof linkedinAssetCategories)[number];
 
 export const linkedinAssetPreferredFor = [
   "any",
-  "carousel",
-  "debate",
-  "contrarian",
+  "project",
+  "education",
+  "data",
 ] as const;
 export type LinkedInAssetPreferredFor = (typeof linkedinAssetPreferredFor)[number];
 
@@ -775,9 +775,9 @@ export const linkedinContentAssets = mysqlTable("linkedin_content_assets", {
     .default("other"),
   preferredFor: mysqlEnum("li_asset_preferred_for", [
     "any",
-    "carousel",
-    "debate",
-    "contrarian",
+    "project",
+    "education",
+    "data",
   ])
     .notNull()
     .default("any"),

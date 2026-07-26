@@ -57,9 +57,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const PREFERRED_LABELS: Record<string, string> = {
   any: "全部主題",
-  carousel: "輪播案例",
-  debate: "外包辯論",
-  contrarian: "反常識",
+  project: "項目＋幕後",
+  education: "教育＋洞察",
+  data: "數據＋視覺",
 };
 
 function parseSelectedMedia(raw: string | null | undefined) {
@@ -162,7 +162,7 @@ export const linkedinContentRouter = router({
       bufferStatusLabels: BUFFER_STATUS_LABELS,
       buffer,
       scheduleNote:
-        "每週自動（HKT）：Tue 16:00 外包 vs 自聘 · Wed 16:00 輪播案例 · Thu 17:00 反常識。批准後推去 Buffer，到點自動發 LinkedIn。",
+        "每週自動（HKT）：Tue 16:00 項目＋幕後 · Wed 16:00 教育＋洞察 · Thu 17:00 數據＋視覺。批准後推去 Buffer，到點自動發 LinkedIn。",
     };
   }),
 

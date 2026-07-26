@@ -1,10 +1,10 @@
 /**
  * LinkedIn Content Factory — Authority 內容工廠
- * 每週自動產出 3 類高互動草稿：
- * 1) Carousel Case Study（輪播成功案例）
- * 2) 外包 vs 自聘辯論
- * 3) 反常識觀點（Contrarian Take）
- * 你批核 → 排程 → 你或 Manus 發佈後標記 published
+ * 每週自動產出 3 類高互動草稿（研究 Type A/B/C）：
+ * 1) 項目案例 + 幕後故事
+ * 2) 攝影教育 + 行業洞察
+ * 3) 數據 + 視覺化
+ * 你批核 → Buffer → LinkedIn
  */
 import { getDb } from "./db";
 import {
@@ -39,15 +39,15 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
-  carousel_case_study: "輪播成功案例",
-  outsource_vs_inhire: "外包 vs 自聘辯論",
-  contrarian_take: "反常識觀點",
+  project_bts: "項目案例 + 幕後故事",
+  photo_education: "攝影教育 + 行業洞察",
+  data_viz: "數據 + 視覺化",
 };
 
 export const CONTENT_TYPE_BLURBS: Record<LinkedInContentType, string> = {
-  carousel_case_study: "輪播互動率約 24.42%（vs 文字 6.67%），故事＋幕後最易停滑",
-  outsource_vs_inhire: "觸碰客戶核心痛點，引發大量評論",
-  contrarian_take: "引發辯論，演算法大力推廣",
+  project_bts: "展示真實工作流程",
+  photo_education: "建立思想領導力",
+  data_viz: "吸引商業客戶",
 };
 
 /** ISO week key in HKT, e.g. 2026-W31 */
@@ -70,9 +70,9 @@ function getMondayHkt(date = new Date()): Date {
 }
 
 const WEEK_SLOTS: Array<{ type: LinkedInContentType; dayOffset: number; hourHkt: number }> = [
-  { type: "outsource_vs_inhire", dayOffset: 1, hourHkt: 16 }, // Tue 4pm
-  { type: "carousel_case_study", dayOffset: 2, hourHkt: 16 }, // Wed 4pm
-  { type: "contrarian_take", dayOffset: 3, hourHkt: 17 }, // Thu 5pm
+  { type: "project_bts", dayOffset: 1, hourHkt: 16 }, // Tue 4pm
+  { type: "photo_education", dayOffset: 2, hourHkt: 16 }, // Wed 4pm
+  { type: "data_viz", dayOffset: 3, hourHkt: 17 }, // Thu 5pm
 ];
 
 export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt: number): Date {
@@ -92,7 +92,7 @@ export async function ensureContentPostsTable(): Promise<void> {
       CREATE TABLE IF NOT EXISTS linkedin_content_posts (
         id int AUTO_INCREMENT PRIMARY KEY,
         week_key varchar(16) NOT NULL,
-        li_content_type enum('carousel_case_study','outsource_vs_inhire','contrarian_take','case_study','industry_insight') NOT NULL,
+        li_content_type enum('project_bts','photo_education','data_viz','carousel_case_study','outsource_vs_inhire','contrarian_take','case_study','industry_insight') NOT NULL,
         li_content_status enum('draft','pending_review','approved','scheduled','published','rejected') NOT NULL DEFAULT 'pending_review',
         title varchar(512) NOT NULL,
         body mediumtext NOT NULL,
@@ -114,7 +114,7 @@ export async function ensureContentPostsTable(): Promise<void> {
         file_name varchar(255) NOT NULL,
         mime_type varchar(128) NOT NULL,
         li_asset_category enum('food','jewellery','product','fashion','commercial','before_after','event','other') NOT NULL DEFAULT 'other',
-        li_asset_preferred_for enum('any','carousel','debate','contrarian') NOT NULL DEFAULT 'any',
+        li_asset_preferred_for enum('any','project','education','data','carousel','debate','contrarian') NOT NULL DEFAULT 'any',
         caption text,
         ai_description text,
         times_used int NOT NULL DEFAULT 0,
@@ -159,25 +159,58 @@ export async function ensureContentPostsTable(): Promise<void> {
         ALTER TABLE linkedin_content_posts
         MODIFY COLUMN li_content_type ENUM(
           'case_study','outsource_vs_inhire','industry_insight',
-          'carousel_case_study','contrarian_take'
+          'carousel_case_study','contrarian_take',
+          'project_bts','photo_education','data_viz'
         ) NOT NULL
       `);
       await db.execute(sql`
-        UPDATE linkedin_content_posts SET li_content_type = 'carousel_case_study'
-        WHERE li_content_type = 'case_study'
+        UPDATE linkedin_content_posts SET li_content_type = 'project_bts'
+        WHERE li_content_type IN ('case_study','carousel_case_study')
       `);
       await db.execute(sql`
-        UPDATE linkedin_content_posts SET li_content_type = 'contrarian_take'
-        WHERE li_content_type = 'industry_insight'
+        UPDATE linkedin_content_posts SET li_content_type = 'photo_education'
+        WHERE li_content_type IN ('outsource_vs_inhire','industry_insight')
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_posts SET li_content_type = 'data_viz'
+        WHERE li_content_type = 'contrarian_take'
       `);
       await db.execute(sql`
         ALTER TABLE linkedin_content_posts
         MODIFY COLUMN li_content_type ENUM(
-          'carousel_case_study','outsource_vs_inhire','contrarian_take'
+          'project_bts','photo_education','data_viz'
         ) NOT NULL
       `);
     } catch (migrateErr) {
-      console.warn("[ContentFactory] enum migrate (may already be current):", migrateErr);
+      console.warn("[ContentFactory] content-type enum migrate:", migrateErr);
+    }
+    try {
+      await db.execute(sql`
+        ALTER TABLE linkedin_content_assets
+        MODIFY COLUMN li_asset_preferred_for ENUM(
+          'any','carousel','debate','contrarian','project','education','data'
+        ) NOT NULL DEFAULT 'any'
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_assets SET li_asset_preferred_for = 'project'
+        WHERE li_asset_preferred_for = 'carousel'
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_assets SET li_asset_preferred_for = 'education'
+        WHERE li_asset_preferred_for = 'debate'
+      `);
+      await db.execute(sql`
+        UPDATE linkedin_content_assets SET li_asset_preferred_for = 'data'
+        WHERE li_asset_preferred_for = 'contrarian'
+      `);
+      await db.execute(sql`
+        ALTER TABLE linkedin_content_assets
+        MODIFY COLUMN li_asset_preferred_for ENUM(
+          'any','project','education','data'
+        ) NOT NULL DEFAULT 'any'
+      `);
+    } catch (prefErr) {
+      console.warn("[ContentFactory] preferredFor enum migrate:", prefErr);
     }
     tableReady = true;
   } catch (err) {
@@ -186,15 +219,15 @@ export async function ensureContentPostsTable(): Promise<void> {
 }
 
 /** preferredFor → content type（指定主題嘅相只會用喺對應帖） */
-const THEME_KEY: Record<LinkedInContentType, "carousel" | "debate" | "contrarian"> = {
-  carousel_case_study: "carousel",
-  outsource_vs_inhire: "debate",
-  contrarian_take: "contrarian",
+const THEME_KEY: Record<LinkedInContentType, "project" | "education" | "data"> = {
+  project_bts: "project",
+  photo_education: "education",
+  data_viz: "data",
 };
 
 /**
  * 抽相規則：
- * 1) 有標「輪播案例／外包辯論／反常識」→ 該主題用晒呢啲相（唔會借去其他主題）
+ * 1) 有標「項目／教育／數據」→ 該主題用晒呢啲相（唔會借去其他主題）
  * 2) 冇專屬相先先用「全部主題」
  * 3) 唔會用其他主題嘅相
  */
@@ -206,7 +239,7 @@ export async function pickAssetsForType(
   if (!db) return [];
 
   const theme = THEME_KEY[type];
-  const maxAssets = type === "carousel_case_study" ? 9 : 4;
+  const maxAssets = type === "project_bts" ? 9 : type === "photo_education" ? 6 : 5;
 
   const rows = await db
     .select()
@@ -267,36 +300,29 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 }
 
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
-  carousel_case_study: {
-    angle: `Write a LinkedIn CAROUSEL case-study post for JD STUDIO HK (Type A: 項目案例 + 幕後故事).
-Follow LINKEDIN_COPY_STYLE strictly (story-first, Michele Galeotto pattern: project + deep reflection, not portfolio dump).
-BODY:
-1) Hook (story / myth / number / question — never corporate announce)
-2) Scene + challenge (honest difficulty OK)
-3) Method with ✓ / ❌ lists
-4) One real behind-the-scenes moment grounded in PROVIDED PHOTOS / captions
-5) Result — only real numbers/names from captions; no invented testimonials
-6) Insight (craft / trust / process philosophy)
-7) CTA as a question (comments), not hard sell; soft jdstudiohk.com only if natural after the question
-Also list numbered slide beats (5–7) matching photo order in the body or mediaHint.
-If photos are event/product/food/fashion/jewellery/commercial — write THAT story; never force wedding.`,
+  project_bts: {
+    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type A: 項目案例 + 幕後故事.
+Goal: show the real workflow (not a portfolio dump). Michele Galeotto pattern: project + deep reflection.
+BODY: Hook → scene/challenge → method (✓/❌) → one real BTS moment from PROVIDED PHOTOS → result (only real caption facts) → craft insight → CTA question.
+List 5–7 slide beats mapped to photo ids. Match actual shoot type (product/food/fashion/jewellery/event/commercial); never force wedding.`,
     mediaHint:
-      "輪播 Type A（5–7 頁）：P1 Hook 封面 → P2 場景/挑戰 → P3 方法 ✓ → P4 幕後真實時刻 → P5 結果 → P6 洞察 → P7 CTA 問題",
+      "輪播 Type A（5–7 頁）：P1 Hook → P2 場景/挑戰 → P3 方法 ✓ → P4 幕後真實時刻 → P5 結果 → P6 洞察 → P7 CTA 問題",
   },
-  outsource_vs_inhire: {
-    angle: `Write a LinkedIn DEBATE post: outsource photography/video to a specialist studio (JD STUDIO HK) vs hire in-house.
-Follow LINKEDIN_COPY_STYLE (hook methods, short paragraphs, CTA = question).
-Hit core pain: cost, downtime, gear, peak seasons, creative range — clear stance, room to disagree.
-Use ✓ / ❌ lists. No hard sell. Soft jdstudiohk.com only after a question CTA.
-If photos provided, treat as proof of specialist craft in framing/mediaHint.`,
-    mediaHint: "配圖：Outsource vs In-house 對比，或問題式封面「你會點揀？」",
+  photo_education: {
+    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type B: 攝影教育 + 行業洞察.
+Goal: thought leadership. Teach one craft/business truth about photography or video for HK brands.
+BODY: Hook as「為什麼…？」→ ❌ myth vs ✅ truth → concrete A/B/C example → 3 practical tips → one-line insight → CTA inviting experience share.
+5–6 slide beats. Ground in photos if provided. No hard sell.`,
+    mediaHint:
+      "輪播 Type B（5–6 頁）：P1 為什麼…？ → P2 ❌誤解 vs ✅真相 → P3 例子對比 → P4 3 個建議 → P5 洞察 → P6 CTA 分享經驗",
   },
-  contrarian_take: {
-    angle: `Write a CONTRARIAN LinkedIn take on brand photography / video / creative hiring in HK or Asia.
-Follow LINKEDIN_COPY_STYLE. ONE sharp anti-consensus claim (myth-bust hook).
-Structure: bold claim → why the consensus is wrong → nuance / real craft → CTA question for debate.
-Ground in provided photos if any. Confident, not rude. No hard sell.`,
-    mediaHint: "配圖：大字報式反常識金句封面、高對比",
+  data_viz: {
+    angle: `Write a LinkedIn CAROUSEL post for JD STUDIO HK — Type C: 數據 + 視覺化.
+Goal: attract commercial clients with credible numbers + insight (not fake JD performance claims).
+BODY: Cover with title+year → 1–2 key figures (use research-safe industry figures OR anonymised process numbers clearly framed as industry-typical — never invent fake named client ROI) → what the numbers mean for brand teams → CTA asking readers to share their own data/experience.
+4–5 slides. Photos as visual proof if provided. Question CTA only.`,
+    mediaHint:
+      "輪播 Type C（4–5 頁）：P1 標題+年份 → P2 關鍵數字 1 → P3 關鍵數字 2 → P4 洞察 → P5 CTA 分享你的數據",
   },
 };
 
@@ -393,25 +419,25 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     const fallbackHint = assets.length
       ? `用庫存相：${assets.map((a, i) => `${i + 1}=#${a.id}`).join(", ")}`
       : meta.mediaHint;
-    if (type === "carousel_case_study") {
+    if (type === "project_bts") {
       return {
-        title: "Carousel case study",
-        body: `上週拍攝，客戶一句話改咗成個方向：「唔好靚到假，要真。」\n\n我哋跟住故事走，唔再等「完美光線」。\n\n✓ 現場即時對光\n✓ 少擺拍、多捕捉\n✓ 交咗精選，唔係交晒全部\n\n最難嘅一刻往往先最有溫度。\n\n你最近一次拍攝，邊張相最有「真」？\n\n---\nLast shoot, one line changed everything: "Don't make it fake-pretty. Make it real."\nWe followed the story — not the perfect light.\nWhich frame from your last project felt the most honest?\n\n#CaseStudy #PhotographyHK #JDStudioHK`,
+        title: "項目案例 + 幕後故事",
+        body: `上週拍攝，客戶一句話改咗成個方向：「唔好靚到假，要真。」\n\n我哋跟住故事走，唔再等「完美光線」。\n\n✓ 現場即時對光\n✓ 少擺拍、多捕捉\n✓ 交精選，唔係交晒\n\n最難嘅一刻往往先最有溫度。\n\n你最近一次拍攝，邊張相最有「真」？\n\n---\nOne line changed the shoot: "Don't make it fake-pretty. Make it real."\nWhich frame from your last project felt the most honest?\n\n#CaseStudy #BehindTheScenes #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
     }
-    if (type === "outsource_vs_inhire") {
+    if (type === "photo_education") {
       return {
-        title: "Outsource vs in-house debate",
-        body: `「請攝影師」聽落好有掌控感。\n「搵工作室」聽落好似有風險。\n\n現實係：自聘隱藏咗人工、淡季空窗、同你仍然冇嘅器材。\n\n❌ 以為有人坐喺度就等於有產量\n✓ 峰值檔期先見到真正成本\n\n你而家 Team Outsource 定 Team In-house？留言話我知。\n\n---\nHiring in-house feels like control. Outsourcing feels like risk.\nOften the "safe" hire hides salary, downtime, and gear you still don't own.\nTeam Outsource or Team In-house?\n\n#MarketingHK #CreativeOps #Photography`,
+        title: "攝影教育 + 行業洞察",
+        body: `點解同一場景，有啲相有靈魂，有啲冇？\n\n❌ 唔係因為相機貴\n✓ 係因為有冇「等」同「睇」\n\n三個可即用做法：\n• 先定情緒，再定燈光\n• 少指令，多觀察\n• 交件講故事，唔係堆數量\n\n你學攝影時，邊一個習慣最難改？\n\n---\nWhy do some frames have soul and others don't — same scene?\nIt's rarely the camera.\nWhich habit was hardest to unlearn?\n\n#PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
       };
     }
     return {
-      title: "Contrarian take",
-      body: `反常識講一句：\n\n「急請攝影師」好多時唔係招聘問題——係視覺需求管理問題。\n\n有時更慳同更快嘅做法，唔係再請一個人，而係同一間 studio 建立彈性 retainer。\n\n你同意定反對？\n\n---\nUnpopular: a "Photographer wanted" post is often a demand problem, not a hiring problem.\nSometimes the move is: don't hire — build a flexible studio retainer.\nAgree or disagree?\n\n#Contrarian #BrandVisuals #HongKong`,
+      title: "數據 + 視覺化",
+      body: `行業常見數字：輪播帖互動可遠高過純文字帖。\n\n但對商業客戶更重要嘅係：\n• 決策者願意停低滑完\n• 複雜流程被拆成可消化頁面\n• 數字後面要有判斷，唔係堆 chart\n\n你哋團隊而家用邊種內容最能說服老闆批 budget？\n\n---\nCarousels often outperform text — but commercial buyers care about clarity and judgment, not charts for charts' sake.\nWhat content format actually wins budget in your team?\n\n#DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,
       selectedMedia,
     };

@@ -41,9 +41,9 @@ const ASSET_CATEGORIES = [
 
 const ASSET_PREFERRED = [
   { value: "any", label: "全部主題" },
-  { value: "carousel", label: "輪播案例" },
-  { value: "debate", label: "外包辯論" },
-  { value: "contrarian", label: "反常識" },
+  { value: "project", label: "項目＋幕後" },
+  { value: "education", label: "教育＋洞察" },
+  { value: "data", label: "數據＋視覺" },
 ] as const;
 
 const PLAYBOOK_LABELS: Record<string, string> = {
@@ -527,13 +527,13 @@ export default function LinkedInOps() {
 
         <TabsContent value="content" className="mt-4 space-y-4">
           <div className="rounded-lg border bg-muted/30 px-3 py-3 sm:px-4 text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
-            每週 3 篇：輪播案例 · 外包 vs 自聘 · 反常識。批准後經 Buffer 自動發 LinkedIn。
+            每週 3 篇：項目＋幕後 · 教育＋洞察 · 數據＋視覺。批准後經 Buffer 自動發 LinkedIn。
             <div className="text-xs mt-1 break-words">{contentMeta?.scheduleNote}</div>
             {contentMeta?.typeBlurbs && (
               <ul className="text-xs mt-2 space-y-1.5 list-none">
-                <li>🥇 輪播 — {(contentMeta.typeBlurbs as any).carousel_case_study}</li>
-                <li>🥈 外包 — {(contentMeta.typeBlurbs as any).outsource_vs_inhire}</li>
-                <li>🥉 反常識 — {(contentMeta.typeBlurbs as any).contrarian_take}</li>
+                <li>🥇 項目案例 + 幕後故事 — {(contentMeta.typeBlurbs as any).project_bts}</li>
+                <li>🥈 攝影教育 + 行業洞察 — {(contentMeta.typeBlurbs as any).photo_education}</li>
+                <li>🥉 數據 + 視覺化 — {(contentMeta.typeBlurbs as any).data_viz}</li>
               </ul>
             )}
             {(contentMeta as any)?.buffer && (
@@ -569,7 +569,7 @@ export default function LinkedInOps() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  上傳後設「適用主題」：標「輪播案例」嘅相會全部用喺輪播帖；辯論／反常識同理。標「全部主題」先作後備。
+                  上傳後設「適用主題」：標「項目＋幕後」嘅相會用喺項目帖；教育／數據同理。標「全部主題」先作後備。
                 </p>
               </div>
               <label className="inline-flex w-full sm:w-auto">

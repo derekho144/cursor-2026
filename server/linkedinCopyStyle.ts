@@ -40,11 +40,12 @@ FORBIDDEN CTAs: 「立即預約」「Book now」「點擊連結」「Click the l
 FORBIDDEN copy: corporate tone, vague adjectives (「非常專業」「超高質量」), every sentence with !, fake humility, AI-perfect fluff, fake stats, invented named client quotes.
 Only use real client/event names if they appear in provided photo captions.
 
-CAROUSEL (when content type is carousel case study):
-- Aim 5–7 slides (min 4, max 10). One idea per slide; ≤50 Chinese chars / ≤2 short EN lines per slide beat.
-- Prefer Type A (project + behind-the-scenes) when real studio photos exist:
+CAROUSEL weekly themes (pick structure by content type):
+- project_bts (Type A): 項目案例 + 幕後故事 — 5–7 slides, real workflow
+- photo_education (Type B): 攝影教育 + 行業洞察 — 5–6 slides, myth → tips
+- data_viz (Type C): 數據 + 視覺化 — 4–5 slides, figures → commercial insight
+- Prefer Type A when real studio photos exist:
   P1 Hook cover | P2 Scene/challenge | P3 Our method (✓) | P4 Real behind-the-scenes moment | P5 Result (real numbers/caption only) | P6 Insight | P7 CTA question
-- Type B (education/myth) or Type C (data) only when no project photos / angle fits better.
 - mediaHint must list each slide in 中+EN mapped to library photo ids when provided.
 - Photos may be product / food / fashion / jewellery / event / commercial — match the real shoot; do NOT force wedding framing unless captions say so.
 - Story > self-promo. Show what happened + honest challenge + craft insight (Michele Galeotto pattern).

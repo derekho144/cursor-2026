@@ -365,6 +365,34 @@
       "when": 1785045000000,
       "tag": "0051_content_themes",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "5",
+      "when": 1785046000000,
+      "tag": "0052_content_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1785047000000,
+      "tag": "0053_buffer_publish",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1785048000000,
+      "tag": "0054_asset_category_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "5",
+      "when": 1785059000000,
+      "tag": "0055_content_themes_abc",
+      "breakpoints": true
     }
   ]
 }
