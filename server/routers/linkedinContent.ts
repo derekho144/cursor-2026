@@ -161,7 +161,7 @@ export const linkedinContentRouter = router({
       bufferStatusLabels: BUFFER_STATUS_LABELS,
       buffer,
       scheduleNote:
-        "每週自動：Tue 輪播成功案例 · Thu 外包 vs 自聘辯論 · Sat 反常識觀點（HKT）。批准後推去 Buffer，到點自動發 LinkedIn。",
+        "每週自動（HKT）：Tue 16:00 外包 vs 自聘 · Wed 16:00 輪播案例 · Thu 17:00 反常識。批准後推去 Buffer，到點自動發 LinkedIn。",
     };
   }),
 
