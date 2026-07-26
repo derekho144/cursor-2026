@@ -138,6 +138,12 @@ export type ScheduleToBufferParams = {
   imageUrls?: string[];
 };
 
+/** Stable public URL Buffer can fetch (Forge storage URLs are auth-gated). */
+export function publicLinkedInAssetUrl(assetId: number): string {
+  const base = ENV.publicBaseUrl || "https://jdsys.biz";
+  return `${base}/api/public/linkedin-asset/${assetId}`;
+}
+
 /**
  * Create a scheduled Buffer post → auto-publishes to LinkedIn at dueAt.
  */

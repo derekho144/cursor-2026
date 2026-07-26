@@ -11,6 +11,15 @@ export const ENV = {
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   appBaseUrl: process.env.APP_BASE_URL ?? "https://jdsys.manus.space",
+  /**
+   * Public HTTPS origin Buffer can fetch without auth.
+   * Prefer PUBLIC_APP_URL; fall back to production site.
+   */
+  publicBaseUrl: (
+    process.env.PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    "https://jdsys.biz"
+  ).replace(/\/+$/, ""),
   /** Buffer API key — push approved content to LinkedIn via Buffer */
   bufferAccessToken: process.env.BUFFER_ACCESS_TOKEN ?? "",
   /** Optional; if empty, first linkedin channel is auto-selected */

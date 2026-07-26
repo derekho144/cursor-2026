@@ -31,6 +31,7 @@ import {
   isBufferConfigured,
   schedulePostToBuffer,
   deleteBufferPost,
+  publicLinkedInAssetUrl,
 } from "../bufferClient";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -141,7 +142,13 @@ async function pushPostToBuffer(postId: number): Promise<{
     }
   }
 
-  const imageUrls = media.map((m: any) => m?.url).filter(Boolean) as string[];
+  const imageUrls = media
+    .map((m: any) => {
+      const id = Number(m?.id);
+      if (id > 0) return publicLinkedInAssetUrl(id);
+      return typeof m?.url === "string" ? m.url : null;
+    })
+    .filter(Boolean) as string[];
   if (!imageUrls.length) {
     const err =
       "冇配圖：推 Buffer 前請先上傳／「從官網抽相」，或重新生成帶相嘅草稿";

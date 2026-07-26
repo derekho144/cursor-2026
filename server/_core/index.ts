@@ -100,6 +100,63 @@ async function startServer() {
     res.end(gif);
   });
 
+  // ─── Public LinkedIn asset proxy (Buffer needs unauthenticated HTTPS URLs) ─
+  app.get("/api/public/linkedin-asset/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!id || id < 1) {
+        res.status(400).send("bad id");
+        return;
+      }
+      const { getDb } = await import("../db");
+      const { linkedinContentAssets } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const { storageGet } = await import("../storage");
+      const db = await getDb();
+      if (!db) {
+        res.status(503).send("db unavailable");
+        return;
+      }
+      const [asset] = await db
+        .select()
+        .from(linkedinContentAssets)
+        .where(and(eq(linkedinContentAssets.id, id), eq(linkedinContentAssets.active, 1)))
+        .limit(1);
+      if (!asset?.storageKey) {
+        res.status(404).send("not found");
+        return;
+      }
+
+      // Prefer original public Squarespace source if we stored it
+      const sourceMatch = asset.aiDescription?.match(/^source:(https:\/\/\S+)/);
+      if (sourceMatch?.[1]) {
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.redirect(302, sourceMatch[1]);
+        return;
+      }
+
+      const { url } = await storageGet(asset.storageKey);
+      const upstream = await fetch(url, { redirect: "follow" });
+      if (!upstream.ok) {
+        res.status(502).send("upstream fetch failed");
+        return;
+      }
+      const mime =
+        asset.mimeType ||
+        upstream.headers.get("content-type") ||
+        "image/jpeg";
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader("Content-Type", mime.split(";")[0].trim());
+      res.setHeader("Content-Length", String(buf.length));
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.end(buf);
+    } catch (err: any) {
+      console.error("[PublicAsset] error:", err?.message || err);
+      res.status(500).send("error");
+    }
+  });
+
   // ─── Tracking Pixel: FH email open tracking ──────────────────────────────
   // Same mechanism as /api/track/open/:logId but targets emailInquiries.replyOpenedAt
   app.get("/api/track/fh/:inquiryId", async (req, res) => {
