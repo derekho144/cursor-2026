@@ -16,7 +16,7 @@ import {
 import { and, eq, gte, lte, inArray, sql, asc, desc } from "drizzle-orm";
 import { invokeLLM, type MessageContent } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
-import { LINKEDIN_COPY_STYLE_PROMPT } from "./linkedinCopyStyle";
+import { STYLE_BY_TYPE, LINKEDIN_SHARED_RULES } from "./linkedinCopyStyle";
 
 export type SelectedMediaItem = {
   id: number;
@@ -301,30 +301,26 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   project_bts: {
-    angle: `Write a LinkedIn post in Michele Galeotto style for JD STUDIO HK — Type A 項目案例 + 幕後.
-Feel: creative director reflecting on a real shoot with the team (we) — project first then thinking.
-Open on what happened last week / on set with a little friction — not a service summary.
-Include one honest challenge one vivid moment from PROVIDED PHOTOS then a quiet insight from THIS job.
-Soft CTA question. English after --- = mini-story (hook conflict/moment insight CTA) not weak bullets.
-5–7 slide beats in mediaHint. Match real shoot type never force wedding. No punctuation in body.`,
+    angle: `Theme Type A only — Michele Galeotto 項目案例 + 幕後.
+Project diary + reflection. Open on what happened on set. One honest challenge one vivid photo beat quiet insight soft CTA.
+English after --- mini-story. No punctuation. Match real shoot type.`,
     mediaHint:
-      "輪播 Type A（5–7 頁）：P1 故事開場 → P2 真實挑戰 → P3 現場選擇 → P4 幕後一刻 → P5 結果（只用真實 caption）→ P6 思考 → P7 柔和 CTA",
+      "輪播 Type A（5–7 頁）：P1 故事開場 → P2 真實挑戰 → P3 現場選擇 → P4 幕後一刻 → P5 結果 → P6 思考 → P7 CTA",
   },
   photo_education: {
-    angle: `Michele Galeotto style Type B 攝影教育 + 行業洞察 for JD STUDIO HK.
-Open like industry thinking from someone who just left a set — not a textbook tip list.
-One lived example (from photos if any) then what most teams get wrong then what you notice after years of shoots.
-Soft CTA. English after --- mini-story arc. No punctuation in body.`,
+    angle: `Theme Type B only — Educator / Myth-bust 攝影教育 + 行業洞察.
+DIFFERENT from Michele project diary. Do NOT open as 上個月拍攝故事.
+Write a teaching post: pointed「點解…」hook → ❌ myth vs ✓ truth → A/B/C or contrast example (photos = proof of the idea) → 2–3 practice moves → industry insight → soft CTA asking their preference/experience.
+English after --- must teach the same arc not retell a shoot. No punctuation.`,
     mediaHint:
-      "輪播 Type B（5–6 頁）：P1 行業觀察開場 → P2 迷思 → P3 現場例子 → P4 我哋點睇 → P5 洞察 → P6 CTA",
+      "輪播 Type B（5–6 頁）：P1 點解／迷思 Hook → P2 ❌ vs ✓ → P3 對比例子 → P4 可練習做法 → P5 行業洞察 → P6 CTA",
   },
   data_viz: {
-    angle: `Michele Galeotto style Type C 數據 + 視覺化 for JD STUDIO HK.
-Start from a number or timeline that changed how you briefed or shot — then what it means for commercial buyers.
-Insight must feel like craft reflection not a marketing dashboard. Soft CTA.
-English after --- mini-story. No fake JD ROI. No punctuation in body.`,
+    angle: `Theme Type C only — Commercial data 數據 + 視覺化.
+DIFFERENT from Michele diary and Type B tips. Open on a number with stakes → second figure → buyer meaning → craft judgment → soft CTA about budget/measurement.
+English commercial mini-arc. No fake JD ROI. No punctuation.`,
     mediaHint:
-      "輪播 Type C（4–5 頁）：P1 有故事嘅數字 → P2 現場含義 → P3 對客戶意味住咩 → P4 思考 → P5 CTA",
+      "輪播 Type C（4–5 頁）：P1 有張力數字 → P2 第二組數字／對比 → P3 對買家意味 → P4 判斷 → P5 CTA",
   },
 };
 
@@ -353,19 +349,25 @@ function hasEnglishMiniStory(body: string): boolean {
   return latin >= 80;
 }
 
-async function generateEnglishMiniStory(zhBody: string): Promise<string> {
+async function generateEnglishMiniStory(zhBody: string, type: LinkedInContentType): Promise<string> {
+  const enHint =
+    type === "photo_education"
+      ? "English must be educator myth-bust arc not a project diary"
+      : type === "data_viz"
+        ? "English must be commercial numbers+judgment arc"
+        : "English must be Michele-style mini project story";
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
         content: `Rewrite the Chinese LinkedIn post as an English mini-story summary for JD STUDIO HK.
+${enHint}
 Rules:
-- No punctuation marks at all (no . , ? ! : ; ' " etc)
-- Use short line breaks
-- Structure exactly: hook then conflict/real moment then insight then soft CTA question
-- Conversational Michele Galeotto creative-director tone we-voice
+- No punctuation marks at all
+- Short line breaks
+- Structure: hook then key middle beat then insight then soft CTA question
 - Do not invent new facts beyond the Chinese
-- Output JSON { "english": "..." } only the English block without --- and without hashtags`,
+- Output JSON { "english": "..." } without --- and without hashtags`,
       },
       {
         role: "user",
@@ -393,18 +395,17 @@ Rules:
   return String(parsed.english || "").trim();
 }
 
-async function ensureBilingualBody(body: string): Promise<string> {
+async function ensureBilingualBody(body: string, type: LinkedInContentType): Promise<string> {
   const trimmed = body.trim();
   if (hasEnglishMiniStory(trimmed)) return trimmed;
 
-  // Split off trailing hashtags
   const { text: main, tags } = stripHashtags(trimmed);
   let zh = main;
   const sep = zh.indexOf("\n---");
   if (sep >= 0) zh = zh.slice(0, sep).trim();
 
   try {
-    const en = await generateEnglishMiniStory(zh);
+    const en = await generateEnglishMiniStory(zh, type);
     if ((en.match(/[A-Za-z]/g) || []).length < 40) return trimmed;
     const parts = [zh, "---", en];
     if (tags) parts.push("", tags);
@@ -455,17 +456,16 @@ ${
       messages: [
         {
           role: "system",
-          content: `You write LinkedIn posts for JD STUDIO HK in the voice of Michele Galeotto (HK creative director style): project + reflection story-first honest challenge we-voice soft invite.
+          content: `You write LinkedIn posts for JD STUDIO HK. Use ONLY the theme style below for this run — do not mix Type A/B/C voices.
 
-${LINKEDIN_COPY_STYLE_PROMPT}
+${STYLE_BY_TYPE[type]}
 
-Content type this run: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
+${LINKEDIN_SHARED_RULES}
 
-When photos are attached ground every claim in those images and captions.
-CRITICAL:
-1) No punctuation marks in body
-2) Sound like Michele — not a case-report brochure
-3) body MUST be bilingual Format A: full 繁中 story then a line with only --- then English mini-story (hook + conflict/moment + insight + CTA). Never end after --- with empty English. Never Chinese-only.
+Content type: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
+
+When photos are attached ground claims in images/captions.
+CRITICAL bilingual body with English mini-story after ---
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -496,7 +496,7 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (!raw) throw new Error("No LLM content");
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     const parsed = JSON.parse(text);
-    const body = await ensureBilingualBody(String(parsed.body || ""));
+    const body = await ensureBilingualBody(String(parsed.body || ""), type);
     const mediaHint =
       String(parsed.mediaHint || meta.mediaHint) +
       (assets.length
@@ -549,29 +549,39 @@ What unrehearsed moment from your last shoot still sticks
     if (type === "photo_education") {
       return {
         title: "攝影教育 + 行業洞察",
-        body: `我哋做創作越耐
-越發現人哋問錯第一條問題
+        body: `點解同一場景
+有啲相有靈魂
+有啲冇
 
-多數人會問邊部機
-現場真正分高下嘅
-往往係你肯唔肯等同你睇唔睇到
+❌ 常見誤解 好相機先有好相
+✓ 真相 好光好事機好故事
 
-同一場景
-有人追完美光
-有人追故事轉折
-結果差好遠
+同一畫面
+A 角度平 故事唔見咗
+B 技術完美 但冇溫度
+C 等對咗嗰下 先有感覺
 
-你學嘢到而家
-邊一個習慣最難改
+下次拍攝前問自己
+呢一刻故事係咩
+光線帶咩情緒
+我想觀眾感受到咩
+
+你最鍾意嘅相
+係擺拍定自然一刻
 
 ---
-The longer we make work the clearer one thing gets
-People ask about the camera first
-On set the real split is whether you wait and whether you see
-Same scene
-Some chase perfect light
-Some chase the turn in the story
-Which habit has been hardest for you to unlearn
+Why do some frames from the same scene feel alive
+and others feel flat
+Myth good camera equals good photo
+Truth light timing and story do the work
+Same room
+A misses the angle
+B is technically perfect and cold
+C waits for the turn and it lands
+Before your next shoot ask
+what is the story in this moment
+Which photos do you treasure more
+posed or unposed
 
 #PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
@@ -583,11 +593,12 @@ Which habit has been hardest for you to unlearn
       body: `商業客戶好少因為相靚就批 budget
 佢哋批嘅係自己睇得明風險同結果
 
-所以我哋越嚟越少堆圖
-多講每一段畫面解決咗咩問題
+所以畫面要回答
+呢段解決咗咩問題
+唔係交咗幾多張
 
 數字有用
-但冇判斷嘅數字只係噪音
+冇判斷嘅數字只係噪音
 
 你哋團隊而家用邊種內容
 最能同老闆講清楚值不值得做
@@ -595,10 +606,11 @@ Which habit has been hardest for you to unlearn
 ---
 Commercial buyers rarely fund pretty frames alone
 They fund clarity about risk and outcome
-So we show fewer dumps and more
-what each sequence actually solved
+So each sequence should answer
+what problem did this solve
+not how many files we delivered
 Numbers help
-Numbers without judgment are just noise
+Numbers without judgment are noise
 What format helps your team explain value upstairs
 
 #DataStorytelling #B2BMarketing #JDStudioHK`,
