@@ -302,23 +302,22 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   project_bts: {
     angle: `Theme Type A only — Michele Galeotto 項目案例 + 幕後.
-Project diary + reflection. Open on what happened on set. One honest challenge one vivid photo beat quiet insight soft CTA.
-English after --- mini-story. No punctuation. Match real shoot type.`,
+ENGLISH primary project diary + reflection. Open on what happened on set. Honest challenge vivid photo beat quiet insight soft CTA then site line.
+Then --- short 繁中 digest. No punctuation. Match real shoot type.`,
     mediaHint:
       "輪播 Type A（5–7 頁）：P1 故事開場 → P2 真實挑戰 → P3 現場選擇 → P4 幕後一刻 → P5 結果 → P6 思考 → P7 CTA",
   },
   photo_education: {
     angle: `Theme Type B only — Educator / Myth-bust 攝影教育 + 行業洞察.
-DIFFERENT from Michele project diary. Do NOT open as 上個月拍攝故事.
-Write a teaching post: pointed「點解…」hook → ❌ myth vs ✓ truth → A/B/C or contrast example (photos = proof of the idea) → 2–3 practice moves → industry insight → soft CTA asking their preference/experience.
-English after --- must teach the same arc not retell a shoot. No punctuation.`,
+ENGLISH primary teaching post NOT Michele diary. why-hook → ❌ myth vs ✓ truth → A/B/C → practice → insight → soft CTA → site line.
+Then --- short 繁中 digest. No punctuation.`,
     mediaHint:
       "輪播 Type B（5–6 頁）：P1 點解／迷思 Hook → P2 ❌ vs ✓ → P3 對比例子 → P4 可練習做法 → P5 行業洞察 → P6 CTA",
   },
   data_viz: {
     angle: `Theme Type C only — Commercial data 數據 + 視覺化.
-DIFFERENT from Michele diary and Type B tips. Open on a number with stakes → second figure → buyer meaning → craft judgment → soft CTA about budget/measurement.
-English commercial mini-arc. No fake JD ROI. No punctuation.`,
+ENGLISH primary: number with stakes → second figure → buyer meaning → craft judgment → soft CTA → site line.
+Then --- short 繁中 digest. No fake JD ROI. No punctuation.`,
     mediaHint:
       "輪播 Type C（4–5 頁）：P1 有張力數字 → P2 第二組數字／對比 → P3 對買家意味 → P4 判斷 → P5 CTA",
   },
@@ -338,78 +337,88 @@ function stripHashtags(block: string): { text: string; tags: string } {
   };
 }
 
-/** True if text after --- has enough Latin letters to count as English mini-story */
-function hasEnglishMiniStory(body: string): boolean {
-  const idx = body.indexOf("\n---\n");
-  const alt = idx < 0 ? body.indexOf("\n---") : idx;
-  if (alt < 0) return false;
-  const after = body.slice(alt).replace(/^[\s\-]+/, "");
-  const { text } = stripHashtags(after);
-  const latin = (text.match(/[A-Za-z]/g) || []).length;
-  return latin >= 80;
+/** Format B: English primary then --- then short 繁中 */
+function splitBilingual(body: string): { before: string; after: string; tags: string } {
+  const { text: main, tags } = stripHashtags(body.trim());
+  const sep = main.search(/\n---\n?/);
+  if (sep < 0) return { before: main, after: "", tags };
+  return {
+    before: main.slice(0, sep).trim(),
+    after: main.slice(sep).replace(/^\n?---\n?/, "").trim(),
+    tags,
+  };
 }
 
-async function generateEnglishMiniStory(zhBody: string, type: LinkedInContentType): Promise<string> {
-  const enHint =
-    type === "photo_education"
-      ? "English must be educator myth-bust arc not a project diary"
-      : type === "data_viz"
-        ? "English must be commercial numbers+judgment arc"
-        : "English must be Michele-style mini project story";
+function hasFormatB(body: string): boolean {
+  const { before, after } = splitBilingual(body);
+  if (!after) return false;
+  const latin = (before.match(/[A-Za-z]/g) || []).length;
+  const cjk = (after.match(/[\u4e00-\u9fff]/g) || []).length;
+  return latin >= 120 && cjk >= 12;
+}
+
+async function generateChineseDigest(enBody: string, type: LinkedInContentType): Promise<string> {
   const response = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: `Rewrite the Chinese LinkedIn post as an English mini-story summary for JD STUDIO HK.
-${enHint}
+        content: `Write a SHORT Traditional Chinese digest (2–5 lines) of this English LinkedIn post for JD STUDIO HK HK audience.
+Theme hint: ${type}
 Rules:
-- No punctuation marks at all
-- Short line breaks
-- Structure: hook then key middle beat then insight then soft CTA question then end with exactly: Head to www.jdstudiohk.com for more case studies
-- Do not invent new facts beyond the Chinese
-- Output JSON { "english": "..." } without --- and without hashtags`,
+- No punctuation marks
+- Short line breaks Cantonese flavour OK
+- Capture hook + one key beat + soft CTA question only — not a full rewrite
+- End with exactly: 更多案例睇 www.jdstudiohk.com
+- Output JSON { "chinese": "..." } without --- and without hashtags`,
       },
       {
         role: "user",
-        content: `Chinese post:\n\n${zhBody}`,
+        content: `English post:\n\n${enBody}`,
       },
     ],
     response_format: {
       type: "json_schema",
       json_schema: {
-        name: "en_mini_story",
+        name: "zh_digest",
         strict: true,
         schema: {
           type: "object",
-          properties: { english: { type: "string" } },
-          required: ["english"],
+          properties: { chinese: { type: "string" } },
+          required: ["chinese"],
           additionalProperties: false,
         },
       },
     },
   });
   const raw = response?.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("No English LLM content");
+  if (!raw) throw new Error("No Chinese LLM content");
   const text = typeof raw === "string" ? raw : JSON.stringify(raw);
   const parsed = JSON.parse(text);
-  return String(parsed.english || "").trim();
+  return String(parsed.chinese || "").trim();
 }
 
-async function ensureSiteCta(body: string): Promise<string> {
+function ensureSiteCta(body: string): string {
   const ZH = "更多案例睇 www.jdstudiohk.com";
   const EN = "Head to www.jdstudiohk.com for more case studies";
-  const { text: main, tags } = stripHashtags(body.trim());
-  const sep = main.search(/\n---\n?/);
-  if (sep < 0) {
-    let out = main.includes("jdstudiohk.com") ? main : `${main}\n\n${ZH}`;
-    if (tags) out += `\n\n${tags}`;
-    return out;
+  const { before, after, tags } = splitBilingual(body);
+  // Format B: before = English, after = 繁中
+  let en = before;
+  let zh = after;
+  // If model still outputted ZH-first (legacy), detect and swap
+  const beforeLatin = (before.match(/[A-Za-z]/g) || []).length;
+  const beforeCjk = (before.match(/[\u4e00-\u9fff]/g) || []).length;
+  if (beforeCjk > beforeLatin && after) {
+    zh = before;
+    en = after;
   }
-  let zh = main.slice(0, sep).trim();
-  let en = main.slice(sep).replace(/^\n?---\n?/, "").trim();
-  if (!/jdstudiohk\.com/i.test(zh)) zh = `${zh}\n\n${ZH}`;
   if (!/jdstudiohk\.com/i.test(en)) en = `${en}\n\n${EN}`;
-  const parts = [zh, "---", en];
+  if (zh && !/jdstudiohk\.com/i.test(zh)) zh = `${zh}\n\n${ZH}`;
+  if (!zh) {
+    const parts = [en];
+    if (tags) parts.push("", tags);
+    return parts.join("\n");
+  }
+  const parts = [en, "---", zh];
   if (tags) parts.push("", tags);
   return parts.join("\n");
 }
@@ -417,21 +426,67 @@ async function ensureSiteCta(body: string): Promise<string> {
 async function ensureBilingualBody(body: string, type: LinkedInContentType): Promise<string> {
   const trimmed = body.trim();
   let result = trimmed;
-  if (!hasEnglishMiniStory(trimmed)) {
-    const { text: main, tags } = stripHashtags(trimmed);
-    let zh = main;
-    const sep = zh.indexOf("\n---");
-    if (sep >= 0) zh = zh.slice(0, sep).trim();
-
+  if (!hasFormatB(trimmed)) {
+    const { before, after, tags } = splitBilingual(trimmed);
+    const beforeLatin = (before.match(/[A-Za-z]/g) || []).length;
+    const beforeCjk = (before.match(/[\u4e00-\u9fff]/g) || []).length;
+    // Prefer existing English block; if ZH-first convert by generating digest from EN after or EN from ZH
     try {
-      const en = await generateEnglishMiniStory(zh, type);
-      if ((en.match(/[A-Za-z]/g) || []).length >= 40) {
-        const parts = [zh, "---", en];
-        if (tags) parts.push("", tags);
-        result = parts.join("\n");
+      if (beforeLatin >= 120) {
+        const zh = after && (after.match(/[\u4e00-\u9fff]/g) || []).length >= 12
+          ? after
+          : await generateChineseDigest(before, type);
+        if ((zh.match(/[\u4e00-\u9fff]/g) || []).length >= 8) {
+          const parts = [before, "---", zh];
+          if (tags) parts.push("", tags);
+          result = parts.join("\n");
+        }
+      } else if (beforeCjk >= 12) {
+        // Legacy Chinese-primary: keep ZH short as digest if EN exists after, else ask for EN rewrite via digest path flipped
+        // Generate English by asking model to expand — reuse generateChineseDigest inverse
+        const enResp = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `Expand this Chinese LinkedIn note into a FULL English LinkedIn post for JD STUDIO HK.
+Theme: ${type}
+No punctuation marks Short line breaks
+Full arc ending with soft CTA then: Head to www.jdstudiohk.com for more case studies
+Output JSON { "english": "..." }`,
+            },
+            { role: "user", content: before },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "en_full",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: { english: { type: "string" } },
+                required: ["english"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const raw = enResp?.choices?.[0]?.message?.content;
+        const parsed = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw));
+        const en = String(parsed.english || "").trim();
+        const zhShort =
+          after && (after.match(/[A-Za-z]/g) || []).length > 40
+            ? await generateChineseDigest(en, type)
+            : before.length > 80
+              ? (await generateChineseDigest(en, type))
+              : before;
+        if ((en.match(/[A-Za-z]/g) || []).length >= 80) {
+          const parts = [en, "---", zhShort];
+          if (tags) parts.push("", tags);
+          result = parts.join("\n");
+        }
       }
     } catch (err: any) {
-      console.warn("[ContentFactory] English mini-story repair failed:", err?.message);
+      console.warn("[ContentFactory] Format B repair failed:", err?.message);
     }
   }
   return ensureSiteCta(result);
@@ -486,7 +541,8 @@ ${LINKEDIN_SHARED_RULES}
 Content type: ${CONTENT_TYPE_LABELS[type]} — ${CONTENT_TYPE_BLURBS[type]}
 
 When photos are attached ground claims in images/captions.
-CRITICAL bilingual body with English mini-story after ---
+CRITICAL bilingual Format B: English FULL first then --- then short 繁中 digest. Never Chinese-primary.
+Always end EN with Head to www.jdstudiohk.com for more case studies and 繁中 with 更多案例睇 www.jdstudiohk.com
 Output JSON only: { "title": "short internal label", "body": "full post text", "mediaHint": "carousel slides or image brief with photo ids" }`,
         },
         {
@@ -537,26 +593,7 @@ Output JSON only: { "title": "short internal label", "body": "full post text", "
     if (type === "project_bts") {
       return {
         title: "項目案例 + 幕後故事",
-        body: `上個月我哋連續幾日跟住同一個現場節奏走
-
-真正難嘅唔係架數
-而係每一個轉折都冇第二次
-
-有一刻場內突然靜咗
-我哋冇追大景
-而係對準一個好細嘅動作
-
-拍完先明
-現場最有價值嘅往往唔係最靚嗰格
-而係最真嗰格
-
-你哋最近一次拍攝
-最記得邊一個冇得重來嘅瞬間
-
-更多案例睇 www.jdstudiohk.com
-
----
-Last month we spent days inside one live rhythm
+        body: `Last month we spent days inside one live rhythm
 The hard part was never the kit count
 It was knowing every turn had no redo
 When the room went quiet we ignored the wide
@@ -566,6 +603,13 @@ What unrehearsed moment from your last shoot still sticks
 
 Head to www.jdstudiohk.com for more case studies
 
+---
+上個月我哋喺同一個現場節奏入面連續幾日
+最難唔係架數 而係每個轉折都冇第二次
+你最近一次拍攝最記得邊個冇得重來嘅瞬間
+
+更多案例睇 www.jdstudiohk.com
+
 #CaseStudy #BehindTheScenes #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
@@ -574,30 +618,7 @@ Head to www.jdstudiohk.com for more case studies
     if (type === "photo_education") {
       return {
         title: "攝影教育 + 行業洞察",
-        body: `點解同一場景
-有啲相有靈魂
-有啲冇
-
-❌ 常見誤解 好相機先有好相
-✓ 真相 好光好事機好故事
-
-同一畫面
-A 角度平 故事唔見咗
-B 技術完美 但冇溫度
-C 等對咗嗰下 先有感覺
-
-下次拍攝前問自己
-呢一刻故事係咩
-光線帶咩情緒
-我想觀眾感受到咩
-
-你最鍾意嘅相
-係擺拍定自然一刻
-
-更多案例睇 www.jdstudiohk.com
-
----
-Why do some frames from the same scene feel alive
+        body: `Why do some frames from the same scene feel alive
 and others feel flat
 Myth good camera equals good photo
 Truth light timing and story do the work
@@ -612,6 +633,14 @@ posed or unposed
 
 Head to www.jdstudiohk.com for more case studies
 
+---
+點解同一場景有啲相有靈魂有啲冇
+❌ 好相機先有好相
+✓ 好光好事機好故事
+你最鍾意嘅相係擺拍定自然一刻
+
+更多案例睇 www.jdstudiohk.com
+
 #PhotographyTips #CreativeLeadership #JDStudioHK`,
         mediaHint: fallbackHint,
         selectedMedia,
@@ -619,23 +648,7 @@ Head to www.jdstudiohk.com for more case studies
     }
     return {
       title: "數據 + 視覺化",
-      body: `商業客戶好少因為相靚就批 budget
-佢哋批嘅係自己睇得明風險同結果
-
-所以畫面要回答
-呢段解決咗咩問題
-唔係交咗幾多張
-
-數字有用
-冇判斷嘅數字只係噪音
-
-你哋團隊而家用邊種內容
-最能同老闆講清楚值不值得做
-
-更多案例睇 www.jdstudiohk.com
-
----
-Commercial buyers rarely fund pretty frames alone
+      body: `Commercial buyers rarely fund pretty frames alone
 They fund clarity about risk and outcome
 So each sequence should answer
 what problem did this solve
@@ -645,6 +658,13 @@ Numbers without judgment are noise
 What format helps your team explain value upstairs
 
 Head to www.jdstudiohk.com for more case studies
+
+---
+商業客戶批嘅係睇得明風險同結果
+唔係相靚就得
+你哋團隊用邊種內容最能同老闆講清楚值不值得做
+
+更多案例睇 www.jdstudiohk.com
 
 #DataStorytelling #B2BMarketing #JDStudioHK`,
       mediaHint: fallbackHint,

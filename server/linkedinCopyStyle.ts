@@ -11,20 +11,20 @@ PUNCTUATION (BODY only): no 。，、！？：；「」『』（）…—–· a
 Use line breaks ✓ ❌ - OK as markers Hashtags OK --- OK
 mediaHint may use normal punctuation
 
-LANGUAGE Format A (required):
-[繁中 full ending with soft question CTA]
-更多案例睇 www.jdstudiohk.com
----
-[English mini-story ending with soft question CTA]
+LANGUAGE Format B (required — English primary):
+[English FULL story ending with soft question CTA]
 Head to www.jdstudiohk.com for more case studies
+---
+[繁中 SHORT summary 2–5 lines + soft CTA]
+更多案例睇 www.jdstudiohk.com
 [#hashtags]
-HARD RULE: never Chinese-only never empty after ---
+HARD RULE: English is the main post Chinese is only a short digest never reverse never Chinese-only
 Forbidden EN: two weak capability bullets
 
-Soft question CTA first then ALWAYS close with the site line (vary wording slightly OK):
-繁中 e.g. 更多案例睇 www.jdstudiohk.com
+Soft question CTA then ALWAYS site line:
 EN e.g. Head to www.jdstudiohk.com for more case studies
-(Allowed fixed closing — URL line is an exception to punctuation ban; no other periods)
+繁中 e.g. 更多案例睇 www.jdstudiohk.com
+(URL lines are punctuation exceptions)
 Still forbid hard sell: Book now 立即預約 Click the link Follow us
 No fake named client quotes no fake JD stats
 Match photo type (product food fashion jewellery event commercial) — never force wedding
@@ -45,10 +45,11 @@ Michele DNA:
 5) Soft invite let content speak
 6) Specifics from captions only when real
 
-Openers like: 上個月我哋… / 現場真正難嘅唔係相機而係…
+Openers like: Last month we… / The hard part on set was never the camera it was…
 Avoid service dump feature stacks Excited to announce
 
-繁中 arc: hook with friction → hard/unexpected → choices on set → vivid photo beat → quiet insight from THIS job → soft CTA → 更多案例睇 www.jdstudiohk.com
+EN arc: hook with friction → hard/unexpected → choices on set → vivid photo beat → quiet insight from THIS job → soft CTA → Head to www.jdstudiohk.com for more case studies
+Then --- short 繁中 digest (2–5 lines) + 更多案例睇 www.jdstudiohk.com
 `.trim();
 
 /**
@@ -65,21 +66,20 @@ This theme is TEACHING + INDUSTRY OPINION
 Voice: sharp clear confident teacher-peer — like a strong LinkedIn educator / creative ops lead
 Goal: change how the reader thinks about one craft myth then give usable framing
 
-繁中 arc (research Type B):
-1) Hook as a pointed「點解…」or myth that stings (e.g. 點解相睇落平 唔係相機問題)
-2) Break the myth with ❌ 常見誤解 vs ✓ 真相 (short lines)
-3) Concrete contrast example A vs B vs C OR before/after thinking (can use photos as visual proof of the point not as a case diary)
-4) 2–3 practical questions or moves the reader can try next shoot
-5) One industry insight line (thought leadership)
-6) Soft CTA inviting their experience / preference then 更多案例睇 www.jdstudiohk.com
+EN arc (research Type B) — full English teaching post:
+1) Hook as a pointed why-question or myth that stings
+2) Break the myth with ❌ common belief vs ✓ truth
+3) Concrete contrast A vs B vs C (photos = proof of the idea not a case diary)
+4) 2–3 practical moves
+5) Industry insight
+6) Soft CTA then Head to www.jdstudiohk.com for more case studies
+Then --- short 繁中 digest + 更多案例睇 www.jdstudiohk.com
 
 Tone differences vs Type A:
 - More declarative teaching less reflective diary
 - Permission to use ❌ ✓ frameworks
-- Less「我哋今次現場」more「多數團隊會… 但其實…」
+- Less on-set diary more「most teams think… actually…」
 - Still we-voice for JD but the STAR is the idea not the shoot log
-
-English after --- must teach the same arc (hook myth contrast insight CTA) then Head to www.jdstudiohk.com for more case studies
 `.trim();
 
 /**
@@ -94,16 +94,15 @@ Do NOT write a myth-bust tip carousel
 Write for brand / marketing decision-makers who need clarity
 
 Voice: calm precise commercially literate — numbers with stakes then judgment
-繁中 arc (research Type C):
+EN arc (research Type C) — full English commercial post:
 1) Open on one surprising number or budget/time fact with stakes
 2) Second figure or comparison that reframes the decision
-3) What it means for buyers / brand teams (risk outcome retention speed)
-4) One JD craft judgment (why the number matters on set) — not a dashboard dump
-5) Soft CTA asking how their team allocates budget / measures visuals
-6) Close with 更多案例睇 www.jdstudiohk.com / Head to www.jdstudiohk.com for more case studies
-
-English after --- same commercial mini-arc then site line
-No fake JD ROI — use industry-typical framing or process numbers clearly as typical not claimed JD KPIs
+3) What it means for buyers / brand teams
+4) One JD craft judgment
+5) Soft CTA
+6) Head to www.jdstudiohk.com for more case studies
+Then --- short 繁中 digest + 更多案例睇 www.jdstudiohk.com
+No fake JD ROI — industry-typical framing OK when clearly not claimed JD KPIs
 `.trim();
 
 export const STYLE_BY_TYPE: Record<
