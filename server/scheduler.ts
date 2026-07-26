@@ -920,15 +920,16 @@ export async function runScheduledPitchOutreach(): Promise<void> {
       const result = await runOutreachPipeline(process.env.HUNTER_API_KEY);
       lastPitchOutreachAt = new Date();
       lastPitchOutreachResult = result;
-      console.log(`[Scheduler] Pitch outreach done: ${result.scraped} scraped, ${result.saved ?? 0} new leads saved`);
+      console.log(`[Scheduler] Pitch outreach done: ${result.scraped} scraped, ${result.saved ?? 0} new, ${result.skipped} expired`);
 
-      if (result.scraped > 0 || (result.saved ?? 0) > 0) {
+      if (result.scraped > 0 || (result.saved ?? 0) > 0 || result.skipped > 0) {
         try {
           await notifyOwner({
             title: `📡 客戶開拓：今日招聘線索已更新`,
             content: [
               `爬取職位：${result.scraped} 個`,
               `新增待跟進：${result.saved ?? 0} 個`,
+              `過期已清理：${result.skipped} 個`,
               `請到「客戶開拓」用 LinkedIn 聯絡 HR／Hiring Manager（系統已停自動寄電郵）。`,
             ].join("\n"),
           });

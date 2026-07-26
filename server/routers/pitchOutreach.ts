@@ -8,7 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { pitchLeads, pitchSendLog } from "../../drizzle/schema";
 import { eq, and, desc, count, gte, lte, like, or, inArray } from "drizzle-orm";
-import { runOutreachPipeline, getTodayContactedCount, generatePitchEmail, linkedInPeopleSearchUrl, linkedInCompanySearchUrl } from "../scrapers/pitchOutreach";
+import { runOutreachPipeline, getTodayContactedCount, generatePitchEmail, linkedInPeopleSearchUrl, linkedInCompanySearchUrl, expireStaleLeads, isLeadExpired, JOB_LISTING_MAX_AGE_DAYS, fallbackJobSearchUrl } from "../scrapers/pitchOutreach";
 import { extractEmailFromCompanyWebsite, extractEmailFromJobPage } from "../scrapers/emailFinder";
 import { extractDomain } from "../scrapers/jobScraper";
 import { multiLayerEmailSearch } from "../scrapers/multiLayerEmailFinder";
@@ -35,12 +35,21 @@ export const pitchOutreachRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
+      // 開頁時順便清理過期待跟進
+      if (input.status === "pending_review" || input.status === "all") {
+        await expireStaleLeads();
+      }
+
       const offset = (input.page - 1) * input.pageSize;
 
       const conditions = [];
       if (input.status === "pending_review") {
-        // 待跟進：包含舊 pending_email
+        // 待跟進：包含舊 pending_email，並排除已過期（雙保險）
         conditions.push(inArray(pitchLeads.status, ["pending_review", "pending_email"]));
+        const cutoff = new Date(Date.now() - JOB_LISTING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+        conditions.push(
+          sql`COALESCE(${pitchLeads.jobPostedAt}, ${pitchLeads.createdAt}) >= ${cutoff}`
+        );
       } else if (input.status !== "all") {
         conditions.push(eq(pitchLeads.status, input.status));
       }
@@ -71,10 +80,17 @@ export const pitchOutreachRouter = router({
       ]);
 
       return {
-        leads,
+        leads: leads.map((lead) => ({
+          ...lead,
+          isExpired: isLeadExpired(lead),
+          jobLinkUrl: isLeadExpired(lead)
+            ? fallbackJobSearchUrl(lead)
+            : lead.jobUrl,
+        })),
         total: totalResult[0]?.cnt ?? 0,
         page: input.page,
         pageSize: input.pageSize,
+        maxAgeDays: JOB_LISTING_MAX_AGE_DAYS,
       };
     }),
 
@@ -82,6 +98,8 @@ export const pitchOutreachRouter = router({
   getStats: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+    await expireStaleLeads();
 
     const todayContacted = await getTodayContactedCount();
 
@@ -95,6 +113,18 @@ export const pitchOutreachRouter = router({
       counts[row.status] = row.cnt;
     }
 
+    // 待跟進：只計未過期
+    const cutoff = new Date(Date.now() - JOB_LISTING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+    const [toContactRow] = await db
+      .select({ cnt: count() })
+      .from(pitchLeads)
+      .where(
+        and(
+          inArray(pitchLeads.status, ["pending_review", "pending_email"]),
+          sql`COALESCE(${pitchLeads.jobPostedAt}, ${pitchLeads.createdAt}) >= ${cutoff}`
+        )
+      );
+
     // 最新 lead 建立時間（代表最後一次爬蟲成功抓到新資料的時間）
     const [latestLead] = await db
       .select({ createdAt: pitchLeads.createdAt })
@@ -102,7 +132,7 @@ export const pitchOutreachRouter = router({
       .orderBy(desc(pitchLeads.createdAt))
       .limit(1);
 
-    const toContact = (counts["pending_review"] ?? 0) + (counts["pending_email"] ?? 0);
+    const toContact = toContactRow?.cnt ?? 0;
 
     return {
       todayContacted,
@@ -111,13 +141,14 @@ export const pitchOutreachRouter = router({
       total: Object.values(counts).reduce((a, b) => a + b, 0),
       toContact,
       pendingEmail: counts["pending_email"] ?? 0,
-      pendingReview: counts["pending_review"] ?? 0,
+      pendingReview: toContact,
       contacted: counts["sent"] ?? 0,
       sent: counts["sent"] ?? 0,
       won: counts["approved"] ?? 0,
       skipped: counts["skipped"] ?? 0,
       replied: counts["replied"] ?? 0,
       lastLeadCreatedAt: latestLead?.createdAt ?? null,
+      maxAgeDays: JOB_LISTING_MAX_AGE_DAYS,
     };
   }),
 

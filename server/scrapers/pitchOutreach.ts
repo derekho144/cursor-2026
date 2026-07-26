@@ -12,6 +12,18 @@ import { invokeLLM } from "../_core/llm";
 import { scrapeAllJobBoards, type ScrapedJob } from "./jobScraper";
 import { extractDomain } from "./jobScraper";
 
+/** 超過呢個日數嘅職位當過期，自動移出「待跟進」 */
+export const JOB_LISTING_MAX_AGE_DAYS = 21;
+
+export function leadAgeAnchor(lead: { jobPostedAt?: Date | null; createdAt: Date }): Date {
+  return lead.jobPostedAt ?? lead.createdAt;
+}
+
+export function isLeadExpired(lead: { jobPostedAt?: Date | null; createdAt: Date }, now = Date.now()): boolean {
+  const anchor = leadAgeAnchor(lead).getTime();
+  return now - anchor > JOB_LISTING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+}
+
 /** LinkedIn people search for HR / hiring contacts at a company */
 export function linkedInPeopleSearchUrl(companyName: string): string {
   const q = `${companyName} HR OR "Talent" OR "Hiring Manager" OR Founder Hong Kong`;
@@ -21,6 +33,17 @@ export function linkedInPeopleSearchUrl(companyName: string): string {
 /** LinkedIn company search */
 export function linkedInCompanySearchUrl(companyName: string): string {
   return `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(companyName)}`;
+}
+
+/** JobsDB 過期時用公司搜尋頁代替死連結 */
+export function fallbackJobSearchUrl(lead: { source: string; companyName: string; jobUrl: string }): string {
+  if (lead.source === "jobsdb") {
+    return `https://hk.jobsdb.com/jobs?q=${encodeURIComponent(lead.companyName)}`;
+  }
+  if (lead.source === "indeed") {
+    return `https://hk.indeed.com/jobs?q=${encodeURIComponent(lead.companyName)}&l=Hong+Kong`;
+  }
+  return lead.jobUrl;
 }
 
 // ─── AI 生成個性化 pitch email ─────────────────────────────────────────────
@@ -301,6 +324,37 @@ export async function saveLeadsToDb(jobs: ScrapedJob[]): Promise<number> {
   return saved;
 }
 
+/**
+ * 將超過 JOB_LISTING_MAX_AGE_DAYS 日、仍待跟進嘅職位標為 skipped（已過期）。
+ * 用 COALESCE(job_posted_at, createdAt) 做錨點。
+ */
+export async function expireStaleLeads(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const cutoff = new Date(Date.now() - JOB_LISTING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+  const note = `Job listing expired (>${JOB_LISTING_MAX_AGE_DAYS}d)`;
+
+  try {
+    const result = await db.execute(sql`
+      UPDATE pitch_leads
+      SET status = 'skipped',
+          notes = ${note},
+          updatedAt = NOW()
+      WHERE status IN ('pending_review', 'pending_email')
+        AND COALESCE(job_posted_at, createdAt) < ${cutoff}
+    `);
+    const affected = Number((result as any)?.[0]?.affectedRows ?? (result as any)?.affectedRows ?? 0);
+    if (affected > 0) {
+      console.log(`[PitchOutreach] Expired ${affected} stale lead(s) older than ${JOB_LISTING_MAX_AGE_DAYS}d`);
+    }
+    return affected;
+  } catch (err) {
+    console.error("[PitchOutreach] expireStaleLeads error:", err);
+    return 0;
+  }
+}
+
 // ─── 主流程：只爬取 + 存線索（唔再自動搵電郵／寄信）────────────────────
 export async function runOutreachPipeline(_hunterApiKey?: string): Promise<{
   scraped: number;
@@ -314,30 +368,27 @@ export async function runOutreachPipeline(_hunterApiKey?: string): Promise<{
 
   console.log("[PitchOutreach] Starting lead-radar pipeline (scrape only, no auto-email)...");
 
-  // 1. 將舊「等電郵／因無電郵跳過」的紀錄改回待跟進（LinkedIn 流程）
+  // 1. 舊 pending_email → 待跟進；唔再批量重開「No email found」（多數已過期）
   try {
     await db
       .update(pitchLeads)
       .set({ status: "pending_review", notes: null })
       .where(eq(pitchLeads.status, "pending_email"));
-
-    await db.execute(sql`
-      UPDATE pitch_leads
-      SET status = 'pending_review', notes = NULL
-      WHERE status = 'skipped' AND notes = 'No email found'
-    `);
   } catch (err) {
     console.error("[PitchOutreach] Legacy status migrate error:", err);
   }
 
-  // 2. 抓取職位
+  // 2. 過期職位移出待跟進
+  const expired = await expireStaleLeads();
+
+  // 3. 抓取職位
   const jobs = await scrapeAllJobBoards();
   console.log(`[PitchOutreach] Scraped ${jobs.length} jobs`);
 
-  // 3. 儲存到資料庫（status = pending_review）
+  // 4. 儲存到資料庫（status = pending_review）
   const saved = await saveLeadsToDb(jobs);
 
-  console.log(`[PitchOutreach] Pipeline complete. Scraped: ${jobs.length}, new leads saved: ${saved}`);
+  console.log(`[PitchOutreach] Pipeline complete. Scraped: ${jobs.length}, new: ${saved}, expired: ${expired}`);
 
-  return { scraped: jobs.length, saved, emailsFound: 0, sent: 0, skipped: 0 };
+  return { scraped: jobs.length, saved, emailsFound: 0, sent: 0, skipped: expired };
 }

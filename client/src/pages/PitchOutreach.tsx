@@ -91,7 +91,9 @@ export default function PitchOutreach() {
 
   const runPipeline = trpc.pitchOutreach.runPipeline.useMutation({
     onSuccess: (data) => {
-      toast.success(`已更新招聘線索：抓取 ${data.scraped} 個職位，新增 ${(data as any).saved ?? 0} 條待跟進`);
+      toast.success(
+        `已更新招聘線索：抓取 ${data.scraped} 個職位，新增 ${(data as any).saved ?? 0} 條；過期已清理 ${data.skipped ?? 0} 條`
+      );
       utils.pitchOutreach.getStats.invalidate();
       utils.pitchOutreach.listLeads.invalidate();
     },
@@ -185,6 +187,7 @@ export default function PitchOutreach() {
       <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
         系統只負責<strong className="text-foreground font-medium">搵訊號</strong>
         （邊間公司而家請 in-house）。聯絡用 LinkedIn DM；已停自動寄冷電郵。
+        超過 {(stats as any)?.maxAgeDays ?? 21} 日嘅職位會自動標為已過期並移出「待跟進」。
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -297,15 +300,20 @@ export default function PitchOutreach() {
                       <td className="p-3">
                         <div className="text-foreground">{lead.jobTitle}</div>
                         {lead.jobUrl ? (
-                          <a
-                            href={lead.jobUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1 mt-0.5"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            查看職位
-                          </a>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <a
+                              href={(lead as any).jobLinkUrl || lead.jobUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {(lead as any).isExpired ? "搜尋公司職位" : "查看職位"}
+                            </a>
+                            {(lead as any).isExpired && (
+                              <span className="text-xs text-amber-600">已過期</span>
+                            )}
+                          </div>
                         ) : null}
                       </td>
                       <td className="p-3">
@@ -314,9 +322,13 @@ export default function PitchOutreach() {
                         </span>
                       </td>
                       <td className="p-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.color}`}>
-                          {statusInfo.label}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium w-fit ${statusInfo.color}`}>
+                            {lead.status === "skipped" && String(lead.notes || "").includes("expired")
+                              ? "已過期"
+                              : statusInfo.label}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-1">
@@ -435,9 +447,13 @@ export default function PitchOutreach() {
                 <div className="col-span-2 flex flex-wrap gap-2">
                   {selectedLead.jobUrl && (
                     <Button variant="outline" size="sm" className="gap-1" asChild>
-                      <a href={selectedLead.jobUrl} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={(selectedLead as any).jobLinkUrl || selectedLead.jobUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         <ExternalLink className="w-3.5 h-3.5" />
-                        職位連結
+                        {(selectedLead as any).isExpired ? "搜尋公司職位（原連結或已下架）" : "職位連結"}
                       </a>
                     </Button>
                   )}
