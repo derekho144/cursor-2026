@@ -205,7 +205,7 @@ export async function saveLeadsToDb(jobs: ScrapedJob[]): Promise<number> {
   // 相關性過濾：只保留攝影/攝錄相關職位
   // 使用更精確的過濾邏輯：職位必須包含「photographer」或「videographer」等核心詞彙
   const CORE_KEYWORDS = [
-    'photographer', 'videographer', 'cinematographer',
+    'photographer', 'videographer', 'cinematographer', 'video production',
     '攝影師', '攝錄師',
   ];
 

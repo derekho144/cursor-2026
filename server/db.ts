@@ -1399,11 +1399,22 @@ export async function upsertClientFromQuote(data: {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
 
-  // Try to find existing client by phone (most reliable) or name+company
+  // Try to find existing client by phone, then email, then name+company
   let existing: Client | undefined;
   if (data.phone) {
     const [found] = await db.select().from(clients).where(eq(clients.phone, data.phone)).limit(1);
     existing = found;
+  }
+  if (!existing && data.email) {
+    const emailNorm = data.email.trim().toLowerCase();
+    if (emailNorm) {
+      const [found] = await db
+        .select()
+        .from(clients)
+        .where(sql`LOWER(${clients.email}) = ${emailNorm}`)
+        .limit(1);
+      existing = found;
+    }
   }
   if (!existing && data.name) {
     const conditions = [eq(clients.name, data.name)];

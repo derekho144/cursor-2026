@@ -26,6 +26,8 @@ import { sendEmail, sendViaGmail } from "../resendEmail";
 import { getDb } from "../db";
 import { freehunterJobs, emailInquiries } from "../../drizzle/schema";
 import { eq, like, or, and, desc } from "drizzle-orm";
+import { resolveQuoteLeadSource } from "../_core/leadSource";
+import { appBaseUrl, buildWaTrackUrl, waTrackAnchor } from "../_core/waTracking";
 
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
@@ -321,16 +323,13 @@ export async function sendFHFirstEmail(clientEmail: string, clientName: string, 
   // Generate AI personalised opening (uses job description if available)
   const personalisedOpening = await generatePersonalisedOpening(englishJobTitle, jobDescription ?? "");
 
-  const emailBody = `Dear ${displayName},\n\nWe are JD STUDIO HK, a production company providing professional photography, videography, and design services. ${personalisedOpening}\nWe would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: https://wa.me/85291531976\n\n---\n\n您好 ${displayName}，\n\n我們是 JD STUDIO HK，專業攝影、影片製作及設計公司。我們留意到您在 Freehunter 上的工作邀請，非常有興趣參與這個項目。\n\n歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：https://wa.me/85291531976\n\nCheers!\n\nDerek\nJD STUDIO HK\nTel No: (852) 9153 1976\nWeb: https://jdstudiohk.com/`;
+  const emailBody = `Dear ${displayName},\n\nWe are JD STUDIO HK, a production company providing professional photography, videography, and design services. ${personalisedOpening}\nWe would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: ${buildWaTrackUrl("fh_first_email", { inq: fhInquiryId })}\n\n---\n\n您好 ${displayName}，\n\n我們是 JD STUDIO HK，專業攝影、影片製作及設計公司。我們留意到您在 Freehunter 上的工作邀請，非常有興趣參與這個項目。\n\n歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：${buildWaTrackUrl("fh_first_email", { inq: fhInquiryId })}\n\nCheers!\n\nDerek\nJD STUDIO HK\nTel No: (852) 9153 1976\nWeb: https://jdstudiohk.com/`;
   // 追蹤像素：客戶開啟郵件時觸發，記錄到 emailInquiries.replyOpenedAt
   const trackingPixel = fhInquiryId
-    ? `<img src="https://jdsys.manus.space/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`
+    ? `<img src="${appBaseUrl()}/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`
     : "";
-  const waTrackUrl = fhInquiryId
-    ? `https://jdsys.manus.space/api/track/wa?src=fh_first_email&inq=${fhInquiryId}`
-    : `https://jdsys.manus.space/api/track/wa?src=fh_first_email`;
-  const whatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: <a href="${waTrackUrl}" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>`;
-  const whatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：<a href="${waTrackUrl}" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>`;
+  const whatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: ${waTrackAnchor("fh_first_email", { inq: fhInquiryId })}`;
+  const whatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：${waTrackAnchor("fh_first_email", { inq: fhInquiryId })}`;
   const htmlEmailBody = `Dear ${displayName},<br><br>We are JD STUDIO HK, a production company providing professional photography, videography, and design services. ${personalisedOpening}<br>${whatsappLine}<br><br><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"><br>您好 ${displayName}，<br><br>我們是 JD STUDIO HK，專業攝影、影片製作及設計公司。我們留意到您在 Freehunter 上的工作邀請，非常有興趣參與這個項目。<br><br>${whatsappLineCN}<br><br>Cheers!<br><br>Derek<br>JD STUDIO HK<br>Tel No: (852) 9153 1976<br>Web: <a href="https://jdstudiohk.com/">https://jdstudiohk.com/</a>`;
   try {
     const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -383,12 +382,11 @@ export async function sendFHFollowUpEmail(
 
   const englishJobTitle = await translateJobTitleToEnglish(jobTitle);
 
-    const emailBody = `Dear ${displayName},\n\nJust wanted to follow up on my previous email regarding the ${englishJobTitle} project. We are still very interested and would love to discuss how JD STUDIO HK — photography, videography, and design — can help bring your vision to life.\n\nWe would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: https://wa.me/85291531976\n\nFeel free to reply to this email or reach out directly -- we are happy to answer any questions.\n\n---\n\n您好 ${displayName}，\n\n想跟進一下之前發送的郵件。我們對 ${englishJobTitle} 項目依然非常有興趣，希望能與您進一步溝通。\n\n歡迎透過 WhatsApp 聯絡我們，我們很樂意解答您的任何問題：https://wa.me/85291531976\n\nCheers!\n\nDerek\nJD STUDIO HK\nTel No: (852) 9153 1976\nWeb: https://jdstudiohk.com/`;
+    const emailBody = `Dear ${displayName},\n\nJust wanted to follow up on my previous email regarding the ${englishJobTitle} project. We are still very interested and would love to discuss how JD STUDIO HK — photography, videography, and design — can help bring your vision to life.\n\nWe would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: ${buildWaTrackUrl("fh_follow_up", { inq: fhInquiryId })}\n\nFeel free to reply to this email or reach out directly -- we are happy to answer any questions.\n\n---\n\n您好 ${displayName}，\n\n想跟進一下之前發送的郵件。我們對 ${englishJobTitle} 項目依然非常有興趣，希望能與您進一步溝通。\n\n歡迎透過 WhatsApp 聯絡我們，我們很樂意解答您的任何問題：${buildWaTrackUrl("fh_follow_up", { inq: fhInquiryId })}\n\nCheers!\n\nDerek\nJD STUDIO HK\nTel No: (852) 9153 1976\nWeb: https://jdstudiohk.com/`;
   // Tracking pixel (reuse the same inquiryId so open events are still tracked)
-  const trackingPixel = `<img src="https://jdsys.manus.space/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`;
-  const waFollowUpUrl = `https://jdsys.manus.space/api/track/wa?src=fh_follow_up&inq=${fhInquiryId}`;
-  const followUpWhatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: <a href="${waFollowUpUrl}" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>`;
-  const followUpWhatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，我們很樂意解答您的任何問題：<a href="${waFollowUpUrl}" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>`;
+  const trackingPixel = `<img src="${appBaseUrl()}/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`;
+  const followUpWhatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: ${waTrackAnchor("fh_follow_up", { inq: fhInquiryId })}`;
+  const followUpWhatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，我們很樂意解答您的任何問題：${waTrackAnchor("fh_follow_up", { inq: fhInquiryId })}`;
   const htmlFollowUpBody = `Dear ${displayName},<br><br>Just wanted to follow up on my previous email regarding the ${englishJobTitle} project. We are still very interested and would love to discuss how JD STUDIO HK can help bring your vision to life.<br><br>${followUpWhatsappLine}<br><br>Feel free to reply to this email or reach out directly -- we are happy to answer any questions.<br><br><hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0"><br>您好 ${displayName}，<br><br>想跟進一下之前發送的郵件。我們對 ${englishJobTitle} 項目依然非常有興趣，希望能與您進一步溝通。<br><br>${followUpWhatsappLineCN}<br><br>Cheers!<br><br>Derek<br>JD STUDIO HK<br>Tel No: (852) 9153 1976<br>Web: <a href="https://jdstudiohk.com/">https://jdstudiohk.com/</a>`;
   try {
     const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -1231,11 +1229,9 @@ Web: https://jdstudiohk.com/`;
  * @param inquiryId - Optional inquiry ID for WhatsApp click tracking
  */
 export function buildMeetingEmailHtml(textDraft: string, inquiryId?: number): string {
-  const waTrackUrl = inquiryId
-    ? `https://jdsys.manus.space/api/track/wa?src=meeting_email&inq=${inquiryId}`
-    : `https://jdsys.manus.space/api/track/wa?src=meeting_email`;
+  const waTrackUrl = buildWaTrackUrl("meeting_email", { inq: inquiryId });
   const trackingPixel = inquiryId
-    ? `<img src="https://jdsys.manus.space/api/track/email?src=meeting_email&inq=${inquiryId}" width="1" height="1" style="display:none" alt="" />`
+    ? `<img src="${appBaseUrl()}/api/track/email?src=meeting_email&inq=${inquiryId}" width="1" height="1" style="display:none" alt="" />`
     : "";
 
   // Convert plain text to HTML paragraphs, replacing wa.me links with styled anchor
@@ -1463,7 +1459,12 @@ ${aiResult?.notes || ""}`,
           total: subtotalNum.toString(),
           currency: "HKD",
           status: "draft",
-          leadSource: "email_inquiry",
+          leadSource: resolveQuoteLeadSource({
+            fromEmail,
+            htmlBody,
+            subject,
+            fhJobId: inquiry.fhJobId,
+          }),
           items,
         });
         await updateEmailInquiry(inquiry.id, { quoteId: newQuote.id });
@@ -1662,7 +1663,12 @@ ${aiResult?.notes || ""}`,
               total: "0",
               currency: "HKD",
               status: "draft",
-              leadSource: "email_inquiry",
+              leadSource: resolveQuoteLeadSource({
+                fromEmail,
+                htmlBody,
+                subject,
+                fhJobId: savedInquiry.fhJobId,
+              }),
               items,
             });
             await updateEmailInquiry(savedInquiry.id, { quoteId: newQuote.id });
@@ -1732,7 +1738,12 @@ ${aiResult?.notes || ""}`,
             total: "0",
             currency: "HKD",
             status: "draft",
-            leadSource: "email_inquiry",
+            leadSource: resolveQuoteLeadSource({
+              fromEmail: existing.fromEmail,
+              bodyText: existing.bodyText,
+              subject: existing.subject,
+              fhJobId: existing.fhJobId,
+            }),
             items,
           });
           quoteId = newQuote.id;

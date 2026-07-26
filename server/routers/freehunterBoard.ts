@@ -20,6 +20,7 @@ import { getFreehunterStatus, getOrLoginFreehunter } from "../freehunter";
 import { sendFHFirstEmail, translateJobTitleToEnglish, cleanClientName } from "./emailInquiries";
 import { invokeLLM } from "../_core/llm";
 import { sendEmail } from "../resendEmail";
+import { appBaseUrl, buildWaTrackUrl, rewriteWaLinks, WA_RAW } from "../_core/waTracking";
 
 /** Create tracking inquiry + send first email (so FH follow-ups can fire later). */
 async function sendFirstEmailWithTracking(job: {
@@ -667,8 +668,8 @@ export const freehunterBoardRouter = router({
         aiBodyCN = `我們留意到您在 Freehunter 上的工作邀請，非常有興趣參與這個項目。期待有機會與您合作，為您提供專業的攝影及影片製作服務。`;
       }
 
-      const whatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: https://wa.me/85291531976`;
-      const whatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：https://wa.me/85291531976`;
+      const whatsappLine = `We would love to connect with you via WhatsApp to better understand your requirements and provide an accurate quote: ${WA_RAW}`;
+      const whatsappLineCN = `歡迎透過 WhatsApp 聯絡我們，以便更深入了解您的需求並提供準確報價：${WA_RAW}`;
       const fullBody = `Dear ${displayName},\n\nWe are JD STUDIO HK, a production company providing professional photography and video services. ${aiBodyEN}\n\n${whatsappLine}\n\n---\n\n您好 ${displayName}，\n\n我們是 JD STUDIO HK，專業攝影及影片製作公司。${aiBodyCN}\n\n${whatsappLineCN}\n\nCheers!\n\nDerek\nJD STUDIO HK\nTel No: (852) 9153 1976\nWeb: https://jdstudiohk.com/`;
 
       return {
@@ -734,14 +735,14 @@ export const freehunterBoardRouter = router({
         fhInquiryId = inserted.id;
       }
 
-      // Build HTML email
-      const trackingPixel = `<img src="https://jdsys.manus.space/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`;
-      const htmlContent = input.body
-        .replace(/\n/g, "<br>")
-        .replace(
-          "https://wa.me/85291531976",
-          '<a href="https://wa.me/85291531976" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>'
-        );
+      // Build HTML email — rewrite any raw wa.me to tracked URL
+      const waTrackUrl = buildWaTrackUrl("fh_manual_send", { inq: fhInquiryId, fhj: job.id });
+      const trackingPixel = `<img src="${appBaseUrl()}/api/track/fh/${fhInquiryId}" width="1" height="1" style="display:none" alt="" />`;
+      let htmlContent = rewriteWaLinks(input.body.replace(/\n/g, "<br>"), waTrackUrl);
+      if (!htmlContent.includes(`href="${waTrackUrl}"`)) {
+        const anchor = `<a href="${waTrackUrl}" style="color:#25D366;font-weight:bold">wa.me/85291531976</a>`;
+        htmlContent = htmlContent.split(waTrackUrl).join(anchor);
+      }
       const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
 <div style="background:#1a1a1a;padding:20px 30px"><h2 style="color:#fff;margin:0;font-size:18px;letter-spacing:2px">JD STUDIO HK</h2></div>
 <div style="padding:30px;line-height:1.6">${htmlContent}</div>

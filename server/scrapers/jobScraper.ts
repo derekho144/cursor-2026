@@ -15,7 +15,7 @@ export interface ScrapedJob {
   jobTitle: string;
   jobUrl: string;
   jobDescription?: string;
-  source: "jobsdb" | "linkedin";
+  source: "jobsdb" | "linkedin" | "indeed" | "ctgoodjobs";
   jobPostedAt?: Date;
   contactEmail?: string;
   industry?: string;
@@ -23,7 +23,7 @@ export interface ScrapedJob {
 }
 
 const SEARCH_KEYWORDS = [
-  // Photography
+  // Photography only — must align with CORE_KEYWORDS in pitchOutreach.saveLeadsToDb
   "product photographer",
   "food photographer",
   "fashion photographer",
@@ -32,13 +32,8 @@ const SEARCH_KEYWORDS = [
   // Videography
   "videographer",
   "video production",
+  "cinematographer",
   "攝錄師",
-  // Design
-  "graphic designer",
-  "graphic design",
-  "平面設計師",
-  "brand designer",
-  "branding designer",
 ];
 
 const USER_AGENT =
@@ -185,7 +180,7 @@ async function scrapeIndeedHK(keyword: string): Promise<ScrapedJob[]> {
           }
         }
         if (jobTitle && jobUrl) {
-          results.push({ companyName: companyName || "Unknown", jobTitle, jobUrl, source: "linkedin" });
+          results.push({ companyName: companyName || "Unknown", jobTitle, jobUrl, source: "indeed" });
         }
       }
     }
@@ -308,10 +303,9 @@ export async function scrapeAllJobBoards(): Promise<ScrapedJob[]> {
     const ctResults: ScrapedJob[] = [];
     console.log(`[JobScraper/CTgoodjobs] Disabled (search results not relevant)`);
 
-    // LinkedIn
-    const linkedinResults = await scrapeLinkedInJobs(keyword);
-    console.log(`[JobScraper/LinkedIn] Found ${linkedinResults.length} jobs for "${keyword}"`);
-    await sleep(2000);
+    // LinkedIn: disabled — stubbed scraper; use Manus / dedicated tools for LinkedIn ops
+    const linkedinResults: ScrapedJob[] = [];
+    console.log(`[JobScraper/LinkedIn] Skipped (not used for automated pitch; prefer Manus / dedicated tools)`);
 
     const combined = [...jobsdbResults, ...indeedResults, ...ctResults, ...linkedinResults];
     for (const job of combined) {

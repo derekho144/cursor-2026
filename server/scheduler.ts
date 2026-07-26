@@ -22,6 +22,7 @@ import { runQuoteFollowUps } from "./gmailFollowUp";
 import { runWatchdog } from "./watchdog";
 import { withSchedulerLock } from "./schedulerLock";
 import { runOutreachPipeline } from "./scrapers/pitchOutreach";
+import { buildWaTrackUrl } from "./_core/waTracking";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
@@ -750,7 +751,7 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
     const seasonalList = await getClientsForSeasonalEmail();
     const nowDate = new Date();
     const nowMonth = nowDate.getMonth() + 1;
-    const waLink = `<a href="https://wa.me/85291531976" style="color:#d4a843;text-decoration:none">WhatsApp Derek 91531976</a>`;
+    const waLink = `<a href="${buildWaTrackUrl("loyalty_seasonal")}" style="color:#d4a843;text-decoration:none">WhatsApp Derek 91531976</a>`;
     const seasonSubject = nowMonth === 1
       ? `新年將至 先預留拍攝檔期`
       : nowMonth === 6
@@ -813,7 +814,7 @@ async function runLoyaltyRemarketingEmails(): Promise<void> {
 
     // ── 長期未合作喚回郵件（12 個月未成交）──
     const winbackList = await getClientsForWinbackEmail();
-    const waLinkWinback = `<a href="https://wa.me/85291531976" style="color:#d4a843;text-decoration:none">WhatsApp Derek 91531976</a>`;
+    const waLinkWinback = `<a href="${buildWaTrackUrl("loyalty_winback")}" style="color:#d4a843;text-decoration:none">WhatsApp Derek 91531976</a>`;
     for (const c of winbackList) {
       if (!c.clientEmail || !c.clientId) continue;
       const clientName = c.clientName ?? "";
