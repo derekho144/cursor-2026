@@ -189,6 +189,24 @@ export default function LinkedInOps() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const clearWeek = trpc.linkedinContent.clearWeekDrafts.useMutation({
+    onSuccess: (d) => {
+      toast.success(`已清空本週草稿 ${d.deleted} 篇（${d.weekKey}）`);
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      utils.linkedinContent.dueToday.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const deletePost = trpc.linkedinContent.deletePost.useMutation({
+    onSuccess: () => {
+      toast.success("已刪除");
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      setEditingPost(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const approvePost = trpc.linkedinContent.approve.useMutation({
     onSuccess: (d) => {
       if (d.bufferPushed) {
@@ -708,14 +726,29 @@ export default function LinkedInOps() {
                 已發佈 {contentStats?.published ?? 0}
               </span>
             </div>
-            <Button
-              className="gap-2 w-full sm:w-auto min-h-10"
-              onClick={() => genWeek.mutate({})}
-              disabled={genWeek.isPending}
-            >
-              {genWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              生成本週 3 篇
-            </Button>
+            <div className="grid grid-cols-1 sm:flex gap-2 w-full sm:w-auto">
+              <Button
+                variant="outline"
+                className="gap-2 w-full sm:w-auto min-h-10 text-muted-foreground"
+                disabled={clearWeek.isPending || !(contentStats?.weekPending || contentList?.posts?.length)}
+                onClick={() => {
+                  if (confirm(`清空本週（${contentStats?.weekKey ?? ""}）待批核／草稿？之後可再生成。`)) {
+                    clearWeek.mutate({});
+                  }
+                }}
+              >
+                {clearWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                清空本週草稿
+              </Button>
+              <Button
+                className="gap-2 w-full sm:w-auto min-h-10"
+                onClick={() => genWeek.mutate({ force: (contentStats?.weekPending ?? 0) > 0 })}
+                disabled={genWeek.isPending}
+              >
+                {genWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {(contentStats?.weekPending ?? 0) > 0 ? "重新生成 3 篇" : "生成本週 3 篇"}
+              </Button>
+            </div>
           </div>
 
           {(duePosts?.length ?? 0) > 0 && (
@@ -849,7 +882,31 @@ export default function LinkedInOps() {
                         <X className="w-3 h-3" />
                         拒絕
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-destructive min-h-10 sm:min-h-0 border sm:border-0 col-span-2 sm:col-span-1"
+                        onClick={() => {
+                          if (confirm("刪除呢篇草稿？")) deletePost.mutate({ id: p.id });
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        刪除
+                      </Button>
                     </>
+                  )}
+                  {p.status === "rejected" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1 text-destructive min-h-10 sm:min-h-0 border sm:border-0"
+                      onClick={() => {
+                        if (confirm("刪除呢篇？")) deletePost.mutate({ id: p.id });
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      刪除
+                    </Button>
                   )}
                   {(p.status === "scheduled" || p.status === "approved") &&
                     p.bufferStatus !== "queued" && (

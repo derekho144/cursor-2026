@@ -263,6 +263,60 @@ export const linkedinContentRouter = router({
       return result;
     }),
 
+  /** 刪除單篇（草稿／待批核／已拒絕；已推 Buffer 嘅要先手動處理） */
+  deletePost: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [post] = await db
+        .select()
+        .from(linkedinContentPosts)
+        .where(eq(linkedinContentPosts.id, input.id))
+        .limit(1);
+      if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "帖文不存在" });
+      if (["approved", "scheduled", "published"].includes(post.status) && post.bufferStatus === "queued") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "已推去 Buffer 嘅帖請先喺 Buffer 刪除／取消排程，或標記後再刪",
+        });
+      }
+      if (!["draft", "pending_review", "rejected"].includes(post.status)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "只可刪草稿／待批核／已拒絕嘅帖",
+        });
+      }
+      await db.delete(linkedinContentPosts).where(eq(linkedinContentPosts.id, input.id));
+      return { success: true };
+    }),
+
+  /** 清空本週未發佈草稿，方便重新生成 */
+  clearWeekDrafts: protectedProcedure
+    .input(z.object({ weekKey: z.string().optional() }).optional())
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const weekKey = input?.weekKey ?? getHktWeekKey();
+      const rows = await db
+        .select({ id: linkedinContentPosts.id })
+        .from(linkedinContentPosts)
+        .where(
+          and(
+            eq(linkedinContentPosts.weekKey, weekKey),
+            inArray(linkedinContentPosts.status, ["draft", "pending_review", "rejected"])
+          )
+        );
+      for (const r of rows) {
+        await db.delete(linkedinContentPosts).where(eq(linkedinContentPosts.id, r.id));
+      }
+      return { success: true, weekKey, deleted: rows.length };
+    }),
+
   listAssets: protectedProcedure
     .input(z.object({ includeArchived: z.boolean().optional() }).optional())
     .query(async ({ input }) => {
