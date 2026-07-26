@@ -81,6 +81,61 @@ export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt
   return new Date(slotHkt - 8 * 60 * 60 * 1000);
 }
 
+/**
+ * Content week for generation/UI: if this week's Fri 16:00 HKT is already past,
+ * roll forward to next Mon–Fri timetable (Tue 08 / Wed 12 / Fri 16).
+ */
+export function resolveContentWeek(date = new Date()): {
+  weekKey: string;
+  monday: Date;
+  rolledFromPastWeek: boolean;
+} {
+  let monday = getMondayHkt(date);
+  let weekKey = getHktWeekKey(date);
+  const friSlot = scheduledForSlot(monday, 4, 16);
+  if (friSlot.getTime() < date.getTime()) {
+    monday = new Date(monday.getTime() + 7 * 86400000);
+    weekKey = getHktWeekKey(new Date(monday.getTime() + 12 * 3600000));
+    return { weekKey, monday, rolledFromPastWeek: true };
+  }
+  return { weekKey, monday, rolledFromPastWeek: false };
+}
+
+export function describeWeekSchedule(monday: Date): Array<{ type: LinkedInContentType; atHkt: string }> {
+  return WEEK_SLOTS.map((slot) => {
+    const at = scheduledForSlot(monday, slot.dayOffset, slot.hourHkt);
+    return {
+      type: slot.type,
+      atHkt: at.toLocaleString("zh-HK", {
+        timeZone: "Asia/Hong_Kong",
+        weekday: "short",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+    };
+  });
+}
+
+/** Best-effort Monday UTC for an ISO week key like 2026-W31 (HKT-based). */
+function getMondayForWeekKey(weekKey: string): Date | null {
+  const m = weekKey.match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const week = Number(m[2]);
+  // ISO week: Thursday of week 1 is in `year`; Monday = Thursday - 3
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+  const mondayUtc = new Date(week1Monday);
+  mondayUtc.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+  // Treat calendar Monday 00:00 as HKT midnight → convert to UTC instant used by scheduledForSlot
+  return new Date(mondayUtc.getTime() - 8 * 60 * 60 * 1000);
+}
+
 let tableReady = false;
 
 export async function ensureContentPostsTable(): Promise<void> {
@@ -696,13 +751,33 @@ Head to www.jdstudiohk.com for more case studies
 export async function generateWeeklyContentBatch(opts?: {
   weekKey?: string;
   force?: boolean;
-}): Promise<{ weekKey: string; created: number; existing: number; assetsUsed: number }> {
+}): Promise<{
+  weekKey: string;
+  created: number;
+  existing: number;
+  assetsUsed: number;
+  rolledFromPastWeek: boolean;
+  schedule: Array<{ type: LinkedInContentType; atHkt: string }>;
+}> {
   await ensureContentPostsTable();
   const db = await getDb();
-  if (!db) return { weekKey: "", created: 0, existing: 0, assetsUsed: 0 };
+  if (!db) {
+    return {
+      weekKey: "",
+      created: 0,
+      existing: 0,
+      assetsUsed: 0,
+      rolledFromPastWeek: false,
+      schedule: [],
+    };
+  }
 
-  const weekKey = opts?.weekKey ?? getHktWeekKey();
-  const monday = getMondayHkt();
+  const resolved = resolveContentWeek();
+  const weekKey = opts?.weekKey ?? resolved.weekKey;
+  const mondayForSlots = opts?.weekKey
+    ? getMondayForWeekKey(opts.weekKey) ?? resolved.monday
+    : resolved.monday;
+
   let created = 0;
   let existing = 0;
   let assetsUsed = 0;
@@ -727,7 +802,7 @@ export async function generateWeeklyContentBatch(opts?: {
     const assets = await pickAssetsForType(slot.type);
     const gen = await generateOnePost(slot.type, assets);
     const selectedJson = JSON.stringify(gen.selectedMedia);
-    const scheduledFor = scheduledForSlot(monday, slot.dayOffset, slot.hourHkt);
+    const scheduledFor = scheduledForSlot(mondayForSlots, slot.dayOffset, slot.hourHkt);
 
     if (found.length && opts?.force) {
       const [row] = await db
@@ -771,7 +846,84 @@ export async function generateWeeklyContentBatch(opts?: {
     created++;
   }
 
-  return { weekKey, created, existing, assetsUsed };
+  return {
+    weekKey,
+    created,
+    existing,
+    assetsUsed,
+    rolledFromPastWeek: !opts?.weekKey && resolved.rolledFromPastWeek,
+    schedule: describeWeekSchedule(mondayForSlots),
+  };
+}
+
+/**
+ * Cancel Buffer queues + delete all unpublished content-factory posts, then regenerate
+ * for the active timetable week (rolls to next week if Fri slot already passed).
+ */
+export async function resetSchedulesAndRegenerate(): Promise<{
+  deleted: number;
+  bufferCancelled: number;
+  bufferErrors: string[];
+  generated: Awaited<ReturnType<typeof generateWeeklyContentBatch>>;
+}> {
+  const { deleteBufferPost } = await import("./bufferClient");
+  await ensureContentPostsTable();
+  const db = await getDb();
+  if (!db) {
+    return {
+      deleted: 0,
+      bufferCancelled: 0,
+      bufferErrors: ["Database unavailable"],
+      generated: {
+        weekKey: "",
+        created: 0,
+        existing: 0,
+        assetsUsed: 0,
+        rolledFromPastWeek: false,
+        schedule: [],
+      },
+    };
+  }
+
+  const rows = await db
+    .select({
+      id: linkedinContentPosts.id,
+      bufferPostId: linkedinContentPosts.bufferPostId,
+      bufferStatus: linkedinContentPosts.bufferStatus,
+      status: linkedinContentPosts.status,
+    })
+    .from(linkedinContentPosts)
+    .where(
+      inArray(linkedinContentPosts.status, [
+        "draft",
+        "pending_review",
+        "approved",
+        "scheduled",
+        "rejected",
+      ])
+    );
+
+  const bufferErrors: string[] = [];
+  let bufferCancelled = 0;
+  for (const row of rows) {
+    if (row.bufferPostId && row.bufferStatus === "queued") {
+      const del = await deleteBufferPost(row.bufferPostId);
+      if (del.ok) bufferCancelled++;
+      else bufferErrors.push(`#${row.id}: ${del.error}`);
+    }
+  }
+
+  for (const row of rows) {
+    await db.delete(linkedinContentPosts).where(eq(linkedinContentPosts.id, row.id));
+  }
+
+  const generated = await generateWeeklyContentBatch({ force: false });
+  return {
+    deleted: rows.length,
+    bufferCancelled,
+    bufferErrors,
+    generated,
+  };
 }
 
 export async function runScheduledContentFactory(): Promise<void> {

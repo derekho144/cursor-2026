@@ -203,6 +203,41 @@ export async function schedulePostToBuffer(
   }
 }
 
+/** Cancel / remove a queued Buffer post by id. */
+export async function deleteBufferPost(
+  postId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (!isBufferConfigured()) {
+      return { ok: false, error: "BUFFER_ACCESS_TOKEN 未設定" };
+    }
+    if (!postId?.trim()) {
+      return { ok: false, error: "缺少 Buffer post id" };
+    }
+    const data = await bufferGql<{
+      deletePost: { id?: string; message?: string };
+    }>(
+      `mutation Delete($input: DeletePostInput!) {
+        deletePost(input: $input) {
+          ... on DeletePostSuccess { id }
+          ... on VoidMutationError { message }
+          ... on MutationError { message }
+        }
+      }`,
+      { input: { id: postId } }
+    );
+    const payload = data.deletePost as any;
+    if (payload?.id || payload?.__typename === "DeletePostSuccess") {
+      return { ok: true };
+    }
+    // Some Buffer responses only confirm via empty success union
+    if (!payload?.message) return { ok: true };
+    return { ok: false, error: payload.message || "Buffer deletePost 失敗" };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
 export async function getBufferLinkedInMeta(): Promise<{
   configured: boolean;
   channelId: string | null;

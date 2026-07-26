@@ -18,6 +18,8 @@ import {
   ensureContentPostsTable,
   generateWeeklyContentBatch,
   getHktWeekKey,
+  resolveContentWeek,
+  resetSchedulesAndRegenerate,
   CONTENT_TYPE_LABELS,
   CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
@@ -193,7 +195,8 @@ export const linkedinContentRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-    const weekKey = getHktWeekKey();
+    const weekKey = resolveContentWeek().weekKey;
+    const calendarWeekKey = getHktWeekKey();
     const rows = await db
       .select({ status: linkedinContentPosts.status, cnt: count() })
       .from(linkedinContentPosts)
@@ -250,6 +253,7 @@ export const linkedinContentRouter = router({
 
     return {
       weekKey,
+      calendarWeekKey,
       pendingReview: counts["pending_review"] ?? 0,
       weekPending: weekPending?.cnt ?? 0,
       weekTotal: weekTotal?.cnt ?? 0,
@@ -290,7 +294,7 @@ export const linkedinContentRouter = router({
         .limit(input.limit);
 
       return {
-        weekKey: input.weekKey ?? getHktWeekKey(),
+        weekKey: input.weekKey ?? resolveContentWeek().weekKey,
         posts: posts.map(mapPostRow),
       };
     }),
@@ -301,6 +305,12 @@ export const linkedinContentRouter = router({
       const result = await generateWeeklyContentBatch({ force: input?.force });
       return result;
     }),
+
+  /** 取消全部未發佈排程（含 Buffer）並按時間表重新生成 */
+  resetAndRegenerate: protectedProcedure.mutation(async () => {
+    const result = await resetSchedulesAndRegenerate();
+    return result;
+  }),
 
   /** 刪除單篇（草稿／待批核／已拒絕；已推 Buffer 嘅要先手動處理） */
   deletePost: protectedProcedure

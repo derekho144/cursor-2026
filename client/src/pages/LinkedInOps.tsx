@@ -237,13 +237,35 @@ export default function LinkedInOps() {
         );
         setContentFilter("all");
       } else {
+        const sched = (d as any).schedule?.map((s: any) => s.atHkt).join(" · ");
         toast.success(
-          `本週內容：新增 ${d.created}，已有 ${d.existing}${used ? `，抽相 ${used} 張` : ""}（${d.weekKey}）`
+          `本週內容：新增 ${d.created}，已有 ${d.existing}${used ? `，抽相 ${used} 張` : ""}（${d.weekKey}${
+            (d as any).rolledFromPastWeek ? " · 已轉下週時間表" : ""
+          }）${sched ? `\n${sched}` : ""}`
         );
         if (d.created > 0) setContentFilter("pending_review");
       }
       utils.linkedinContent.getStats.invalidate();
       utils.linkedinContent.listPosts.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const resetRegen = trpc.linkedinContent.resetAndRegenerate.useMutation({
+    onSuccess: (d) => {
+      const g = d.generated;
+      const sched = g.schedule?.map((s) => s.atHkt).join(" · ") || "";
+      toast.success(
+        `已取消 ${d.deleted} 篇排程（Buffer ${d.bufferCancelled}）→ 重新生成 ${g.created} 篇（${g.weekKey}）${
+          sched ? `\n時間表：${sched}` : ""
+        }`
+      );
+      if (d.bufferErrors?.length) {
+        toast.warning(`Buffer 取消部分失敗：${d.bufferErrors.slice(0, 2).join("；")}`);
+      }
+      setContentFilter("pending_review");
+      utils.linkedinContent.getStats.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+      utils.linkedinContent.dueToday.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -829,9 +851,26 @@ export default function LinkedInOps() {
                 清空本週草稿
               </Button>
               <Button
+                variant="outline"
+                className="gap-2 w-full sm:w-auto min-h-10 border-amber-600/40 text-amber-800 dark:text-amber-300"
+                disabled={resetRegen.isPending || genWeek.isPending}
+                onClick={() => {
+                  if (
+                    confirm(
+                      "取消全部未發佈排程（含 Buffer），並按時間表重新生成？\n（Tue 08:00 項目 · Wed 12:00 教育 · Fri 16:00 數據；若本週已過會自動轉下週）"
+                    )
+                  ) {
+                    resetRegen.mutate();
+                  }
+                }}
+              >
+                {resetRegen.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                取消排程並重來
+              </Button>
+              <Button
                 className="gap-2 w-full sm:w-auto min-h-10"
                 onClick={() => genWeek.mutate({ force: (contentStats?.weekPending ?? 0) > 0 })}
-                disabled={genWeek.isPending}
+                disabled={genWeek.isPending || resetRegen.isPending}
               >
                 {genWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {(contentStats?.weekPending ?? 0) > 0 ? "重新生成 3 篇" : "生成本週 3 篇"}
