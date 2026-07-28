@@ -227,8 +227,8 @@ export default function AdSync() {
   }, []);
 
   const handleGoogleReauth = () => {
-    const origin = window.location.origin;
-    window.location.href = `/api/google-ads/auth-url?origin=${encodeURIComponent(origin)}`;
+    const returnTo = `${window.location.origin}${window.location.pathname}`;
+    window.location.href = `/api/google-ads/auth-url?origin=${encodeURIComponent(returnTo)}`;
   };
 
   const clearSyncLogsMutation = trpc.adExpenses.clearSyncLogs.useMutation({

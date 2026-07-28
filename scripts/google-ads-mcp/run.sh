@@ -23,7 +23,12 @@ set +a
 : "${GOOGLE_ADS_CLIENT_ID:?Set GOOGLE_ADS_CLIENT_ID in $ENV_FILE}"
 : "${GOOGLE_ADS_CLIENT_SECRET:?Set GOOGLE_ADS_CLIENT_SECRET in $ENV_FILE}"
 : "${GOOGLE_ADS_REFRESH_TOKEN:?Set GOOGLE_ADS_REFRESH_TOKEN in $ENV_FILE}"
-: "${GOOGLE_PROJECT_ID:?Set GOOGLE_PROJECT_ID (GCP project id) in $ENV_FILE}"
+
+# GCP project: explicit env, or OAuth client id prefix (project number), e.g. 4821341680-xxx.apps.googleusercontent.com
+if [[ -z "${GOOGLE_PROJECT_ID:-}" && "$GOOGLE_ADS_CLIENT_ID" =~ ^([0-9]+)- ]]; then
+  GOOGLE_PROJECT_ID="${BASH_REMATCH[1]}"
+fi
+: "${GOOGLE_PROJECT_ID:?Set GOOGLE_PROJECT_ID in $ENV_FILE, or set GOOGLE_ADS_CLIENT_ID so project number can be inferred}"
 
 LOGIN_CID="${GOOGLE_ADS_LOGIN_CUSTOMER_ID:-${GOOGLE_ADS_CUSTOMER_ID:-}}"
 LOGIN_CID="${LOGIN_CID//-/}"

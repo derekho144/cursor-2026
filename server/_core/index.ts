@@ -309,8 +309,14 @@ async function startServer() {
       res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
       return;
     }
-    const origin = (req.query.origin as string) || ENV.appBaseUrl;
-    const redirectUri = `${origin}/api/google-ads/oauth-callback`;
+    const returnTo = (req.query.origin as string) || ENV.appBaseUrl;
+    let appOrigin = ENV.appBaseUrl;
+    try {
+      appOrigin = new URL(returnTo).origin;
+    } catch {
+      appOrigin = returnTo.replace(/\/$/, "");
+    }
+    const redirectUri = `${appOrigin}/api/google-ads/oauth-callback`;
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
@@ -318,7 +324,7 @@ async function startServer() {
       scope: "https://www.googleapis.com/auth/adwords",
       access_type: "offline",
       prompt: "consent",
-      state: origin,
+      state: returnTo,
     });
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     // Redirect directly to Google
@@ -330,20 +336,32 @@ async function startServer() {
     const code = req.query.code as string;
     const state = req.query.state as string;
     const error = req.query.error as string;
-    const origin = state || ENV.appBaseUrl;
+    let appOrigin = ENV.appBaseUrl;
+    let returnPath = "/ad-sync";
+    if (state) {
+      try {
+        const u = new URL(state);
+        appOrigin = u.origin;
+        returnPath = u.pathname || "/ad-sync";
+      } catch {
+        appOrigin = state.replace(/\/$/, "");
+      }
+    }
+    const redirectBack = (params: string) =>
+      res.redirect(`${appOrigin}${returnPath}?${params}`);
 
     if (error) {
-      res.redirect(`${origin}/ad-expenses?google_auth=error&msg=${encodeURIComponent(error)}`);
+      redirectBack(`google_auth=error&msg=${encodeURIComponent(error)}`);
       return;
     }
     if (!code) {
-      res.redirect(`${origin}/ad-expenses?google_auth=error&msg=no_code`);
+      redirectBack("google_auth=error&msg=no_code");
       return;
     }
 
     const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
-    const redirectUri = `${origin}/api/google-ads/oauth-callback`;
+    const redirectUri = `${appOrigin}/api/google-ads/oauth-callback`;
 
     try {
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -362,17 +380,17 @@ async function startServer() {
       if (!tokenJson.refresh_token) {
         console.error("[Google Ads OAuth] No refresh_token in response:", JSON.stringify(tokenJson));
         const msg = "No refresh token received. Please go to https://myaccount.google.com/permissions and revoke JD Studio access, then try again.";
-        res.redirect(`${origin}/ad-expenses?google_auth=error&msg=${encodeURIComponent(msg)}`);
+        redirectBack(`google_auth=error&msg=${encodeURIComponent(msg)}`);
         return;
       }
 
       const { saveGoogleAdsRefreshToken } = await import("../googleAds");
       await saveGoogleAdsRefreshToken(tokenJson.refresh_token);
       console.log("[Google Ads OAuth] New refresh token saved to DB successfully");
-      res.redirect(`${origin}/ad-expenses?google_auth=success`);
+      redirectBack("google_auth=success");
     } catch (err: any) {
       console.error("[Google Ads OAuth] Callback error:", err);
-      res.redirect(`${origin}/ad-expenses?google_auth=error&msg=${encodeURIComponent(err?.message ?? "Unknown error")}`);
+      redirectBack(`google_auth=error&msg=${encodeURIComponent(err?.message ?? "Unknown error")}`);
     }
   });
 
