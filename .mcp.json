@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "google-ads-mcp": {
+      "command": "/Users/derek/Desktop/jd-studio-admin/scripts/google-ads-mcp/run.sh",
+      "args": []
+    }
+  }
+}
