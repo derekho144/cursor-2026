@@ -127,18 +127,45 @@ async function startServer() {
         return;
       }
 
-      // Prefer original public Squarespace source if we stored it
+      // Buffer cannot follow redirects reliably — always stream image bytes (200),
+      // never 302 to Squarespace / Forge signed URLs.
       const sourceMatch = asset.aiDescription?.match(/^source:(https:\/\/\S+)/);
-      if (sourceMatch?.[1]) {
-        res.setHeader("Cache-Control", "public, max-age=86400");
-        res.redirect(302, sourceMatch[1]);
+      const candidates: string[] = [];
+      if (sourceMatch?.[1]) candidates.push(sourceMatch[1]);
+      try {
+        const { url } = await storageGet(asset.storageKey);
+        if (url) candidates.push(url);
+      } catch (err: any) {
+        console.warn("[PublicAsset] storageGet failed:", err?.message || err);
+      }
+      if (!candidates.length) {
+        res.status(404).send("not found");
         return;
       }
 
-      const { url } = await storageGet(asset.storageKey);
-      const upstream = await fetch(url, { redirect: "follow" });
-      if (!upstream.ok) {
-        res.status(502).send("upstream fetch failed");
+      let upstream: Response | null = null;
+      let lastStatus = 0;
+      for (const url of candidates) {
+        try {
+          const resUp = await fetch(url, {
+            redirect: "follow",
+            headers: {
+              // Prefer raster formats LinkedIn/Buffer accept well
+              Accept: "image/jpeg,image/png,image/webp,image/*;q=0.8,*/*;q=0.5",
+              "User-Agent": "JDStudio-PublicAssetProxy/1.0",
+            },
+          });
+          lastStatus = resUp.status;
+          if (resUp.ok) {
+            upstream = resUp;
+            break;
+          }
+        } catch (err: any) {
+          console.warn("[PublicAsset] upstream fetch error:", err?.message || err);
+        }
+      }
+      if (!upstream) {
+        res.status(502).send(`upstream fetch failed (${lastStatus || "network"})`);
         return;
       }
       const mime =
