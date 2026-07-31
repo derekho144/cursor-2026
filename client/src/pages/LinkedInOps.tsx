@@ -294,7 +294,26 @@ export default function LinkedInOps() {
       toast.success("草稿已儲存");
       utils.linkedinContent.listPosts.invalidate();
     },
+    onError: (e) => toast.error(e.message || "儲存失敗"),
   });
+
+  const buildPostSaveInput = (post: NonNullable<typeof editingPost>) => {
+    const scheduledRaw = post.scheduledFor as string | Date | null | undefined;
+    let scheduledFor: string | null = null;
+    if (scheduledRaw instanceof Date) {
+      scheduledFor = Number.isNaN(scheduledRaw.getTime()) ? null : scheduledRaw.toISOString();
+    } else if (typeof scheduledRaw === "string" && scheduledRaw.trim()) {
+      const d = new Date(scheduledRaw);
+      scheduledFor = Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    return {
+      id: post.id,
+      title: post.title,
+      body: post.body,
+      mediaHint: post.mediaHint ?? "",
+      scheduledFor,
+    };
+  };
 
   const copy = async (text: string) => {
     try {
@@ -951,16 +970,7 @@ export default function LinkedInOps() {
             <Button
               variant="outline"
               className="w-full sm:w-auto min-h-10"
-              onClick={() =>
-                editingPost &&
-                savePost.mutate({
-                  id: editingPost.id,
-                  title: editingPost.title,
-                  body: editingPost.body,
-                  mediaHint: editingPost.mediaHint,
-                  scheduledFor: editingPost.scheduledFor ?? null,
-                })
-              }
+              onClick={() => editingPost && savePost.mutate(buildPostSaveInput(editingPost))}
               disabled={savePost.isPending}
             >
               儲存修改
@@ -970,16 +980,9 @@ export default function LinkedInOps() {
                 className="w-full sm:w-auto min-h-10"
                 onClick={() => {
                   if (!editingPost) return;
-                  savePost.mutate(
-                    {
-                      id: editingPost.id,
-                      title: editingPost.title,
-                      body: editingPost.body,
-                      mediaHint: editingPost.mediaHint,
-                      scheduledFor: editingPost.scheduledFor ?? null,
-                    },
-                    { onSuccess: () => approvePost.mutate({ id: editingPost.id }) }
-                  );
+                  savePost.mutate(buildPostSaveInput(editingPost), {
+                    onSuccess: () => approvePost.mutate({ id: editingPost.id }),
+                  });
                 }}
               >
                 儲存並批准 → Buffer

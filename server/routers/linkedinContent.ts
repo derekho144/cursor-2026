@@ -544,9 +544,24 @@ export const linkedinContentRouter = router({
         id: z.number(),
         title: z.string().optional(),
         body: z.string().optional(),
-        mediaHint: z.string().optional(),
-        notes: z.string().optional(),
-        scheduledFor: z.string().datetime().optional().nullable(),
+        // Client may send null from DB fields / empty inputs
+        mediaHint: z.string().nullish(),
+        notes: z.string().nullish(),
+        // SuperJSON may revive scheduledFor as Date; also accept ISO strings
+        scheduledFor: z
+          .union([z.string(), z.date()])
+          .nullish()
+          .transform((v) => {
+            if (v === undefined) return undefined;
+            if (v == null || v === "") return null;
+            if (v instanceof Date) {
+              if (Number.isNaN(v.getTime())) return null;
+              return v.toISOString();
+            }
+            const d = new Date(v);
+            if (Number.isNaN(d.getTime())) return null;
+            return d.toISOString();
+          }),
       })
     )
     .mutation(async ({ input }) => {
