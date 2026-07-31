@@ -120,7 +120,7 @@ export function describeWeekSchedule(monday: Date): Array<{ type: LinkedInConten
 }
 
 /** Best-effort Monday UTC for an ISO week key like 2026-W31 (HKT-based). */
-function getMondayForWeekKey(weekKey: string): Date | null {
+export function getMondayForWeekKey(weekKey: string): Date | null {
   const m = weekKey.match(/^(\d{4})-W(\d{2})$/);
   if (!m) return null;
   const year = Number(m[1]);
@@ -134,6 +134,15 @@ function getMondayForWeekKey(weekKey: string): Date | null {
   mondayUtc.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
   // Treat calendar Monday 00:00 as HKT midnight → convert to UTC instant used by scheduledForSlot
   return new Date(mondayUtc.getTime() - 8 * 60 * 60 * 1000);
+}
+
+/** Inclusive UTC window for an ISO week key (Mon 00:00 HKT → next Mon 00:00 HKT). */
+export function getWeekRangeUtc(weekKey: string): { start: Date; end: Date } | null {
+  const monday = getMondayForWeekKey(weekKey);
+  if (!monday) return null;
+  const start = monday;
+  const end = new Date(monday.getTime() + 7 * 86400000 - 1);
+  return { start, end };
 }
 
 let tableReady = false;
@@ -199,6 +208,58 @@ export async function ensureContentPostsTable(): Promise<void> {
     } catch {
       /* exists */
     }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN impressions int NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN reactions int NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN comments int NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN reposts int NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN engagement_rate varchar(16) NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN metrics_updated_at timestamp NULL`);
+    } catch {
+      /* exists */
+    }
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS linkedin_week_scoreboards (
+        week_key varchar(16) PRIMARY KEY,
+        post_count int NULL,
+        impressions int NULL,
+        reactions int NULL,
+        comments int NULL,
+        reposts int NULL,
+        engagement_rate varchar(16) NULL,
+        metrics_synced_at timestamp NULL,
+        metrics_sync_error text NULL,
+        new_followers int NULL,
+        linkedin_inquiries int NULL,
+        quotes_from_linkedin int NULL,
+        dm_conversations int NULL,
+        experiment_note text NULL,
+        next_week_plan text NULL,
+        verdict varchar(64) NULL,
+        createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
     try {
       await db.execute(sql`
         ALTER TABLE linkedin_content_assets

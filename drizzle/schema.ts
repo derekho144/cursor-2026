@@ -724,6 +724,13 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   /** none | queued | failed | sent */
   bufferStatus: varchar("buffer_status", { length: 32 }),
   bufferError: text("buffer_error"),
+  /** Cached Buffer/LinkedIn metrics (synced) */
+  impressions: int("impressions"),
+  reactions: int("reactions"),
+  comments: int("comments"),
+  reposts: int("reposts"),
+  engagementRate: varchar("engagement_rate", { length: 16 }),
+  metricsUpdatedAt: timestamp("metrics_updated_at"),
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
   approvedAt: timestamp("approved_at"),
@@ -733,6 +740,31 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
 });
 export type LinkedInContentPost = typeof linkedinContentPosts.$inferSelect;
 export type InsertLinkedInContentPost = typeof linkedinContentPosts.$inferInsert;
+
+/** Weekly LinkedIn scoreboard — auto Buffer metrics + manual business fields */
+export const linkedinWeekScoreboards = mysqlTable("linkedin_week_scoreboards", {
+  weekKey: varchar("week_key", { length: 16 }).primaryKey(),
+  postCount: int("post_count"),
+  impressions: int("impressions"),
+  reactions: int("reactions"),
+  comments: int("comments"),
+  reposts: int("reposts"),
+  engagementRate: varchar("engagement_rate", { length: 16 }),
+  metricsSyncedAt: timestamp("metrics_synced_at"),
+  metricsSyncError: text("metrics_sync_error"),
+  /** Manual / semi-auto business outcomes */
+  newFollowers: int("new_followers"),
+  linkedInInquiries: int("linkedin_inquiries"),
+  quotesFromLinkedIn: int("quotes_from_linkedin"),
+  dmConversations: int("dm_conversations"),
+  experimentNote: text("experiment_note"),
+  nextWeekPlan: text("next_week_plan"),
+  verdict: varchar("verdict", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type LinkedInWeekScoreboard = typeof linkedinWeekScoreboards.$inferSelect;
+export type InsertLinkedInWeekScoreboard = typeof linkedinWeekScoreboards.$inferInsert;
 
 /** 內容工廠圖片庫 — 每週生成時自動抽相寫主題 */
 export const linkedinAssetCategories = [

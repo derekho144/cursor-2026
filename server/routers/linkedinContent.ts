@@ -10,8 +10,10 @@ import {
   linkedinContentAssets,
   linkedinAssetCategories,
   linkedinAssetPreferredFor,
+  linkedinWeekScoreboards,
+  quotes,
 } from "../../drizzle/schema";
-import { eq, and, desc, count, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, count, gte, lte, inArray, like, or } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
 import {
@@ -24,6 +26,7 @@ import {
   CONTENT_TYPE_LABELS,
   CONTENT_TYPE_BLURBS,
   notifyDuePublishes,
+  getWeekRangeUtc,
 } from "../linkedinContentFactory";
 import { harvestJdStudioWebsiteImages } from "../jdStudioWebsiteImages";
 import {
@@ -32,6 +35,8 @@ import {
   schedulePostToBuffer,
   deleteBufferPost,
   publicLinkedInAssetUrl,
+  fetchBufferPostMetrics,
+  fetchAggregatedLinkedInMetrics,
 } from "../bufferClient";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -726,4 +731,209 @@ export const linkedinContentRouter = router({
     await notifyDuePublishes();
     return { success: true };
   }),
+
+  /** Weekly scoreboard: Buffer auto metrics + manual business fields + quote attribution */
+  getWeeklyScoreboard: protectedProcedure
+    .input(z.object({ weekKey: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const weekKey = input?.weekKey || resolveContentWeek().weekKey;
+      const range = getWeekRangeUtc(weekKey);
+
+      const [board] = await db
+        .select()
+        .from(linkedinWeekScoreboards)
+        .where(eq(linkedinWeekScoreboards.weekKey, weekKey))
+        .limit(1);
+
+      const weekPosts = await db
+        .select()
+        .from(linkedinContentPosts)
+        .where(eq(linkedinContentPosts.weekKey, weekKey))
+        .orderBy(linkedinContentPosts.scheduledFor);
+
+      let quotesFromLinkedInAuto = 0;
+      if (range) {
+        const quoteRows = await db
+          .select({ cnt: count() })
+          .from(quotes)
+          .where(
+            and(
+              gte(quotes.createdAt, range.start),
+              lte(quotes.createdAt, range.end),
+              or(
+                like(quotes.leadSource, "%LinkedIn%"),
+                like(quotes.leadSource, "%linkedin%"),
+                eq(quotes.leadSource, "LI")
+              )
+            )
+          );
+        quotesFromLinkedInAuto = quoteRows[0]?.cnt ?? 0;
+      }
+
+      const behavior = {
+        planned: weekPosts.length,
+        pendingReview: weekPosts.filter((p) => p.status === "pending_review").length,
+        approvedOrScheduled: weekPosts.filter((p) =>
+          ["approved", "scheduled", "published"].includes(p.status)
+        ).length,
+        bufferQueued: weekPosts.filter((p) => p.bufferStatus === "queued").length,
+        bufferFailed: weekPosts.filter((p) => p.bufferStatus === "failed").length,
+        withMetrics: weekPosts.filter((p) => p.impressions != null).length,
+      };
+
+      return {
+        weekKey,
+        range: range
+          ? { start: range.start.toISOString(), end: range.end.toISOString() }
+          : null,
+        board: board ?? null,
+        quotesFromLinkedInAuto,
+        behavior,
+        posts: weekPosts.map(mapPostRow),
+        autoCollectable: {
+          bufferConfigured: isBufferConfigured(),
+          fromBuffer: [
+            "impressions",
+            "reactions",
+            "comments",
+            "reposts",
+            "engagementRate",
+            "postCount",
+          ],
+          fromJdSystem: ["weekPosts", "bufferStatus", "quotesFromLinkedIn (leadSource)"],
+          manual: ["newFollowers", "linkedInInquiries", "dmConversations", "experimentNote"],
+          note: "Buffer metrics 約每日更新；新 post 可能要最多 24 小時先有數。",
+        },
+      };
+    }),
+
+  syncWeeklyMetrics: protectedProcedure
+    .input(z.object({ weekKey: z.string().optional() }).optional())
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const weekKey = input?.weekKey || resolveContentWeek().weekKey;
+      const range = getWeekRangeUtc(weekKey);
+      if (!range) throw new TRPCError({ code: "BAD_REQUEST", message: "無效 weekKey" });
+
+      const agg = await fetchAggregatedLinkedInMetrics({
+        startDateTime: range.start,
+        endDateTime: range.end,
+      });
+
+      const weekPosts = await db
+        .select()
+        .from(linkedinContentPosts)
+        .where(eq(linkedinContentPosts.weekKey, weekKey));
+
+      let postsSynced = 0;
+      const postErrors: string[] = [];
+      for (const post of weekPosts) {
+        if (!post.bufferPostId) continue;
+        const m = await fetchBufferPostMetrics(post.bufferPostId);
+        if (!m.ok) {
+          postErrors.push(`#${post.id}: ${m.error}`);
+          continue;
+        }
+        await db
+          .update(linkedinContentPosts)
+          .set({
+            impressions: m.metrics.impressions ?? null,
+            reactions: m.metrics.reactions ?? null,
+            comments: m.metrics.comments ?? null,
+            reposts: m.metrics.reposts ?? null,
+            engagementRate:
+              m.metrics.engagementRate != null ? String(m.metrics.engagementRate) : null,
+            metricsUpdatedAt: m.metricsUpdatedAt ? new Date(m.metricsUpdatedAt) : new Date(),
+          })
+          .where(eq(linkedinContentPosts.id, post.id));
+        postsSynced++;
+      }
+
+      const patch = {
+        weekKey,
+        postCount: agg.ok ? agg.metrics.postCount ?? weekPosts.length : weekPosts.length,
+        impressions: agg.ok ? Math.round(agg.metrics.impressions ?? 0) : null,
+        reactions: agg.ok ? Math.round(agg.metrics.reactions ?? 0) : null,
+        comments: agg.ok ? Math.round(agg.metrics.comments ?? 0) : null,
+        reposts: agg.ok ? Math.round(agg.metrics.reposts ?? 0) : null,
+        engagementRate:
+          agg.ok && agg.metrics.engagementRate != null
+            ? String(agg.metrics.engagementRate)
+            : null,
+        metricsSyncedAt: new Date(),
+        metricsSyncError: agg.ok
+          ? postErrors.length
+            ? postErrors.slice(0, 5).join(" | ")
+            : null
+          : agg.error,
+      };
+
+      await db
+        .insert(linkedinWeekScoreboards)
+        .values(patch)
+        .onDuplicateKeyUpdate({
+          set: {
+            postCount: patch.postCount,
+            impressions: patch.impressions,
+            reactions: patch.reactions,
+            comments: patch.comments,
+            reposts: patch.reposts,
+            engagementRate: patch.engagementRate,
+            metricsSyncedAt: patch.metricsSyncedAt,
+            metricsSyncError: patch.metricsSyncError,
+          },
+        });
+
+      return {
+        success: agg.ok,
+        weekKey,
+        postsSynced,
+        aggregate: agg.ok ? agg.metrics : null,
+        error: agg.ok ? null : agg.error,
+        postErrors,
+      };
+    }),
+
+  saveWeeklyScoreboard: protectedProcedure
+    .input(
+      z.object({
+        weekKey: z.string(),
+        newFollowers: z.number().int().nullable().optional(),
+        linkedInInquiries: z.number().int().nullable().optional(),
+        quotesFromLinkedIn: z.number().int().nullable().optional(),
+        dmConversations: z.number().int().nullable().optional(),
+        experimentNote: z.string().nullable().optional(),
+        nextWeekPlan: z.string().nullable().optional(),
+        verdict: z.string().nullable().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await ensureContentPostsTable();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const { weekKey, ...rest } = input;
+      const patch: Record<string, unknown> = { weekKey };
+      for (const [k, v] of Object.entries(rest)) {
+        if (v !== undefined) patch[k] = v;
+      }
+
+      await db
+        .insert(linkedinWeekScoreboards)
+        .values(patch as typeof linkedinWeekScoreboards.$inferInsert)
+        .onDuplicateKeyUpdate({
+          set: Object.fromEntries(
+            Object.entries(rest).filter(([, v]) => v !== undefined)
+          ) as Partial<typeof linkedinWeekScoreboards.$inferInsert>,
+        });
+
+      return { success: true };
+    }),
 });

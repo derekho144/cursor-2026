@@ -244,6 +244,120 @@ export async function deleteBufferPost(
   }
 }
 
+export type BufferPostMetric = {
+  type: string;
+  name: string;
+  value: number;
+  unit: string;
+};
+
+function metricsToMap(metrics: BufferPostMetric[] | undefined | null): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of metrics ?? []) {
+    if (!m?.type) continue;
+    out[m.type] = Number(m.value) || 0;
+  }
+  return out;
+}
+
+/** Per-post metrics from Buffer (LinkedIn impressions/reactions/etc.). Freshness ~daily. */
+export async function fetchBufferPostMetrics(postId: string): Promise<{
+  ok: true;
+  metrics: Record<string, number>;
+  metricsUpdatedAt: string | null;
+  list: BufferPostMetric[];
+} | {
+  ok: false;
+  error: string;
+}> {
+  try {
+    if (!isBufferConfigured()) return { ok: false, error: "BUFFER_ACCESS_TOKEN 未設定" };
+    if (!postId?.trim()) return { ok: false, error: "缺少 Buffer post id" };
+
+    const data = await bufferGql<{
+      post: {
+        id: string;
+        metrics: BufferPostMetric[] | null;
+        metricsUpdatedAt: string | null;
+      } | null;
+    }>(
+      `query PostMetrics($id: PostId!) {
+        post(input: { id: $id }) {
+          id
+          metrics { type name value unit }
+          metricsUpdatedAt
+        }
+      }`,
+      { id: postId }
+    );
+
+    if (!data.post) return { ok: false, error: "Buffer 找不到該 post（可能未發送或已刪）" };
+    const list = data.post.metrics ?? [];
+    return {
+      ok: true,
+      metrics: metricsToMap(list),
+      metricsUpdatedAt: data.post.metricsUpdatedAt ?? null,
+      list,
+    };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+/** Week/channel rollup via Buffer aggregatedPostMetrics (LinkedIn channel only). */
+export async function fetchAggregatedLinkedInMetrics(opts: {
+  startDateTime: Date;
+  endDateTime: Date;
+}): Promise<{
+  ok: true;
+  organizationId: string;
+  channelId: string;
+  metrics: Record<string, number>;
+  metricsUpdatedAt: string | null;
+} | {
+  ok: false;
+  error: string;
+}> {
+  try {
+    if (!isBufferConfigured()) return { ok: false, error: "BUFFER_ACCESS_TOKEN 未設定" };
+    const { organizationId } = await listBufferChannels();
+    const { channelId } = await resolveLinkedInChannelId();
+
+    const data = await bufferGql<{
+      aggregatedPostMetrics: {
+        metrics: BufferPostMetric[];
+        metricsUpdatedAt: string | null;
+      };
+    }>(
+      `query Agg($input: AggregatedPostMetricsInput!) {
+        aggregatedPostMetrics(input: $input) {
+          metrics { type name value unit }
+          metricsUpdatedAt
+        }
+      }`,
+      {
+        input: {
+          organizationId,
+          startDateTime: opts.startDateTime.toISOString(),
+          endDateTime: opts.endDateTime.toISOString(),
+          channelIds: [channelId],
+        },
+      }
+    );
+
+    const agg = data.aggregatedPostMetrics;
+    return {
+      ok: true,
+      organizationId,
+      channelId,
+      metrics: metricsToMap(agg?.metrics),
+      metricsUpdatedAt: agg?.metricsUpdatedAt ?? null,
+    };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
 export async function getBufferLinkedInMeta(): Promise<{
   configured: boolean;
   channelId: string | null;

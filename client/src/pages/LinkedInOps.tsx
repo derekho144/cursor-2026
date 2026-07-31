@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,6 +101,48 @@ export default function LinkedInOps() {
   const [uploading, setUploading] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [editingAssetId, setEditingAssetId] = useState<number | null>(null);
+  const [scoreboardOpen, setScoreboardOpen] = useState(true);
+  const [sbFollowers, setSbFollowers] = useState("");
+  const [sbInquiries, setSbInquiries] = useState("");
+  const [sbDms, setSbDms] = useState("");
+  const [sbExperiment, setSbExperiment] = useState("");
+  const [sbNextPlan, setSbNextPlan] = useState("");
+  const [sbVerdict, setSbVerdict] = useState("");
+
+  const scoreboardWeekKey = contentStats?.weekKey;
+  const { data: scoreboard, isLoading: scoreboardLoading } = trpc.linkedinContent.getWeeklyScoreboard.useQuery(
+    { weekKey: scoreboardWeekKey },
+    { enabled: Boolean(scoreboardWeekKey), refetchInterval: 60000 }
+  );
+
+  useEffect(() => {
+    const b = scoreboard?.board;
+    if (!b) return;
+    setSbFollowers(b.newFollowers != null ? String(b.newFollowers) : "");
+    setSbInquiries(b.linkedInInquiries != null ? String(b.linkedInInquiries) : "");
+    setSbDms(b.dmConversations != null ? String(b.dmConversations) : "");
+    setSbExperiment(b.experimentNote ?? "");
+    setSbNextPlan(b.nextWeekPlan ?? "");
+    setSbVerdict(b.verdict ?? "");
+  }, [scoreboard?.board?.weekKey, scoreboard?.board?.updatedAt]);
+
+  const syncWeeklyMetrics = trpc.linkedinContent.syncWeeklyMetrics.useMutation({
+    onSuccess: (r) => {
+      if (r.success) toast.success(`已同步 Buffer 數據（${r.postsSynced} 篇）`);
+      else toast.error(r.error || "同步失敗");
+      utils.linkedinContent.getWeeklyScoreboard.invalidate();
+      utils.linkedinContent.listPosts.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const saveWeeklyScoreboard = trpc.linkedinContent.saveWeeklyScoreboard.useMutation({
+    onSuccess: () => {
+      toast.success("週報已儲存");
+      utils.linkedinContent.getWeeklyScoreboard.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const { data: assets, isLoading: assetsLoading } = trpc.linkedinContent.listAssets.useQuery(undefined);
   const editingAsset = assets?.find((a) => a.id === editingAssetId) ?? null;
@@ -360,6 +402,222 @@ export default function LinkedInOps() {
                 )
               ) : (
                 <span className="text-amber-700">未設定 BUFFER_ACCESS_TOKEN</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Weekly scoreboard */}
+        <div className="border rounded-lg p-3 sm:p-4 bg-card space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" className="text-left min-w-0" onClick={() => setScoreboardOpen((o) => !o)}>
+              <div className="font-medium text-sm">
+                週報／記分板{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {scoreboard?.weekKey ?? contentStats?.weekKey ?? "—"}
+                </span>
+                <span className="text-xs font-normal text-muted-foreground ml-2 underline-offset-2 hover:underline">
+                  {scoreboardOpen ? "收起" : "展開"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Buffer 自動拉曝光／互動；生意結果可人手補。用來每週評估「新客／品牌」有冇用。
+              </p>
+            </button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-9"
+                disabled={!scoreboardWeekKey || syncWeeklyMetrics.isPending}
+                onClick={() => syncWeeklyMetrics.mutate({ weekKey: scoreboardWeekKey })}
+              >
+                {syncWeeklyMetrics.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                <span className="ml-1.5">同步 Buffer 數據</span>
+              </Button>
+            </div>
+          </div>
+
+          {scoreboardOpen && (
+            <div className="space-y-3 pt-1 border-t border-border/60">
+              {scoreboardLoading ? (
+                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> 載入週報…
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { label: "本週規劃帖", value: scoreboard?.behavior.planned ?? 0 },
+                      { label: "印象（自動）", value: scoreboard?.board?.impressions ?? "—" },
+                      { label: "反應（自動）", value: scoreboard?.board?.reactions ?? "—" },
+                      { label: "留言（自動）", value: scoreboard?.board?.comments ?? "—" },
+                      { label: "轉發（自動）", value: scoreboard?.board?.reposts ?? "—" },
+                      {
+                        label: "互動率 %",
+                        value: scoreboard?.board?.engagementRate ?? "—",
+                      },
+                      {
+                        label: "報價·LinkedIn（自動）",
+                        value: scoreboard?.quotesFromLinkedInAuto ?? 0,
+                      },
+                      {
+                        label: "Buffer 失敗",
+                        value: scoreboard?.behavior.bufferFailed ?? 0,
+                      },
+                    ].map((c) => (
+                      <div key={c.label} className="rounded-md border bg-muted/20 px-2.5 py-2">
+                        <div className="text-[11px] text-muted-foreground leading-tight">{c.label}</div>
+                        <div className="text-lg font-semibold tabular-nums mt-0.5">{c.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {scoreboard?.board?.metricsSyncedAt && (
+                    <p className="text-[11px] text-muted-foreground">
+                      上次同步：
+                      {new Date(scoreboard.board.metricsSyncedAt).toLocaleString("zh-HK", {
+                        timeZone: "Asia/Hong_Kong",
+                      })}
+                      {scoreboard.board.metricsSyncError
+                        ? ` · 注意：${scoreboard.board.metricsSyncError}`
+                        : ""}
+                    </p>
+                  )}
+                  {!scoreboard?.autoCollectable.bufferConfigured && (
+                    <p className="text-xs text-amber-700">未設定 BUFFER_ACCESS_TOKEN，無法自動拉曝光數據。</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    可自動：Buffer 印象／反應／留言／轉發／互動率；JD 本週帖狀態；leadSource 含 LinkedIn 嘅報價。
+                    需人手：新追蹤、詢價／DM 對話、本週試驗筆記。新 post 數據或要等約 24 小時。
+                  </p>
+
+                  {scoreboard?.posts && scoreboard.posts.length > 0 && (
+                    <div className="overflow-x-auto rounded-md border">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/40 text-muted-foreground">
+                          <tr>
+                            <th className="text-left font-medium px-2 py-1.5">帖</th>
+                            <th className="text-right font-medium px-2 py-1.5">印象</th>
+                            <th className="text-right font-medium px-2 py-1.5">反應</th>
+                            <th className="text-right font-medium px-2 py-1.5">留言</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scoreboard.posts.map((p: any) => (
+                            <tr key={p.id} className="border-t border-border/50">
+                              <td className="px-2 py-1.5 max-w-[14rem] truncate" title={p.title}>
+                                <span className="text-muted-foreground">{p.typeLabel}</span> · {p.title}
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">
+                                {p.impressions ?? "—"}
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">
+                                {p.reactions ?? "—"}
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">
+                                {p.comments ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">新追蹤（人手）</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={sbFollowers}
+                        onChange={(e) => setSbFollowers(e.target.value)}
+                        placeholder="例如 12"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">LinkedIn 詢價（人手）</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={sbInquiries}
+                        onChange={(e) => setSbInquiries(e.target.value)}
+                        placeholder="DM／表單詢價數"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">DM 對話（人手）</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={sbDms}
+                        onChange={(e) => setSbDms(e.target.value)}
+                        placeholder="有來回嘅對話數"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">本週試驗（只改一件）</Label>
+                    <Input
+                      value={sbExperiment}
+                      onChange={(e) => setSbExperiment(e.target.value)}
+                      placeholder="例如：教育帖加 DM CTA"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">下週計劃</Label>
+                    <Input
+                      value={sbNextPlan}
+                      onChange={(e) => setSbNextPlan(e.target.value)}
+                      placeholder="維持／改題材／減產…"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">本週判決</Label>
+                    <Select value={sbVerdict || undefined} onValueChange={setSbVerdict}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="選一個" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="keep">維持 3 篇／週</SelectItem>
+                        <SelectItem value="improve_cta">改 CTA／導流</SelectItem>
+                        <SelectItem value="reduce">減產，轉 outreach</SelectItem>
+                        <SelectItem value="scale_winner">放大勝出題材</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="min-h-9"
+                    disabled={!scoreboardWeekKey || saveWeeklyScoreboard.isPending}
+                    onClick={() => {
+                      if (!scoreboardWeekKey) return;
+                      const num = (s: string) => {
+                        const t = s.trim();
+                        if (!t) return null;
+                        const n = Number(t);
+                        return Number.isFinite(n) ? Math.round(n) : null;
+                      };
+                      saveWeeklyScoreboard.mutate({
+                        weekKey: scoreboardWeekKey,
+                        newFollowers: num(sbFollowers),
+                        linkedInInquiries: num(sbInquiries),
+                        dmConversations: num(sbDms),
+                        quotesFromLinkedIn: scoreboard?.quotesFromLinkedInAuto ?? null,
+                        experimentNote: sbExperiment.trim() || null,
+                        nextWeekPlan: sbNextPlan.trim() || null,
+                        verdict: sbVerdict || null,
+                      });
+                    }}
+                  >
+                    {saveWeeklyScoreboard.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                    ) : null}
+                    儲存週報
+                  </Button>
+                </>
               )}
             </div>
           )}
