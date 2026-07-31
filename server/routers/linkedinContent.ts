@@ -223,7 +223,7 @@ export const linkedinContentRouter = router({
       bufferStatusLabels: BUFFER_STATUS_LABELS,
       buffer,
       scheduleNote:
-        "每週自動（HKT）：Tue 08:00 項目＋幕後 · Wed 12:00 教育＋洞察 · Fri 16:00 數據＋視覺。批准後推去 Buffer，到點自動發 LinkedIn。",
+        "每週自動（HKT）：Tue 08:00 項目＋幕後 · Wed 12:00 教育＋洞察 · Fri 16:00 數據＋視覺。批准後推去 Buffer。抽相：每張最多用 2 次。超過 3 週嘅高表現帖可自動重發一次。",
     };
   }),
 

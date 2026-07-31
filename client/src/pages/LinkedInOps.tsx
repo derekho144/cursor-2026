@@ -757,21 +757,38 @@ export default function LinkedInOps() {
               ) : (
                 <div className="max-h-56 sm:max-h-64 overflow-y-auto rounded-md border bg-muted/10 p-2">
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
-                    {assets?.map((a) => (
+                    {assets?.map((a) => {
+                      const usedUp = (a.timesUsed ?? 0) >= 2;
+                      return (
                       <button
                         key={a.id}
                         type="button"
-                        title={`#${a.id} · 用過 ${a.timesUsed} 次 · 撳入去改`}
-                        className="relative aspect-square rounded border overflow-hidden bg-muted hover:ring-2 hover:ring-[#d4a843]/70 focus:outline-none focus:ring-2 focus:ring-[#d4a843]"
+                        title={
+                          usedUp
+                            ? `#${a.id} · 已用 ${a.timesUsed} 次（滿 2 次，唔再自動抽）`
+                            : `#${a.id} · 用過 ${a.timesUsed}/2 次 · 撳入去改`
+                        }
+                        className={`relative aspect-square rounded border overflow-hidden bg-muted hover:ring-2 hover:ring-[#d4a843]/70 focus:outline-none focus:ring-2 focus:ring-[#d4a843] ${
+                          usedUp ? "opacity-45" : ""
+                        }`}
                         onClick={() => setEditingAssetId(a.id)}
                       >
                         <img src={a.url} alt={a.fileName} className="w-full h-full object-cover" loading="lazy" />
                         <span className="absolute bottom-0 inset-x-0 bg-black/55 text-[9px] text-white text-center truncate px-0.5">
-                          #{a.id}
+                          #{a.id} · {a.timesUsed}/2
                         </span>
+                        {usedUp && (
+                          <span className="absolute top-0.5 right-0.5 rounded bg-black/70 text-[8px] text-white px-1">
+                            滿
+                          </span>
+                        )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
+                  <p className="text-[11px] text-muted-foreground px-0.5">
+                    抽相規則：每張最多用 2 次（變淡＝已滿）。生成時會優先新相；不夠會去官網補庫。
+                  </p>
                 </div>
               )}
             </>
@@ -922,6 +939,11 @@ export default function LinkedInOps() {
                         >
                           {p.typeLabel}
                         </span>
+                        {(p as { repostOfPostId?: number | null }).repostOfPostId ? (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded border bg-violet-50 text-violet-800 border-violet-200">
+                            重發 #{(p as { repostOfPostId: number }).repostOfPostId}
+                          </span>
+                        ) : null}
                         {bufferQueued ? (
                           <span className="text-[11px] px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300">
                             Buffer 已排程

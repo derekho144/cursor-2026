@@ -731,6 +731,10 @@ export const linkedinContentPosts = mysqlTable("linkedin_content_posts", {
   reposts: int("reposts"),
   engagementRate: varchar("engagement_rate", { length: 16 }),
   metricsUpdatedAt: timestamp("metrics_updated_at"),
+  /** If this post is a recycle of an older high-performer */
+  repostOfPostId: int("repost_of_post_id"),
+  /** Set when this post has been recycled once into a newer week */
+  recycledAt: timestamp("recycled_at"),
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
   approvedAt: timestamp("approved_at"),

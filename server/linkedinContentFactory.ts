@@ -13,7 +13,7 @@ import {
   type LinkedInContentType,
   type LinkedInContentAsset,
 } from "../drizzle/schema";
-import { and, eq, gte, lte, inArray, sql, asc, desc } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, sql, asc, desc, isNull } from "drizzle-orm";
 import { invokeLLM, type MessageContent } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
 import { STYLE_BY_TYPE, LINKEDIN_SHARED_RULES } from "./linkedinCopyStyle";
@@ -238,6 +238,16 @@ export async function ensureContentPostsTable(): Promise<void> {
     } catch {
       /* exists */
     }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN repost_of_post_id int NULL`);
+    } catch {
+      /* exists */
+    }
+    try {
+      await db.execute(sql`ALTER TABLE linkedin_content_posts ADD COLUMN recycled_at timestamp NULL`);
+    } catch {
+      /* exists */
+    }
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS linkedin_week_scoreboards (
         week_key varchar(16) PRIMARY KEY,
@@ -346,8 +356,11 @@ const THEME_KEY: Record<LinkedInContentType, "project" | "education" | "data"> =
  * 1) 有標「項目／教育／數據」→ 該主題用晒呢啲相（唔會借去其他主題）
  * 2) 冇專屬相先先用「全部主題」
  * 3) 唔會用其他主題嘅相
- * 4) 仍然冇相 → 自動去 jdstudiohk.com 服務頁抽圖入庫再抽
+ * 4) 用過 ≥2 次嘅相唔再抽（逼系統用新相／官網補庫）
+ * 5) 仍然冇相 → 自動去 jdstudiohk.com 服務頁抽圖入庫再抽
  */
+export const MAX_ASSET_USES = 2;
+
 export async function pickAssetsForType(
   type: LinkedInContentType
 ): Promise<LinkedInContentAsset[]> {
@@ -358,11 +371,16 @@ export async function pickAssetsForType(
   const theme = THEME_KEY[type];
   const maxAssets = type === "project_bts" ? 9 : type === "photo_education" ? 6 : 5;
 
+  const freshOnly = and(
+    eq(linkedinContentAssets.active, 1),
+    sql`${linkedinContentAssets.timesUsed} < ${MAX_ASSET_USES}`
+  );
+
   const selectPool = async (): Promise<LinkedInContentAsset[]> => {
     const rows = await db
       .select()
       .from(linkedinContentAssets)
-      .where(eq(linkedinContentAssets.active, 1))
+      .where(freshOnly)
       .orderBy(
         asc(linkedinContentAssets.timesUsed),
         sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
@@ -398,11 +416,11 @@ export async function pickAssetsForType(
   picked = await selectPool();
   if (picked.length > 0) return picked;
 
-  // Last resort: ignore preferredFor and take any active photo
+  // Last resort: any theme, but still never reuse photos used ≥ MAX_ASSET_USES
   const fallback = await db
     .select()
     .from(linkedinContentAssets)
-    .where(eq(linkedinContentAssets.active, 1))
+    .where(freshOnly)
     .orderBy(
       asc(linkedinContentAssets.timesUsed),
       sql`(${linkedinContentAssets.lastUsedAt} IS NULL) DESC`,
@@ -410,6 +428,11 @@ export async function pickAssetsForType(
       desc(linkedinContentAssets.id)
     )
     .limit(maxAssets);
+  if (fallback.length === 0) {
+    console.warn(
+      `[ContentFactory] no fresh assets for ${type} (all used ≥${MAX_ASSET_USES}x) — upload new photos`
+    );
+  }
   return fallback;
 }
 
@@ -426,6 +449,64 @@ async function markAssetsUsed(ids: number[]): Promise<void> {
         lastUsedAt: now,
       })
       .where(eq(linkedinContentAssets.id, id));
+  }
+}
+
+/** Posts older than this can be recycled once (best performer per type). */
+export const REPOST_MIN_AGE_MS = 21 * 86400000;
+
+/**
+ * Best published/scheduled post of this type that is >3 weeks old and not yet recycled.
+ * Ranked by impressions → reactions → comments.
+ */
+export async function findBestPostForRepost(
+  type: LinkedInContentType
+): Promise<(typeof linkedinContentPosts.$inferSelect) | null> {
+  await ensureContentPostsTable();
+  const db = await getDb();
+  if (!db) return null;
+
+  const cutoff = new Date(Date.now() - REPOST_MIN_AGE_MS);
+
+  const rows = await db
+    .select()
+    .from(linkedinContentPosts)
+    .where(
+      and(
+        eq(linkedinContentPosts.contentType, type),
+        isNull(linkedinContentPosts.recycledAt),
+        isNull(linkedinContentPosts.repostOfPostId),
+        inArray(linkedinContentPosts.status, ["published", "scheduled", "approved"]),
+        sql`COALESCE(${linkedinContentPosts.publishedAt}, ${linkedinContentPosts.scheduledFor}, ${linkedinContentPosts.createdAt}) < ${cutoff}`
+      )
+    )
+    .orderBy(
+      desc(sql`COALESCE(${linkedinContentPosts.impressions}, 0)`),
+      desc(sql`COALESCE(${linkedinContentPosts.reactions}, 0)`),
+      desc(sql`COALESCE(${linkedinContentPosts.comments}, 0)`),
+      desc(linkedinContentPosts.id)
+    )
+    .limit(8);
+
+  if (!rows.length) return null;
+
+  const scored = rows.filter(
+    (r) => (r.impressions ?? 0) + (r.reactions ?? 0) * 10 + (r.comments ?? 0) * 20 > 0
+  );
+  // Need a minimum signal so we don't recycle zero-metric posts
+  const best = scored[0];
+  if (!best) return null;
+  if ((best.impressions ?? 0) < 30 && (best.reactions ?? 0) < 2) return null;
+  return best;
+}
+
+function parseSelectedMediaJson(raw: string | null | undefined): SelectedMediaItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 
@@ -887,8 +968,38 @@ export async function generateWeeklyContentBatch(opts?: {
     }
 
     const assets = await pickAssetsForType(slot.type);
-    const gen = await generateOnePost(slot.type, assets);
-    const selectedJson = JSON.stringify(gen.selectedMedia);
+    const bestOld = await findBestPostForRepost(slot.type);
+
+    let title: string;
+    let body: string;
+    let mediaHint: string;
+    let selectedMediaItems: SelectedMediaItem[];
+    let repostOfPostId: number | null = null;
+
+    if (bestOld) {
+      const oldMedia = parseSelectedMediaJson(bestOld.selectedMedia);
+      selectedMediaItems = assets.length ? assetsToSelectedMedia(assets) : oldMedia;
+      title = String(bestOld.title || "").startsWith("重發")
+        ? bestOld.title
+        : `重發·${bestOld.title}`.slice(0, 500);
+      body = bestOld.body;
+      mediaHint =
+        `${bestOld.mediaHint || ""}\n♻️ 重發自 #${bestOld.id}（>${Math.round(REPOST_MIN_AGE_MS / 86400000)} 週高表現：印象 ${bestOld.impressions ?? 0}／反應 ${bestOld.reactions ?? 0}）`.trim();
+      repostOfPostId = bestOld.id;
+      console.log(
+        `[ContentFactory] recycling #${bestOld.id} → ${slot.type} week=${weekKey} impressions=${bestOld.impressions}`
+      );
+    } else {
+      const gen = await generateOnePost(slot.type, assets);
+      title = gen.title;
+      body = gen.body;
+      mediaHint = gen.mediaHint;
+      selectedMediaItems = gen.selectedMedia.length
+        ? gen.selectedMedia
+        : assetsToSelectedMedia(assets);
+    }
+
+    const selectedJson = JSON.stringify(selectedMediaItems);
     const scheduledFor = scheduledForSlot(mondayForSlots, slot.dayOffset, slot.hourHkt);
 
     if (found.length && opts?.force) {
@@ -904,15 +1015,22 @@ export async function generateWeeklyContentBatch(opts?: {
       await db
         .update(linkedinContentPosts)
         .set({
-          title: gen.title,
-          body: gen.body,
-          mediaHint: gen.mediaHint,
+          title,
+          body,
+          mediaHint,
           selectedMedia: selectedJson,
           status: "pending_review",
           scheduledFor,
+          repostOfPostId,
         })
         .where(eq(linkedinContentPosts.id, found[0].id));
-      await markAssetsUsed(assets.map((a) => a.id));
+      if (assets.length) await markAssetsUsed(assets.map((a) => a.id));
+      if (repostOfPostId) {
+        await db
+          .update(linkedinContentPosts)
+          .set({ recycledAt: new Date() })
+          .where(eq(linkedinContentPosts.id, repostOfPostId));
+      }
       assetsUsed += assets.length;
       created++;
       continue;
@@ -922,13 +1040,20 @@ export async function generateWeeklyContentBatch(opts?: {
       weekKey,
       contentType: slot.type,
       status: "pending_review",
-      title: gen.title,
-      body: gen.body,
-      mediaHint: gen.mediaHint,
+      title,
+      body,
+      mediaHint,
       selectedMedia: selectedJson,
       scheduledFor,
+      repostOfPostId,
     });
-    await markAssetsUsed(assets.map((a) => a.id));
+    if (assets.length) await markAssetsUsed(assets.map((a) => a.id));
+    if (repostOfPostId) {
+      await db
+        .update(linkedinContentPosts)
+        .set({ recycledAt: new Date() })
+        .where(eq(linkedinContentPosts.id, repostOfPostId));
+    }
     assetsUsed += assets.length;
     created++;
   }
