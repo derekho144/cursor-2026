@@ -16,7 +16,7 @@ import {
 import { invokeLLM, extractLLMText } from "../_core/llm";
 import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
@@ -672,6 +672,136 @@ ${itemsText}
       // Also update all associated follow-up records for this quote
       await db.update(quoteFollowUps).set({ stopFollowUp: input.stopFollowUp }).where(eq(quoteFollowUps.quoteId, input.id));
       return { success: true, stopFollowUp: input.stopFollowUp };
+    }),
+
+  /**
+   * Bank-ready list of merchants/clients with at least one accepted quote.
+   * Deduplicates by company (preferred) or client name.
+   */
+  acceptedMerchants: protectedProcedure
+    .input(
+      z
+        .object({
+          year: z.number().optional(),
+          fromYear: z.number().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection failed" });
+
+      const rows = await db
+        .select({
+          id: quotesTable.id,
+          quoteNumber: quotesTable.quoteNumber,
+          clientName: quotesTable.clientName,
+          clientCompany: quotesTable.clientCompany,
+          clientEmail: quotesTable.clientEmail,
+          clientPhone: quotesTable.clientPhone,
+          serviceType: quotesTable.serviceType,
+          total: quotesTable.total,
+          currency: quotesTable.currency,
+          signedAt: quotesTable.signedAt,
+          createdAt: quotesTable.createdAt,
+          shootingDate: quotesTable.shootingDate,
+        })
+        .from(quotesTable)
+        .where(eq(quotesTable.status, "accepted"))
+        .orderBy(desc(quotesTable.createdAt));
+
+      const year = input?.year;
+      const fromYear = input?.fromYear;
+      const filtered = rows.filter((r) => {
+        const d = r.signedAt ?? r.createdAt;
+        if (!d) return true;
+        const y = new Date(d).getFullYear();
+        if (year != null) return y === year;
+        if (fromYear != null) return y >= fromYear;
+        return true;
+      });
+
+      type Agg = {
+        merchantName: string;
+        contactName: string;
+        email: string | null;
+        phone: string | null;
+        quoteCount: number;
+        totalAmount: number;
+        currency: string;
+        firstAcceptedAt: Date | null;
+        lastAcceptedAt: Date | null;
+        serviceTypes: Set<string>;
+        quoteNumbers: string[];
+      };
+
+      const map = new Map<string, Agg>();
+      for (const r of filtered) {
+        const company = (r.clientCompany || "").trim();
+        const name = (r.clientName || "").trim();
+        const merchantName = company || name || "（未命名）";
+        const key = merchantName.toLowerCase().replace(/\s+/g, " ");
+        const acceptedAt = r.signedAt ?? r.createdAt ?? null;
+        const amount = Number(r.total || 0);
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, {
+            merchantName,
+            contactName: name || merchantName,
+            email: r.clientEmail || null,
+            phone: r.clientPhone || null,
+            quoteCount: 1,
+            totalAmount: amount,
+            currency: r.currency || "HKD",
+            firstAcceptedAt: acceptedAt,
+            lastAcceptedAt: acceptedAt,
+            serviceTypes: new Set([r.serviceType]),
+            quoteNumbers: [r.quoteNumber],
+          });
+        } else {
+          existing.quoteCount += 1;
+          existing.totalAmount += amount;
+          existing.serviceTypes.add(r.serviceType);
+          existing.quoteNumbers.push(r.quoteNumber);
+          if (!existing.email && r.clientEmail) existing.email = r.clientEmail;
+          if (!existing.phone && r.clientPhone) existing.phone = r.clientPhone;
+          if (name && existing.contactName === existing.merchantName) existing.contactName = name;
+          if (acceptedAt) {
+            if (!existing.firstAcceptedAt || acceptedAt < existing.firstAcceptedAt) {
+              existing.firstAcceptedAt = acceptedAt;
+            }
+            if (!existing.lastAcceptedAt || acceptedAt > existing.lastAcceptedAt) {
+              existing.lastAcceptedAt = acceptedAt;
+            }
+          }
+        }
+      }
+
+      const merchants = Array.from(map.values())
+        .map((m) => ({
+          merchantName: m.merchantName,
+          contactName: m.contactName,
+          email: m.email,
+          phone: m.phone,
+          quoteCount: m.quoteCount,
+          totalAmount: Math.round(m.totalAmount * 100) / 100,
+          currency: m.currency,
+          firstAcceptedAt: m.firstAcceptedAt,
+          lastAcceptedAt: m.lastAcceptedAt,
+          serviceTypes: Array.from(m.serviceTypes).map(
+            (t) => SERVICE_TYPE_LABELS[t as keyof typeof SERVICE_TYPE_LABELS] || t
+          ),
+          quoteNumbers: m.quoteNumbers,
+        }))
+        .sort((a, b) => a.merchantName.localeCompare(b.merchantName, "zh-HK"));
+
+      return {
+        generatedAt: new Date().toISOString(),
+        acceptedQuoteCount: filtered.length,
+        merchantCount: merchants.length,
+        grandTotal: Math.round(merchants.reduce((s, m) => s + m.totalAmount, 0) * 100) / 100,
+        merchants,
+      };
     }),
 });
 

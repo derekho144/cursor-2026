@@ -32,6 +32,7 @@ const ReceiptPrintPage = lazy(() => import("./pages/ReceiptPrintPage"));
 const QuoteFollowUp = lazy(() => import("./pages/QuoteFollowUp"));
 const PitchOutreach = lazy(() => import("./pages/PitchOutreach"));
 const LinkedInOps = lazy(() => import("./pages/LinkedInOps"));
+const AcceptedMerchantsBank = lazy(() => import("./pages/AcceptedMerchantsBank"));
 
 // Minimal spinner shown while lazy chunks are loading
 function PageLoader() {
@@ -48,6 +49,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/quotes" component={QuotesList} />
+        <Route path="/quotes/accepted-merchants" component={AcceptedMerchantsBank} />
         <Route path="/quotes/new" component={QuoteForm} />
         <Route path="/quotes/:id/edit" component={QuoteForm} />
         <Route path="/quotes/:id" component={QuoteDetail} />

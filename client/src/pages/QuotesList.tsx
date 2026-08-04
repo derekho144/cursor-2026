@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { FileText, Plus, Search, Trash2, Edit, Download, ImageIcon, Eye } from "lucide-react";
+import { FileText, Plus, Search, Trash2, Edit, Download, ImageIcon, Eye, Building2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -96,22 +96,40 @@ export default function QuotesList() {
             </div>
             <h1 className="text-2xl font-light">報價單管理</h1>
           </div>
-          <button
-            onClick={() => setLocation("/quotes/new")}
-            className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
-            style={{
-              background: "#d4a843",
-              color: "#0a0a0a",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              borderRadius: "2px",
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            新增報價單
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setLocation("/quotes/accepted-merchants")}
+              className="flex items-center gap-2 px-4 py-2.5 transition-all hover:opacity-80"
+              style={{
+                border: "1px solid rgba(212,168,67,0.45)",
+                color: "#d4a843",
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                borderRadius: "2px",
+              }}
+            >
+              <Building2 className="h-4 w-4" />
+              已接受商家名單（銀行）
+            </button>
+            <button
+              onClick={() => setLocation("/quotes/new")}
+              className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
+              style={{
+                background: "#d4a843",
+                color: "#0a0a0a",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                borderRadius: "2px",
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              新增報價單
+            </button>
+          </div>
         </div>
 
         <div style={{ height: "1px", background: "linear-gradient(to right, #d4a843, rgba(212,168,67,0.1), transparent)" }} />
