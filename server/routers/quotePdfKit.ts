@@ -445,18 +445,20 @@ export async function generateQuotePdfBuffer(
     y += 14;
 
     const bankRows = [
-      ["PAYEE", "HUI MAN HO"],
-      ["BANK", "HSBC Hong Kong"],
-      ["ACCOUNT", "646-512590-833"],
+      ["PAYEE", "JD STUDIO Limited"],
+      ["BANK", "Standard Chartered Bank (Hong Kong) Ltd"],
+      ["ACCOUNT", "44796326072"],
       ["REF", quote.quoteNumber],
     ];
     let bankY = y;
+    const bankValueW = payColW - 48;
     for (const [label, value] of bankRows) {
       doc.fontSize(6.5).font("NotoSans").fillColor(C.lightGray);
       doc.text(label, ML, bankY, { width: 40, lineBreak: false });
       doc.fontSize(8.5).font(label === "REF" ? "NotoSansBold" : "NotoSans").fillColor(C.darkGray);
-      doc.text(value, ML + 44, bankY, { lineBreak: false });
-      bankY += 13;
+      const valueH = doc.heightOfString(value, { width: bankValueW });
+      doc.text(value, ML + 44, bankY, { width: bankValueW });
+      bankY += Math.max(13, valueH + 3);
     }
 
     // FPS

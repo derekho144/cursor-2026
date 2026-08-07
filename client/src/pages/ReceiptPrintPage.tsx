@@ -412,15 +412,15 @@ export default function ReceiptPrintPage() {
                 <div style={S.paymentTitle}>BANK TRANSFER</div>
                 <div style={S.paymentRow}>
                   <span style={S.paymentRowLabel}>PAYEE</span>
-                  <span style={S.paymentRowValue}>HUI MAN HO</span>
+                  <span style={S.paymentRowValue}>JD STUDIO Limited</span>
                 </div>
                 <div style={S.paymentRow}>
                   <span style={S.paymentRowLabel}>BANK</span>
-                  <span style={S.paymentRowValue}>HSBC Hong Kong</span>
+                  <span style={S.paymentRowValue}>Standard Chartered Bank (Hong Kong) Ltd</span>
                 </div>
                 <div style={S.paymentRow}>
                   <span style={S.paymentRowLabel}>ACCOUNT</span>
-                  <span style={S.paymentRowValue}>646-512590-833</span>
+                  <span style={S.paymentRowValue}>44796326072</span>
                 </div>
                 <div style={S.paymentRow}>
                   <span style={S.paymentRowLabel}>REF</span>

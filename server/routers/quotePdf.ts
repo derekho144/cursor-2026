@@ -256,9 +256,9 @@ export function generateQuotePdfHtml(
         <td style="vertical-align:top;width:35%;padding-right:24px;">
           <div style="font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;margin-bottom:14px;">BANK TRANSFER</div>
           <table cellpadding="0" cellspacing="0">
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;white-space:nowrap;">PAYEE</td><td style="font-size:10px;color:#333333;">HUI MAN HO</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">BANK</td><td style="font-size:10px;color:#333333;">HSBC Hong Kong</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">ACCOUNT</td><td style="font-size:10px;color:#333333;">646-512590-833</td></tr>
+            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;white-space:nowrap;">PAYEE</td><td style="font-size:10px;color:#333333;">JD STUDIO Limited</td></tr>
+            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">BANK</td><td style="font-size:10px;color:#333333;">Standard Chartered Bank (Hong Kong) Ltd</td></tr>
+            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">ACCOUNT</td><td style="font-size:10px;color:#333333;">44796326072</td></tr>
             <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">REF</td><td style="font-size:10px;color:#111111;font-weight:600;">${quote.quoteNumber}</td></tr>
           </table>
         </td>
