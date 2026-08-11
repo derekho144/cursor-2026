@@ -61,7 +61,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">業務儀表板</h1>
-            <p className="text-sm text-muted-foreground mt-1">JD Studio 業務數據總覽</p>
+            <p className="text-sm text-muted-foreground mt-1">JD Studio 業務數據總覽 · 應收追蹤 · 最近活動</p>
           </div>
           {/* Year / Month selectors */}
           <div className="flex items-center gap-2">
@@ -126,25 +126,30 @@ export default function Dashboard() {
           </button>
         )}
 
-        {receivables && receivables.count > 0 && (
-          <div
-            className="rounded-lg p-4"
-            style={{ background: "#111", border: "1px solid rgba(255,184,0,0.25)" }}
-          >
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <div>
-                <h3 className="text-sm font-medium" style={{ color: "#e8e0d0" }}>應收／逾期</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {receivables.count} 張已成交未清 · 合共 {fmt(receivables.totalOutstanding)}
-                </p>
-              </div>
+        {/* Receivables — always visible */}
+        <div
+          className="rounded-lg p-4"
+          style={{ background: "#111", border: "1px solid rgba(255,184,0,0.25)" }}
+        >
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-medium" style={{ color: "#e8e0d0" }}>應收／逾期</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {receivables && receivables.count > 0
+                  ? `${receivables.count} 張已成交未清 · 合共 ${fmt(receivables.totalOutstanding)}`
+                  : "暫無未清已成交報價"}
+              </p>
+            </div>
+            {receivables && receivables.count > 0 && (
               <div className="flex gap-3 text-xs">
                 <span style={{ color: "#4caf50" }}>≤30日 {fmt(receivables.buckets.current)}</span>
                 <span style={{ color: "#FFB800" }}>31–60 {fmt(receivables.buckets.d30)}</span>
                 <span style={{ color: "#ff9800" }}>61–90 {fmt(receivables.buckets.d60)}</span>
                 <span style={{ color: "#FF6B6B" }}>90+ {fmt(receivables.buckets.d90plus)}</span>
               </div>
-            </div>
+            )}
+          </div>
+          {receivables && receivables.items.length > 0 ? (
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {receivables.items.slice(0, 8).map((it) => (
                 <button
@@ -167,8 +172,10 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">已成交且未付／只付訂金嘅報價會顯示喺呢度。</p>
+          )}
+        </div>
 
         {/* Top KPI Cards — 5 columns */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -385,15 +392,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent activity timeline */}
-        {recentActivity.length > 0 && (
-          <div
-            className="rounded-lg p-5"
-            style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <h3 className="text-sm font-medium mb-4" style={{ color: "#e8e0d0" }}>
-              最近活動
-            </h3>
+        {/* Recent activity timeline — always visible */}
+        <div
+          className="rounded-lg p-5"
+          style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <h3 className="text-sm font-medium mb-4" style={{ color: "#e8e0d0" }}>
+            最近活動
+          </h3>
+          {recentActivity.length > 0 ? (
             <div className="space-y-2">
               {recentActivity.map((a) => (
                 <button
@@ -433,8 +440,10 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-muted-foreground">載入中或暫無最近報價／詢價／FH 活動。</p>
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
