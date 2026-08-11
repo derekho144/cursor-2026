@@ -343,6 +343,21 @@ export default function PlatformEfficiency() {
                           {p.spend > 0 ? `${p.refundRate}%` : "—"}
                         </div>
                       </div>
+                      <div>
+                        <div style={{ fontSize: "0.55rem", color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>跟進後成交</div>
+                        <div className="text-sm font-light mt-0.5" style={{ color: (p as any).followUpWinRate != null ? "#60a5fa" : "#555" }}>
+                          {(p as any).followUpWinRate != null ? `${(p as any).followUpWinRate}%` : "—"}
+                          {(p as any).followUpsSent > 0 ? (
+                            <span style={{ color: "#666", fontSize: "0.65rem" }}> ({(p as any).followUpsSent})</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.55rem", color: "#666", letterSpacing: "0.1em", textTransform: "uppercase" }}>郵件打開率</div>
+                        <div className="text-sm font-light mt-0.5" style={{ color: (p as any).openRate != null ? "#4ade80" : "#555" }}>
+                          {(p as any).openRate != null ? `${(p as any).openRate}%` : "—"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* CPA + 真實ROI + LTV/CAC */}

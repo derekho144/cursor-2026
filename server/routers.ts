@@ -12,6 +12,7 @@ import { freehunterBoardRouter } from "./routers/freehunterBoard";
 import { expensesRouter } from "./routers/expenses";
 import { loyaltyRouter } from "./routers/loyalty";
 import { getDashboardStats, getDashboardStatsQuick, getAvgResponseTimeHours, getWhatsappClickStats, getMonthlyQuoteCosts, getDb } from "./db";
+import { getReceivablesSummary, getRecentActivity } from "./opsInsights";
 import { quoteCostsRouter } from "./routers/quoteCosts";
 import { followUpRouter } from "./routers/followUp";
 import { pitchOutreachRouter } from "./routers/pitchOutreach";
@@ -20,6 +21,8 @@ import { linkedinContentRouter } from "./routers/linkedinContent";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
+import { getWatchdogStatus } from "./watchdog";
+import { lastFreehunterScrapeAt, lastFreehunterScrapeResult } from "./scheduler";
 
 export const appRouter = router({
   system: systemRouter,
@@ -66,7 +69,7 @@ export const appRouter = router({
         const month = input?.month ?? hkt.getUTCMonth() + 1;
         const db = await getDb();
 
-        const [stats, avgResp, waStats, pendingCount, fhStats] = await Promise.all([
+        const [stats, avgResp, waStats, pendingCount, fhStats, receivables, recentActivity, fhHealth] = await Promise.all([
           // 1. Main KPI stats (revenue, ad spend, trend, source distribution)
           getDashboardStats(year, month),
           // 2. Average response time
@@ -111,9 +114,35 @@ export const appRouter = router({
                 ignored: Number(rows.find((r) => r.status === "ignored")?.count ?? 0),
               }))
             : Promise.resolve(null),
+          // 6. Receivables / overdue
+          getReceivablesSummary(20),
+          // 7. Recent activity timeline
+          getRecentActivity(15),
+          // 8. FH health (DB last scrape + in-memory + watchdog)
+          db
+            ? db
+                .select({ lastScrapedAt: sql<Date | null>`MAX(${freehunterJobs.scrapedAt})` })
+                .from(freehunterJobs)
+                .then(([row]) => {
+                  const lastDb = row?.lastScrapedAt ? new Date(row.lastScrapedAt) : null;
+                  const lastMem = lastFreehunterScrapeAt;
+                  const lastAt = [lastDb, lastMem].filter(Boolean).sort((a, b) => (b!.getTime() - a!.getTime()))[0] ?? null;
+                  const ageHours = lastAt ? (Date.now() - lastAt.getTime()) / (3600 * 1000) : null;
+                  const hktHour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
+                  const inActiveHours = hktHour >= 8 && hktHour < 21;
+                  const scrapeStale = inActiveHours && (ageHours == null || ageHours > 2);
+                  return {
+                    lastScrapedAt: lastAt?.toISOString() ?? null,
+                    lastScrapeResult: lastFreehunterScrapeResult ?? null,
+                    ageHours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
+                    scrapeStale,
+                    watchdog: getWatchdogStatus(),
+                  };
+                })
+            : Promise.resolve(null),
         ]);
 
-        return { stats, avgResp, waStats, pendingCount, fhStats };
+        return { stats, avgResp, waStats, pendingCount, fhStats, receivables, recentActivity, fhHealth };
       }),
   }),
   quotes: quotesRouter,

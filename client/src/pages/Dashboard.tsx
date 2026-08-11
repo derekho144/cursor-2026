@@ -39,6 +39,9 @@ export default function Dashboard() {
   const fhStats = dashData?.fhStats;
   const waStats = dashData?.waStats;
   const pendingInquiries = dashData?.pendingCount ?? 0;
+  const receivables = dashData?.receivables;
+  const recentActivity = dashData?.recentActivity ?? [];
+  const fhHealth = dashData?.fhHealth;
 
   const trendData = stats?.trendData ?? [];
   const sourceData = useMemo(() => {
@@ -106,6 +109,65 @@ export default function Dashboard() {
             </span>
             <span className="ml-auto text-xs text-muted-foreground">→</span>
           </button>
+        )}
+
+        {fhHealth?.scrapeStale && (
+          <button
+            onClick={() => setLocation("/freehunter-board")}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-opacity hover:opacity-80"
+            style={{ background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.3)" }}
+          >
+            <span className="text-sm" style={{ color: "#FF6B6B" }}>
+              FH 爬取可能已停滯
+              {fhHealth.ageHours != null ? `（約 ${fhHealth.ageHours} 小時無新資料）` : "（尚無爬取紀錄）"}
+              — 請檢查登入／立即爬取
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">→</span>
+          </button>
+        )}
+
+        {receivables && receivables.count > 0 && (
+          <div
+            className="rounded-lg p-4"
+            style={{ background: "#111", border: "1px solid rgba(255,184,0,0.25)" }}
+          >
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <h3 className="text-sm font-medium" style={{ color: "#e8e0d0" }}>應收／逾期</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {receivables.count} 張已成交未清 · 合共 {fmt(receivables.totalOutstanding)}
+                </p>
+              </div>
+              <div className="flex gap-3 text-xs">
+                <span style={{ color: "#4caf50" }}>≤30日 {fmt(receivables.buckets.current)}</span>
+                <span style={{ color: "#FFB800" }}>31–60 {fmt(receivables.buckets.d30)}</span>
+                <span style={{ color: "#ff9800" }}>61–90 {fmt(receivables.buckets.d60)}</span>
+                <span style={{ color: "#FF6B6B" }}>90+ {fmt(receivables.buckets.d90plus)}</span>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {receivables.items.slice(0, 8).map((it) => (
+                <button
+                  key={it.id}
+                  onClick={() => setLocation(`/quotes/${it.id}`)}
+                  className="w-full flex items-center justify-between gap-2 text-left px-2 py-1.5 rounded hover:opacity-80"
+                  style={{ background: "rgba(255,255,255,0.03)" }}
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm truncate" style={{ color: "#e8e0d0" }}>
+                      {it.quoteNumber} · {it.clientName}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {it.paymentStatus === "deposit_paid" ? "已付訂金" : "未付款"} · {it.ageDays} 日
+                    </div>
+                  </div>
+                  <div className="text-sm font-medium shrink-0" style={{ color: it.ageDays > 60 ? "#FF6B6B" : "#FFB800" }}>
+                    {fmt(it.outstanding)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Top KPI Cards — 5 columns */}
@@ -224,7 +286,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Bottom Charts */}
+        {/* Bottom Charts + Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Revenue + Ad Spend Dual-Line Trend Chart */}
           <div
@@ -322,6 +384,57 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        {/* Recent activity timeline */}
+        {recentActivity.length > 0 && (
+          <div
+            className="rounded-lg p-5"
+            style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <h3 className="text-sm font-medium mb-4" style={{ color: "#e8e0d0" }}>
+              最近活動
+            </h3>
+            <div className="space-y-2">
+              {recentActivity.map((a) => (
+                <button
+                  key={`${a.type}-${a.id}`}
+                  onClick={() => setLocation(a.href)}
+                  className="w-full flex items-start gap-3 text-left px-2 py-2 rounded hover:opacity-80"
+                  style={{ background: "rgba(255,255,255,0.03)" }}
+                >
+                  <span
+                    className="text-[10px] mt-0.5 px-1.5 py-0.5 rounded shrink-0"
+                    style={{
+                      background:
+                        a.type === "quote"
+                          ? "rgba(212,168,67,0.15)"
+                          : a.type === "inquiry"
+                            ? "rgba(0,212,170,0.15)"
+                            : "rgba(255,107,107,0.15)",
+                      color:
+                        a.type === "quote"
+                          ? "#d4a843"
+                          : a.type === "inquiry"
+                            ? "#00D4AA"
+                            : "#FF6B6B",
+                    }}
+                  >
+                    {a.type === "quote" ? "報價" : a.type === "inquiry" ? "詢價" : "FH"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm truncate" style={{ color: "#e8e0d0" }}>{a.title}</div>
+                    {a.subtitle && (
+                      <div className="text-xs text-muted-foreground truncate">{a.subtitle}</div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {new Date(a.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

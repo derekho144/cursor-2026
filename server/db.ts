@@ -1079,6 +1079,44 @@ export async function getPlatformEfficiency(year: number) {
   const avgDealValue = totalConversionsAll > 0 ? totalAcceptedRevenue / totalConversionsAll : 0;
   const ltv = avgDealValue * avgRepurchaseRate;
 
+  // 6b. Follow-up → win + email open rate by leadSource
+  const followUpMetrics = await db
+    .select({
+      leadSource: quotes.leadSource,
+      sent: sql<number>`COUNT(*)`,
+      wins: sql<number>`SUM(CASE WHEN ${quotes.status} = 'accepted' THEN 1 ELSE 0 END)`,
+    })
+    .from(quoteFollowUps)
+    .innerJoin(quotes, eq(quoteFollowUps.quoteId, quotes.id))
+    .where(sql`
+      ${quoteFollowUps.followUpSentAt} IS NOT NULL
+      AND ${quoteFollowUps.followUpSentAt} > '1971-01-01'
+      AND ${quotes.createdAt} >= ${yearStart} AND ${quotes.createdAt} < ${yearEnd}
+    `)
+    .groupBy(quotes.leadSource);
+
+  const openMetrics = await db
+    .select({
+      leadSource: quotes.leadSource,
+      emailsSent: sql<number>`COUNT(*)`,
+      emailsOpened: sql<number>`SUM(CASE WHEN ${emailLogs.openedAt} IS NOT NULL THEN 1 ELSE 0 END)`,
+    })
+    .from(emailLogs)
+    .innerJoin(quotes, eq(emailLogs.quoteId, quotes.id))
+    .where(sql`${quotes.createdAt} >= ${yearStart} AND ${quotes.createdAt} < ${yearEnd}`)
+    .groupBy(quotes.leadSource);
+
+  const fuBySource: Record<string, { sent: number; wins: number }> = {};
+  for (const row of followUpMetrics) {
+    const src = (row.leadSource && row.leadSource.trim() !== "") ? row.leadSource : "unknown";
+    fuBySource[src] = { sent: Number(row.sent), wins: Number(row.wins) };
+  }
+  const openBySource: Record<string, { emailsSent: number; emailsOpened: number }> = {};
+  for (const row of openMetrics) {
+    const src = (row.leadSource && row.leadSource.trim() !== "") ? row.leadSource : "unknown";
+    openBySource[src] = { emailsSent: Number(row.emailsSent), emailsOpened: Number(row.emailsOpened) };
+  }
+
   // 7. 計算各平台效益指標
   const platformStats = PLATFORM_DEFS.map(def => {
     const ad = def.adKey ? adData.find(r => r.platform === def.adKey) : null;
@@ -1148,6 +1186,11 @@ export async function getPlatformEfficiency(year: number) {
     else if (overallScore >= 50) grade = "B";
     else if (overallScore >= 35) grade = "C";
 
+    const fu = fuBySource[def.leadSource] ?? { sent: 0, wins: 0 };
+    const om = openBySource[def.leadSource] ?? { emailsSent: 0, emailsOpened: 0 };
+    const followUpWinRate = fu.sent > 0 ? Math.round((fu.wins / fu.sent) * 1000) / 10 : null;
+    const openRate = om.emailsSent > 0 ? Math.round((om.emailsOpened / om.emailsSent) * 1000) / 10 : null;
+
     return {
       platform: def.key,
       label: def.label,
@@ -1173,6 +1216,12 @@ export async function getPlatformEfficiency(year: number) {
       trueRoi: trueRoi !== null ? Math.round(trueRoi * 10) / 10 : null,   // 真實 ROI（扣除服務成本）
       allocatedServiceCost: Math.round(allocatedServiceCost),              // 分攤服務成本
       ltvCacRatio: ltvCacRatio !== null ? Math.round(ltvCacRatio * 10) / 10 : null, // LTV/CAC 比率
+      followUpsSent: fu.sent,
+      followUpWins: fu.wins,
+      followUpWinRate,
+      emailsSent: om.emailsSent,
+      emailsOpened: om.emailsOpened,
+      openRate,
       overallScore,
       grade,
     };
@@ -3307,12 +3356,21 @@ export async function upsertQuoteFollowUp(data: InsertQuoteFollowUp): Promise<vo
 export async function getPendingFollowUps(daysAfterSent: number): Promise<QuoteFollowUp[]> {
   const db = await getDb();
   if (!db) return [];
-  const cutoff = new Date(Date.now() - daysAfterSent * 24 * 60 * 60 * 1000);
+
+  // Adaptive per leadSource (Google/HelloToby faster; Repeat slower). Use widest window then filter.
+  const { FOLLOW_UP_DAYS_BY_SOURCE, followUpDaysForSource } = await import("./followUpPolicy");
+  const maxDays = Math.max(daysAfterSent, ...Object.values(FOLLOW_UP_DAYS_BY_SOURCE));
+  const cutoff = new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000);
   const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+  const now = Date.now();
 
   const candidates = await db
-    .select()
+    .select({
+      followUp: quoteFollowUps,
+      leadSource: quotes.leadSource,
+    })
     .from(quoteFollowUps)
+    .leftJoin(quotes, eq(quoteFollowUps.quoteId, quotes.id))
     .where(
       and(
         eq(quoteFollowUps.status, "pending"),
@@ -3322,11 +3380,17 @@ export async function getPendingFollowUps(daysAfterSent: number): Promise<QuoteF
       )
     )
     .orderBy(quoteFollowUps.sentAt)
-    .limit(50);
+    .limit(80);
 
-  if (candidates.length === 0) return [];
+  const due = candidates.filter((row) => {
+    const needed = followUpDaysForSource(row.leadSource, daysAfterSent);
+    const sentAt = new Date(row.followUp.sentAt).getTime();
+    return now - sentAt >= needed * 24 * 60 * 60 * 1000;
+  }).slice(0, 50);
 
-  const ids = candidates.map((c) => c.id);
+  if (due.length === 0) return [];
+
+  const ids = due.map((c) => c.followUp.id);
   await db.execute(sql`
     UPDATE quote_follow_ups
     SET follow_up_sent_at = ${SENTINEL}

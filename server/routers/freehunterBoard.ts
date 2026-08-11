@@ -170,6 +170,29 @@ export const freehunterBoardRouter = router({
       jobs,
       stats,
       session: sessionStatus,
+      health: await (async () => {
+        const [row] = await db
+          .select({ lastScrapedAt: sql<Date | null>`MAX(${freehunterJobs.scrapedAt})` })
+          .from(freehunterJobs);
+        const lastDb = row?.lastScrapedAt ? new Date(row.lastScrapedAt) : null;
+        const { lastFreehunterScrapeAt, lastFreehunterScrapeResult } = await import("../scheduler");
+        const { getWatchdogStatus } = await import("../watchdog");
+        const lastMem = lastFreehunterScrapeAt;
+        const lastAt =
+          [lastDb, lastMem].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null;
+        const ageHours = lastAt ? (Date.now() - lastAt.getTime()) / (3600 * 1000) : null;
+        const hktHour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
+        const inActiveHours = hktHour >= 8 && hktHour < 21;
+        const scrapeStale = inActiveHours && (ageHours == null || ageHours > 2);
+        return {
+          lastScrapedAt: lastAt?.toISOString() ?? null,
+          lastScrapeResult: lastFreehunterScrapeResult,
+          ageHours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
+          scrapeStale,
+          sessionConnected: sessionStatus.connected,
+          watchdog: getWatchdogStatus(),
+        };
+      })(),
     };
   }),
 

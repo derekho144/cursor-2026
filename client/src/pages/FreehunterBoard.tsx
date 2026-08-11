@@ -759,6 +759,36 @@ export default function FreehunterBoard() {
         </div>
       )}
 
+      {/* Health alert */}
+      {(data as any)?.health && (
+        <div
+          className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${
+            (data as any).health.scrapeStale || !(data as any).health.sessionConnected
+              ? "bg-red-50 text-red-700 border border-red-200"
+              : "bg-slate-50 text-slate-600 border border-slate-200"
+          }`}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">
+              {(data as any).health.scrapeStale
+                ? "爬取可能已停滯 — 請檢查登入或按「立即爬取」"
+                : "爬取狀態正常"}
+            </p>
+            <p className="text-xs mt-0.5 opacity-80">
+              上次資料：
+              {(data as any).health.lastScrapedAt
+                ? new Date((data as any).health.lastScrapedAt).toLocaleString("zh-HK")
+                : "尚無"}
+              {(data as any).health.ageHours != null ? `（${(data as any).health.ageHours} 小時前）` : ""}
+              {(data as any).health.lastScrapeResult
+                ? ` · 最近一次 +${(data as any).health.lastScrapeResult.newJobs} 新工作 / ${(data as any).health.lastScrapeResult.emailsFetched} 電郵`
+                : ""}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

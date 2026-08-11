@@ -383,8 +383,11 @@ export default function QuoteFollowUpPage() {
                           className="w-24"
                           style={{ background: "rgba(255,255,255,0.05)" }}
                         />
-                        <span className="text-sm text-muted-foreground">天（建議 3–5 天）</span>
+                        <span className="text-sm text-muted-foreground">天（預設；無渠道對應時使用）</span>
                       </div>
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                        渠道自適應：Google／HelloToby／360Pro = 2 天；FH／網站／社群 = 3 天；介紹 = 4 天；回頭客 = 5 天。有設定 leadSource 嘅報價會用對應天數，其餘用上面預設。
+                      </p>
                     </div>
 
                     {/* Send time */}

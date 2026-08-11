@@ -737,15 +737,26 @@ export const adExpensesRouter = router({
           label: string; grade: string; overallScore: number; netSpend: number; revenue: number;
           totalLeads: number; conversions: number; conversionRate: number; roas: number | null;
           trueRoi: number | null; cpa: number | null; ltvCacRatio: number | null; platform: string;
+          followUpsSent?: number; followUpWinRate?: number | null; openRate?: number | null;
         }) => ({
           name: p.label, grade: p.grade, score: p.overallScore, spend: p.netSpend,
           revenue: p.revenue, leads: p.totalLeads, conversions: p.conversions,
           convRate: p.conversionRate, roas: p.roas, trueRoi: p.trueRoi, cpa: p.cpa,
           ltvCac: p.ltvCacRatio,
+          followUpsSent: p.followUpsSent ?? 0,
+          followUpWinRate: p.followUpWinRate ?? null,
+          openRate: p.openRate ?? null,
           curSpend: curMonthSpend[p.platform] ?? 0,
           prevSpend: prevMonthSpend[p.platform] ?? 0,
         }))
         .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+
+      const followUpChannelSummary = platformSummary
+        .filter((p: { followUpsSent: number }) => p.followUpsSent > 0)
+        .map((p: { name: string; followUpsSent: number; followUpWinRate: number | null; openRate: number | null }) =>
+          `${p.name}：跟進${p.followUpsSent}次／跟進後成交率${p.followUpWinRate ?? "—"}%／郵件打開率${p.openRate ?? "—"}%`
+        )
+        .join("；") || "暫無跟進成效數據";
 
       const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
       const monthLabel = monthNames[month - 1];
@@ -870,6 +881,9 @@ ${platformSummary.map((p: {
   cpa: number | null; curSpend: number;
 }) => `| ${p.name} | ${p.grade}(${p.score}分) | ${p.roas !== null ? p.roas + "x" : "-"} | ${platformCplMap[p.name] ?? "-"} | ${p.convRate}% | HK$${p.spend.toLocaleString()} |`).join("\n")}
 
+## 跟進與郵件打開成效（按渠道）
+${followUpChannelSummary}
+
 ## 報價失敗完整記錄（${monthLabel}，共 ${rejectedQuoteDetails.length} 宗）
 ${rejectedDetailsText}
 
@@ -885,6 +899,8 @@ ${rejectedDetailsText}
 - 建議要有優先次序，不要什麼都說「重要」
 - 結合香港 B2B 創意服務（攝影）市場的實際情況
 - 如某指標暫無數據，說明原因並給出如何獲取數據的建議
+- **報告結尾必須加「本週優先行動 Top 3」**：每項包含（1）負責人建議（Derek／助理）（2）具體動作（3）對應指標（4）預期影響（HKD 或 %）（5）完成期限（本週內哪一天）
+- 若有明顯異常（某平台 CPL 暴升、成交率驟降、ROAS < 1），單獨用「異常警報」段落點名，並給出立即止血方案
 
 ---
 

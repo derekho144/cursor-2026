@@ -9,9 +9,10 @@ import { getDb } from "../db";
 import { pitchLeads, pitchSendLog } from "../../drizzle/schema";
 import { eq, and, desc, count, gte, lte, like, or, inArray, sql } from "drizzle-orm";
 import { runOutreachPipeline, getTodayContactedCount, generatePitchEmail, linkedInPeopleSearchUrl, linkedInCompanySearchUrl, expireStaleLeads, isLeadExpired, JOB_LISTING_MAX_AGE_DAYS, fallbackJobSearchUrl } from "../scrapers/pitchOutreach";
-import { extractEmailFromCompanyWebsite, extractEmailFromJobPage } from "../scrapers/emailFinder";
+import { extractEmailFromCompanyWebsite, extractEmailFromJobPage, findDecisionMakerEmail } from "../scrapers/emailFinder";
 import { extractDomain } from "../scrapers/jobScraper";
 import { multiLayerEmailSearch } from "../scrapers/multiLayerEmailFinder";
+import { findLinkedInDecisionMakers } from "../scrapers/linkedinDecisionMaker";
 import { sendViaGmail } from "../resendEmail";
 import { ENV } from "../_core/env";
 import axios from "axios";
@@ -441,11 +442,65 @@ ${bodyHtml}
         }
       }
 
+      // Layer 5: LinkedIn decision makers when other layers found nothing
+      let linkedInTried = false;
+      if (candidates.length === 0) {
+        linkedInTried = true;
+        try {
+          const makers = await findLinkedInDecisionMakers(lead.companyName);
+          if (makers.length > 0) {
+            let selectedMaker =
+              makers.find((m) => {
+                const t = m.title.toLowerCase();
+                return t.includes("owner") || t.includes("founder") || t.includes("ceo") || t.includes("chief");
+              }) ||
+              makers.find((m) => {
+                const t = m.title.toLowerCase();
+                return (
+                  t.includes("hr") ||
+                  t.includes("human resources") ||
+                  t.includes("talent") ||
+                  t.includes("people") ||
+                  t.includes("recruiting")
+                );
+              }) ||
+              makers.find((m) => {
+                const t = m.title.toLowerCase();
+                return t.includes("director") || t.includes("head of");
+              }) ||
+              makers[0];
+
+            if (selectedMaker) {
+              const dm = await findDecisionMakerEmail({
+                decisionMakerName: selectedMaker.name,
+                decisionMakerTitle: selectedMaker.title,
+                companyName: lead.companyName,
+                companyWebsite: lead.companyWebsite ?? undefined,
+              });
+              if (dm.email && !seen.has(dm.email.toLowerCase())) {
+                seen.add(dm.email.toLowerCase());
+                candidates.push({
+                  email: dm.email,
+                  name: selectedMaker.name,
+                  position: selectedMaker.title,
+                  foundVia: `linkedin_dm:${dm.foundVia ?? "search"}`,
+                  confidence: 60,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[PitchOutreach] LinkedIn decision maker search failed for lead #${input.id}:`, err);
+        }
+      }
+
       return {
         leadId: input.id,
         candidates,
         hasHunterKey: !!hunterApiKey,
-        searchedLayers: multiResult.searchedLayers,
+        searchedLayers: linkedInTried
+          ? [...multiResult.searchedLayers, "linkedin_decision_maker"]
+          : multiResult.searchedLayers,
         domain: multiResult.domain,
       };
     }),

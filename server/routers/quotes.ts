@@ -22,11 +22,9 @@ import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
-import {
-  SERVICE_TYPE_LABELS,
-  generateQuotePdfHtml,
-} from "./quotePdf";
+import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { generateQuotePdfBuffer } from "./quotePdfKit";
+// Legacy HTML PDF (unused): keep re-export for tests only — live generation uses PDFKit.
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
 /**
