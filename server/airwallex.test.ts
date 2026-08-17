@@ -8,6 +8,7 @@ import {
   suggestPaymentKind,
   verifyAirwallexWebhookSignature,
 } from "./airwallex";
+import { buildQuotePaymentPatch } from "./airwallexPayment";
 
 describe("Airwallex payment amounts", () => {
   it("computes percent deposit", () => {
@@ -58,6 +59,54 @@ describe("Airwallex payment amounts", () => {
 
   it("rounds money to 2 decimals", () => {
     expect(roundMoney(123.456)).toBe(123.46);
+  });
+});
+
+describe("buildQuotePaymentPatch", () => {
+  it("records deposit on accepted quote", () => {
+    const patch = buildQuotePaymentPatch({
+      quote: {
+        total: "10000",
+        paymentStatus: "unpaid",
+        depositPaidAmount: null,
+        depositPaidAt: null,
+        balancePaidAmount: null,
+        balancePaidAt: null,
+        paymentNotes: null,
+        currency: "HKD",
+      },
+      kind: "deposit",
+      amount: 5000,
+      paidAt: new Date("2026-08-18T10:00:00Z"),
+      paymentIntentId: "int_test_deposit",
+    });
+    expect(patch.paymentStatus).toBe("deposit_paid");
+    expect(Number(patch.depositPaidAmount)).toBe(5000);
+    expect(patch.depositPaidAt).toBeTruthy();
+    expect(patch.paymentNotes).toContain("訂金");
+    expect(patch.paymentNotes).toContain("int_test_deposit");
+  });
+
+  it("records balance and marks fully paid", () => {
+    const patch = buildQuotePaymentPatch({
+      quote: {
+        total: "10000",
+        paymentStatus: "deposit_paid",
+        depositPaidAmount: "5000",
+        depositPaidAt: new Date("2026-08-10"),
+        balancePaidAmount: null,
+        balancePaidAt: null,
+        paymentNotes: "✓ Airwallex 訂金 HKD 5,000",
+        currency: "HKD",
+      },
+      kind: "balance",
+      amount: 5000,
+      paidAt: new Date("2026-08-18T12:00:00Z"),
+      paymentIntentId: "int_test_balance",
+    });
+    expect(patch.paymentStatus).toBe("fully_paid");
+    expect(Number(patch.balancePaidAmount)).toBe(5000);
+    expect(patch.paymentNotes).toContain("尾款");
   });
 });
 

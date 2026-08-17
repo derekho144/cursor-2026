@@ -686,6 +686,12 @@ ${itemsText}
       }
       const quote = await getQuoteById(input.id);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
+      if (quote.status !== "accepted") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "只限已接受報價單可建立 Airwallex 付款連結",
+        });
+      }
       if ((quote as any).paymentStatus === "fully_paid") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "此報價已完成付款" });
       }

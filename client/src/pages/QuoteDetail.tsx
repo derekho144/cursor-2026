@@ -841,7 +841,9 @@ export default function QuoteDetail() {
                 </div>
               )}
               {/* Airwallex online payment links */}
-              {airwallexStatus?.configured && (quote as any).paymentStatus !== "fully_paid" && (
+              {airwallexStatus?.configured &&
+                quote.status === "accepted" &&
+                (quote as any).paymentStatus !== "fully_paid" && (
                 <div className="col-span-2 pt-3 mt-2" style={{ borderTop: "1px solid rgba(126,184,247,0.15)" }}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span style={{ fontSize: "0.6rem", letterSpacing: "0.12em", color: "#7eb8f7", textTransform: "uppercase" }}>

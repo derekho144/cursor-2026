@@ -1,11 +1,7 @@
 import type { Request, Response } from "express";
 import { ENV } from "./_core/env";
 import { verifyAirwallexWebhookSignature, type AirwallexPaymentLinkKind } from "./airwallex";
-import {
-  applyAirwallexPaymentToQuote,
-  getAirwallexPaymentLinkByAirwallexId,
-  markAirwallexLinkPaid,
-} from "./airwallexPayment";
+import { processAirwallexPaymentNotification } from "./airwallexPayment";
 
 type WebhookPayload = {
   id?: string;
@@ -32,6 +28,55 @@ function parseAmount(value: unknown): number | undefined {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return undefined;
   return n;
+}
+
+function parsePaidAt(obj: Record<string, unknown>): Date {
+  return new Date(
+    asString(obj.updated_at) ??
+      asString(obj.paid_at) ??
+      asString(obj.created_at) ??
+      Date.now()
+  );
+}
+
+function metadataFrom(obj: Record<string, unknown>): Record<string, unknown> {
+  return (
+    (obj.metadata as Record<string, unknown> | undefined) ??
+    ((obj.payment_link as Record<string, unknown> | undefined)?.metadata as
+      | Record<string, unknown>
+      | undefined) ??
+    {}
+  );
+}
+
+/** Build notification from payment_intent.succeeded payload. */
+function notificationFromPaymentIntent(obj: Record<string, unknown>) {
+  const meta = metadataFrom(obj);
+  return {
+    paymentIntentId: asString(obj.id),
+    paymentLinkId:
+      asString(obj.payment_link_id) ??
+      asString((obj.payment_link as Record<string, unknown> | undefined)?.id),
+    quoteId: Number(asString(meta.quoteId)),
+    quoteNumber: asString(meta.quoteNumber) ?? asString(obj.merchant_order_id) ?? asString(obj.reference),
+    kind: parseKind(meta.kind),
+    amount: parseAmount(obj.amount),
+    paidAt: parsePaidAt(obj),
+  };
+}
+
+/** Build notification from payment_link.paid payload. */
+function notificationFromPaymentLink(obj: Record<string, unknown>) {
+  const meta = metadataFrom(obj);
+  return {
+    paymentIntentId: asString(obj.latest_successful_payment_intent_id),
+    paymentLinkId: asString(obj.id),
+    quoteId: Number(asString(meta.quoteId)),
+    quoteNumber: asString(meta.quoteNumber) ?? asString(obj.reference),
+    kind: parseKind(meta.kind),
+    amount: parseAmount(obj.amount),
+    paidAt: parsePaidAt(obj),
+  };
 }
 
 export async function handleAirwallexWebhook(req: Request, res: Response): Promise<void> {
@@ -71,76 +116,30 @@ export async function handleAirwallexWebhook(req: Request, res: Response): Promi
   const eventName = payload.name ?? "";
   console.log(`[Airwallex Webhook] Event: ${eventName} id=${payload.id ?? "?"}`);
 
-  if (eventName !== "payment_intent.succeeded") {
+  if (eventName !== "payment_intent.succeeded" && eventName !== "payment_link.paid") {
     res.status(200).json({ received: true, ignored: eventName });
     return;
   }
 
   const obj = payload.data?.object ?? {};
-  const paymentIntentId = asString(obj.id);
-  const paymentLinkId =
-    asString(obj.payment_link_id) ??
-    asString((obj.payment_link as Record<string, unknown> | undefined)?.id);
-  const metadataRaw =
-    (obj.metadata as Record<string, unknown> | undefined) ??
-    ((obj.payment_link as Record<string, unknown> | undefined)?.metadata as
-      | Record<string, unknown>
-      | undefined) ??
-    {};
+  const notification =
+    eventName === "payment_link.paid"
+      ? notificationFromPaymentLink(obj)
+      : notificationFromPaymentIntent(obj);
 
-  const quoteIdFromMeta = Number(asString(metadataRaw.quoteId));
-  let kind = parseKind(metadataRaw.kind);
-  let quoteId = Number.isFinite(quoteIdFromMeta) && quoteIdFromMeta > 0 ? quoteIdFromMeta : 0;
-  let amount = parseAmount(obj.amount);
+  const result = await processAirwallexPaymentNotification(notification);
 
-  let link = paymentLinkId
-    ? await getAirwallexPaymentLinkByAirwallexId(paymentLinkId)
-    : null;
-
-  if (link) {
-    if (!quoteId) quoteId = link.quoteId;
-    if (!kind) kind = link.kind as AirwallexPaymentLinkKind;
-    if (!amount) amount = Number(link.amount);
-    if (link.status === "PAID") {
-      res.status(200).json({ received: true, duplicate: true });
-      return;
-    }
-  }
-
-  if (!quoteId || !kind || !amount) {
-    console.warn("[Airwallex Webhook] Missing quote/kind/amount", {
-      quoteId,
-      kind,
-      amount,
-      paymentLinkId,
-    });
-    res.status(200).json({ received: true, skipped: "missing fields" });
+  if (!result.applied) {
+    console.log(`[Airwallex Webhook] Not applied: ${result.reason}`, notification);
+    res.status(200).json({ received: true, applied: false, reason: result.reason });
     return;
   }
 
-  const paidAt = new Date(
-    asString(obj.updated_at) ?? asString(obj.created_at) ?? Date.now()
-  );
-
-  if (paymentLinkId) {
-    await markAirwallexLinkPaid({
-      airwallexId: paymentLinkId,
-      paymentIntentId,
-      paidAt,
-    });
-  }
-
-  await applyAirwallexPaymentToQuote({
-    quoteId,
-    kind,
-    amount,
-    paidAt,
-    paymentIntentId,
-    source: "webhook",
+  res.status(200).json({
+    received: true,
+    applied: true,
+    quoteId: result.quoteId,
+    kind: result.kind,
+    paymentStatus: result.paymentStatus,
   });
-
-  console.log(
-    `[Airwallex Webhook] Quote #${quoteId} marked ${kind} paid (${amount})`
-  );
-  res.status(200).json({ received: true, quoteId, kind });
 }

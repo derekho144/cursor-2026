@@ -103,6 +103,12 @@ export function paymentKindLabel(kind: AirwallexPaymentLinkKind): string {
   return "Full payment";
 }
 
+export function paymentKindLabelZh(kind: AirwallexPaymentLinkKind): string {
+  if (kind === "deposit") return "訂金";
+  if (kind === "balance") return "尾款";
+  return "全數";
+}
+
 export function verifyAirwallexWebhookSignature(params: {
   rawBody: string;
   timestamp: string | undefined;
