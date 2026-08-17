@@ -128,6 +128,25 @@ export const quoteItems = mysqlTable("quote_items", {
 export type QuoteItem = typeof quoteItems.$inferSelect;
 export type InsertQuoteItem = typeof quoteItems.$inferInsert;
 
+// ─── Airwallex Payment Links ───────────────────────────────────────
+export const airwallexPaymentLinks = mysqlTable("airwallex_payment_links", {
+  id: int("id").autoincrement().primaryKey(),
+  quoteId: int("quote_id").notNull(),
+  kind: mysqlEnum("kind", ["deposit", "balance", "full"]).notNull(),
+  airwallexId: varchar("airwallex_id", { length: 64 }).notNull().unique(),
+  url: varchar("url", { length: 1024 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 8 }).notNull().default("HKD"),
+  status: varchar("status", { length: 32 }).notNull().default("UNPAID"),
+  paymentIntentId: varchar("payment_intent_id", { length: 64 }),
+  paidAt: timestamp("paid_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AirwallexPaymentLink = typeof airwallexPaymentLinks.$inferSelect;
+export type InsertAirwallexPaymentLink = typeof airwallexPaymentLinks.$inferInsert;
+
 // ─── Ad Expenses (廣告開支) ────────────────────────────────────────
 export const adExpenses = mysqlTable("ad_expenses", {
   id: int("id").autoincrement().primaryKey(),

@@ -24,4 +24,9 @@ export const ENV = {
   bufferAccessToken: process.env.BUFFER_ACCESS_TOKEN ?? "",
   /** Optional; if empty, first linkedin channel is auto-selected */
   bufferLinkedInChannelId: process.env.BUFFER_LINKEDIN_CHANNEL_ID ?? "",
+  /** Airwallex online payments (Payment Links + webhook) */
+  airwallexApiKey: process.env.AIRWALLEX_API_KEY ?? "",
+  airwallexClientId: process.env.AIRWALLEX_CLIENT_ID ?? "",
+  airwallexEnv: process.env.AIRWALLEX_ENV ?? "production",
+  airwallexWebhookSecret: process.env.AIRWALLEX_WEBHOOK_SECRET ?? "",
 };

@@ -36,6 +36,22 @@ async function startServer() {
   // Increase headersTimeout to 180s (default 60s is too short for multi-step LLM calls)
   server.headersTimeout = 180_000;
   server.requestTimeout = 300_000;
+
+  // Airwallex webhook — raw body required for HMAC verification (before JSON parser)
+  app.post(
+    "/api/webhooks/airwallex",
+    express.raw({ type: "application/json", limit: "1mb" }),
+    async (req, res) => {
+      try {
+        const { handleAirwallexWebhook } = await import("../airwallexWebhook");
+        await handleAirwallexWebhook(req, res);
+      } catch (err) {
+        console.error("[Airwallex Webhook] Error:", err);
+        res.status(200).json({ received: true });
+      }
+    }
+  );
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

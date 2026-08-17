@@ -24,6 +24,11 @@ import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { generateQuotePdfBuffer } from "./quotePdfKit";
+import { isAirwallexConfigured } from "../airwallex";
+import {
+  createQuoteAirwallexPaymentLink,
+  listAirwallexPaymentLinksForQuote,
+} from "../airwallexPayment";
 // Legacy HTML PDF (unused): keep re-export for tests only — live generation uses PDFKit.
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
@@ -649,6 +654,54 @@ ${itemsText}
         })
         .where(eq(quotesTable.id, input.id));
       return { success: true };
+    }),
+
+  airwallexStatus: protectedProcedure.query(() => ({
+    configured: isAirwallexConfigured(),
+    webhookUrl: `${ENV.publicBaseUrl}/api/webhooks/airwallex`,
+  })),
+
+  listPaymentLinks: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const quote = await getQuoteById(input.id);
+      if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
+      return listAirwallexPaymentLinksForQuote(input.id);
+    }),
+
+  createPaymentLink: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        kind: z.enum(["deposit", "balance", "full"]).optional(),
+        forceNew: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      if (!isAirwallexConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Airwallex 未設定（缺少 API Key / Client ID）",
+        });
+      }
+      const quote = await getQuoteById(input.id);
+      if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
+      if ((quote as any).paymentStatus === "fully_paid") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "此報價已完成付款" });
+      }
+      try {
+        const link = await createQuoteAirwallexPaymentLink({
+          quoteId: input.id,
+          kind: input.kind,
+          forceNew: input.forceNew,
+        });
+        return link;
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "建立付款連結失敗",
+        });
+      }
     }),
 
   // Stop/Resume Follow-up

@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Edit, FileText, Loader2, Sparkles, Mail, Clock, Link2, CheckCircle2, Paperclip, X, UploadCloud, Eye, ExternalLink, ImageIcon, DollarSign, Plus, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Download, Edit, FileText, Loader2, Sparkles, Mail, Clock, Link2, CheckCircle2, Paperclip, X, UploadCloud, Eye, ExternalLink, ImageIcon, DollarSign, Plus, Trash2, TrendingUp, CreditCard, Copy } from "lucide-react";
 import { useState, useRef } from "react";
 import {
   Dialog,
@@ -164,6 +164,34 @@ export default function QuoteDetail() {
     },
     onError: () => toast.error("更新失敗"),
   });
+
+  const { data: airwallexStatus } = trpc.quotes.airwallexStatus.useQuery();
+  const { data: paymentLinks, refetch: refetchPaymentLinks } = trpc.quotes.listPaymentLinks.useQuery(
+    { id: quoteId },
+    { enabled: !!quoteId && !!airwallexStatus?.configured }
+  );
+  const createPaymentLinkMutation = trpc.quotes.createPaymentLink.useMutation({
+    onSuccess: async (link) => {
+      toast.success("Airwallex 付款連結已建立");
+      await refetchPaymentLinks();
+      try {
+        await navigator.clipboard.writeText(link.url);
+        toast.success("連結已複製到剪貼簿");
+      } catch {
+        // clipboard may fail on HTTP / restricted contexts
+      }
+    },
+    onError: (e) => toast.error(`建立付款連結失敗：${e.message}`),
+  });
+
+  async function copyPaymentLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("連結已複製");
+    } catch {
+      toast.error("無法複製，請手動選取連結");
+    }
+  }
   function startPaymentEdit() {
     setPaymentForm({
       paymentStatus: ((quote as any)?.paymentStatus ?? "unpaid") as "unpaid" | "deposit_paid" | "fully_paid",
@@ -810,6 +838,90 @@ export default function QuoteDetail() {
                 <div className="col-span-2 flex justify-between text-xs">
                   <span style={{ color: "#666" }}>備註</span>
                   <span style={{ color: "#aaa" }}>{(quote as any).paymentNotes}</span>
+                </div>
+              )}
+              {/* Airwallex online payment links */}
+              {airwallexStatus?.configured && (quote as any).paymentStatus !== "fully_paid" && (
+                <div className="col-span-2 pt-3 mt-2" style={{ borderTop: "1px solid rgba(126,184,247,0.15)" }}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span style={{ fontSize: "0.6rem", letterSpacing: "0.12em", color: "#7eb8f7", textTransform: "uppercase" }}>
+                      Airwallex 線上付款
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 justify-end">
+                      {((quote as any).paymentStatus === "unpaid"
+                        ? (["deposit", "full"] as const)
+                        : (["balance"] as const)
+                      ).map((kind) => (
+                        <button
+                          key={kind}
+                          onClick={() => createPaymentLinkMutation.mutate({ id: quoteId, kind })}
+                          disabled={createPaymentLinkMutation.isPending}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-all hover:opacity-80 disabled:opacity-50"
+                          style={{
+                            border: "1px solid rgba(126,184,247,0.35)",
+                            color: "#7eb8f7",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          {createPaymentLinkMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <CreditCard className="h-3 w-3" />
+                          )}
+                          {kind === "deposit" ? "訂金連結" : kind === "balance" ? "尾數連結" : "全數連結"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {paymentLinks && paymentLinks.length > 0 ? (
+                    <div className="space-y-2">
+                      {paymentLinks.slice(0, 5).map((link) => (
+                        <div
+                          key={link.id}
+                          className="flex items-center justify-between gap-2 text-xs py-1.5 px-2 rounded"
+                          style={{ background: "rgba(126,184,247,0.06)", border: "1px solid rgba(126,184,247,0.12)" }}
+                        >
+                          <div className="min-w-0">
+                            <span style={{ color: link.status === "PAID" ? "#6fcf6f" : "#aaa" }}>
+                              {link.kind === "deposit" ? "訂金" : link.kind === "balance" ? "尾數" : "全數"}
+                              {" · "}
+                              {link.currency} {Number(link.amount).toLocaleString()}
+                              {" · "}
+                              {link.status === "PAID" ? "已付" : "待付"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {link.status !== "PAID" && (
+                              <>
+                                <button
+                                  onClick={() => copyPaymentLink(link.url)}
+                                  className="p-1 rounded hover:opacity-80"
+                                  title="複製連結"
+                                  style={{ color: "#7eb8f7" }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 rounded hover:opacity-80"
+                                  title="開啟付款頁"
+                                  style={{ color: "#7eb8f7" }}
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs" style={{ color: "#555" }}>
+                      按上方按鈕建立付款連結，客人付清後 webhook 會自動更新付款狀態。
+                    </p>
+                  )}
                 </div>
               )}
               {/* 尚欠總額：報價總額 - 已付訂金 */}
