@@ -181,6 +181,92 @@ export async function getAirwallexAccessToken(): Promise<string> {
   return body.token;
 }
 
+export function inferPaymentKindForQuote(
+  quote: {
+    paymentStatus: string;
+    total: string | number;
+    depositMode?: string | null;
+    depositPercent?: string | number | null;
+    depositFixedAmount?: string | number | null;
+    depositPaidAmount?: string | number | null;
+  },
+  amount: number
+): AirwallexPaymentLinkKind | null {
+  if (quote.paymentStatus === "fully_paid") return null;
+  if (quote.paymentStatus === "deposit_paid") return "balance";
+
+  const total = Number(quote.total) || 0;
+  const amt = roundMoney(amount);
+  const deposit = computeQuoteDepositAmount(quote);
+
+  if (amt >= total - 0.01) return "full";
+  if (deposit > 0 && deposit < total && Math.abs(amt - deposit) <= 1) return "deposit";
+  if (deposit > 0 && deposit < total && amt < total) return "deposit";
+  return "full";
+}
+
+export type AirwallexPaymentIntentSummary = {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reference?: string;
+  merchantOrderId?: string;
+  metadata?: Record<string, string>;
+  paymentLinkId?: string;
+  updatedAt?: string;
+  createdAt?: string;
+};
+
+export async function listRecentSucceededPaymentIntents(
+  sinceHours = 72
+): Promise<AirwallexPaymentIntentSummary[]> {
+  const token = await getAirwallexAccessToken();
+  const from = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+  const url = new URL(`${getAirwallexBaseUrl()}/api/v1/pa/payment_intents`);
+  url.searchParams.set("page_size", "100");
+  url.searchParams.set("status", "SUCCEEDED");
+  url.searchParams.set("from_created_at", from);
+
+  const resp = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const body = (await resp.json().catch(() => ({}))) as {
+    items?: Array<Record<string, unknown>>;
+    message?: string;
+  };
+
+  if (!resp.ok) {
+    throw new Error(body.message || `Airwallex list payment intents failed (${resp.status})`);
+  }
+
+  return (body.items ?? []).map((item) => {
+    const meta = (item.metadata as Record<string, string> | undefined) ?? {};
+    return {
+      id: String(item.id ?? ""),
+      amount: Number(item.amount ?? 0),
+      currency: String(item.currency ?? "HKD"),
+      status: String(item.status ?? ""),
+      reference: item.reference != null ? String(item.reference) : undefined,
+      merchantOrderId:
+        item.merchant_order_id != null ? String(item.merchant_order_id) : undefined,
+      metadata: meta,
+      paymentLinkId:
+        item.payment_link_id != null
+          ? String(item.payment_link_id)
+          : (item.payment_link as Record<string, unknown> | undefined)?.id != null
+            ? String((item.payment_link as Record<string, unknown>).id)
+            : undefined,
+      updatedAt: item.updated_at != null ? String(item.updated_at) : undefined,
+      createdAt: item.created_at != null ? String(item.created_at) : undefined,
+    };
+  }).filter((i) => i.id && i.amount > 0);
+}
+
 export async function createAirwallexPaymentLink(input: {
   title: string;
   amount: number;

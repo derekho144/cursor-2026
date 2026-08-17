@@ -184,6 +184,18 @@ export default function QuoteDetail() {
     onError: (e) => toast.error(`建立付款連結失敗：${e.message}`),
   });
 
+  const syncAirwallexMutation = trpc.quotes.syncAirwallexPayments.useMutation({
+    onSuccess: (data) => {
+      utils.quotes.getById.invalidate({ id: quoteId });
+      if (data.applied > 0) {
+        toast.success(`已自動確認 ${data.applied} 筆 Airwallex 付款`);
+      } else {
+        toast.info(`已檢查 ${data.scanned} 筆，暫無新付款需確認`);
+      }
+    },
+    onError: (e) => toast.error(`同步失敗：${e.message}`),
+  });
+
   async function copyPaymentLink(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -850,6 +862,24 @@ export default function QuoteDetail() {
                       Airwallex 線上付款
                     </span>
                     <div className="flex flex-wrap gap-1.5 justify-end">
+                      <button
+                        onClick={() => syncAirwallexMutation.mutate({ sinceHours: 168 })}
+                        disabled={syncAirwallexMutation.isPending}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] rounded transition-all hover:opacity-80 disabled:opacity-50"
+                        style={{
+                          border: "1px solid rgba(111,207,111,0.35)",
+                          color: "#6fcf6f",
+                          letterSpacing: "0.06em",
+                        }}
+                        title="從 Airwallex 拉取最近付款並自動確認訂金／尾款"
+                      >
+                        {syncAirwallexMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3 w-3" />
+                        )}
+                        同步入帳
+                      </button>
                       {((quote as any).paymentStatus === "unpaid"
                         ? (["deposit", "full"] as const)
                         : (["balance"] as const)

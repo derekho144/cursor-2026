@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeQuoteBalanceAmount,
   computeQuoteDepositAmount,
+  inferPaymentKindForQuote,
   paymentAmountForKind,
   roundMoney,
   suggestPaymentKind,
@@ -59,6 +60,23 @@ describe("Airwallex payment amounts", () => {
 
   it("rounds money to 2 decimals", () => {
     expect(roundMoney(123.456)).toBe(123.46);
+  });
+  it("infers balance when deposit already paid", () => {
+    expect(
+      inferPaymentKindForQuote(
+        { paymentStatus: "deposit_paid", total: 10000, depositPercent: 50, depositMode: "percent" },
+        5000
+      )
+    ).toBe("balance");
+  });
+
+  it("infers deposit from amount", () => {
+    expect(
+      inferPaymentKindForQuote(
+        { paymentStatus: "unpaid", total: 10000, depositPercent: 50, depositMode: "percent" },
+        5000
+      )
+    ).toBe("deposit");
   });
 });
 

@@ -28,6 +28,7 @@ import { isAirwallexConfigured } from "../airwallex";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
+  syncRecentAirwallexPayments,
 } from "../airwallexPayment";
 // Legacy HTML PDF (unused): keep re-export for tests only — live generation uses PDFKit.
 
@@ -659,7 +660,27 @@ ${itemsText}
   airwallexStatus: protectedProcedure.query(() => ({
     configured: isAirwallexConfigured(),
     webhookUrl: `${ENV.publicBaseUrl}/api/webhooks/airwallex`,
+    webhookEvents: ["payment_intent.succeeded", "payment_link.paid"],
   })),
+
+  syncAirwallexPayments: protectedProcedure
+    .input(z.object({ sinceHours: z.number().min(1).max(168).optional() }).optional())
+    .mutation(async ({ input }) => {
+      if (!isAirwallexConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Airwallex 未設定",
+        });
+      }
+      try {
+        return await syncRecentAirwallexPayments(input?.sinceHours ?? 72);
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "同步失敗",
+        });
+      }
+    }),
 
   listPaymentLinks: protectedProcedure
     .input(z.object({ id: z.number() }))

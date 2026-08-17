@@ -8,6 +8,8 @@ import {
 import { getDb } from "./db";
 import {
   createAirwallexPaymentLink,
+  inferPaymentKindForQuote,
+  listRecentSucceededPaymentIntents,
   paymentAmountForKind,
   paymentKindLabel,
   paymentKindLabelZh,
@@ -108,6 +110,21 @@ async function getAirwallexLinkByPaymentIntentId(
     .where(eq(airwallexPaymentLinks.paymentIntentId, paymentIntentId))
     .limit(1);
   return row ?? null;
+}
+
+async function getAcceptedQuoteById(quoteId: number): Promise<Quote | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [quote] = await db
+    .select()
+    .from(quotesTable)
+    .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.status, "accepted")))
+    .limit(1);
+  return quote ?? null;
+}
+
+function paymentIntentAlreadyRecorded(notes: string | null | undefined, paymentIntentId: string): boolean {
+  return Boolean(notes?.includes(paymentIntentId));
 }
 
 async function getAcceptedQuoteByNumber(quoteNumber: string): Promise<Quote | null> {
@@ -336,6 +353,20 @@ export async function resolveAirwallexPaymentNotification(
     if (quote) quoteId = quote.id;
   }
 
+  if (quoteId && (!kind || !amount)) {
+    const quote = await getAcceptedQuoteById(quoteId);
+    if (quote) {
+      if (!kind && amount) {
+        kind = inferPaymentKindForQuote(quote, amount) ?? undefined;
+      } else if (kind && !amount) {
+        amount = paymentAmountForKind(quote, kind);
+      } else if (!kind && !amount) {
+        kind = suggestPaymentKind(quote);
+        amount = paymentAmountForKind(quote, kind);
+      }
+    }
+  }
+
   if (!quoteId || !kind || !amount || amount <= 0) return null;
 
   return {
@@ -384,6 +415,17 @@ export async function applyAirwallexPaymentToQuote(input: {
     return {
       applied: false,
       reason: "quote_not_accepted",
+      quoteId: quote.id,
+    };
+  }
+
+  if (
+    input.paymentIntentId &&
+    paymentIntentAlreadyRecorded(quote.paymentNotes, input.paymentIntentId)
+  ) {
+    return {
+      applied: false,
+      reason: "duplicate_payment_intent",
       quoteId: quote.id,
     };
   }
@@ -460,4 +502,40 @@ export async function processAirwallexPaymentNotification(
     paymentLinkId: resolved.paymentLinkId,
     source: "webhook",
   });
+}
+
+/** Pull recent succeeded Airwallex payments and apply any not yet recorded. */
+export async function syncRecentAirwallexPayments(sinceHours = 72): Promise<{
+  scanned: number;
+  applied: number;
+  skipped: number;
+  results: AirwallexPaymentApplyResult[];
+}> {
+  const intents = await listRecentSucceededPaymentIntents(sinceHours);
+  const results: AirwallexPaymentApplyResult[] = [];
+  let applied = 0;
+  let skipped = 0;
+
+  for (const intent of intents) {
+    const meta = intent.metadata ?? {};
+    const quoteNumber =
+      meta.quoteNumber ?? intent.reference ?? intent.merchantOrderId;
+    const result = await processAirwallexPaymentNotification({
+      paymentIntentId: intent.id,
+      paymentLinkId: intent.paymentLinkId,
+      quoteId: Number(meta.quoteId) || undefined,
+      quoteNumber,
+      kind:
+        meta.kind === "deposit" || meta.kind === "balance" || meta.kind === "full"
+          ? meta.kind
+          : undefined,
+      amount: intent.amount,
+      paidAt: new Date(intent.updatedAt ?? intent.createdAt ?? Date.now()),
+    });
+    results.push(result);
+    if (result.applied) applied += 1;
+    else skipped += 1;
+  }
+
+  return { scanned: intents.length, applied, skipped, results };
 }

@@ -66,6 +66,19 @@ async function startServer() {
     res.json({ ok: true, ts: new Date().toISOString(), message: "Server is alive" });
   });
 
+  // ─── Scheduled: Airwallex payment sync (backup if webhook missed) ────────
+  app.post("/api/scheduled/airwallex-sync", async (req, res) => {
+    const { sdk: authSdk } = await import("./sdk");
+    let user: any = null;
+    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
+    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    res.json({ ok: true, started: true, time: new Date().toISOString() });
+    import("../airwallexPayment")
+      .then(({ syncRecentAirwallexPayments }) => syncRecentAirwallexPayments(48))
+      .then((r) => console.log(`[Airwallex Sync] scanned=${r.scanned} applied=${r.applied}`))
+      .catch((err) => console.error("[Airwallex Sync] Error:", err));
+  });
+
   // ─── Resend Webhook: email open tracking ─────────────────────────────
   // Resend sends POST to /api/webhooks/resend when an email is opened
   // Event types: email.opened, email.clicked, email.delivered, email.bounced
