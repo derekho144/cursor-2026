@@ -28,6 +28,7 @@ import { freehunterJobs, emailInquiries } from "../../drizzle/schema";
 import { eq, like, or, and, desc } from "drizzle-orm";
 import { resolveQuoteLeadSource } from "../_core/leadSource";
 import { appBaseUrl, buildWaTrackUrl, waTrackAnchor } from "../_core/waTracking";
+import { CREW_BILLING_RULES, detectCrewHighValue } from "../inquiryCrewHighValue";
 
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
@@ -805,7 +806,7 @@ RETOUCHING SUMMARY (CRITICAL):
 
 IMPORTANT RULES FOR ALL SERVICE TYPES:
 1. ALWAYS extract quantity signals from the email: number of items/products/dishes/hours/rooms/pieces mentioned.
-2. If no quantity is mentioned, use the DEFAULT VALUE above and append "(assumed X - please confirm)" to the item description.
+2. If no quantity is mentioned, use the DEFAULT VALUE above and append "(assumed X - please confirm)" to the item description.${CREW_BILLING_RULES}
 3. Transportation Fee is ALWAYS HKD 320 (fixed). Never change this amount.
 4. pricingMid MUST equal the exact sum of (quantity x unitPrice) across all suggestedItems.
 5. pricingLow = pricingMid x 0.7 (rounded to nearest 100). pricingHigh = pricingMid x 1.35 (rounded to nearest 100).
@@ -1351,10 +1352,19 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程，不應進入此流程）
     const isFHSource = isFreehunterEmail(fromEmail, htmlBody);
     const isHighConfidence = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
-    // High-value inquiry: pricingMid >= HK$8,000 → meeting flow instead of auto-send
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
-    const isHighValue = isHighConfidence && !isFHSource && estimatedTotal >= HIGH_VALUE_THRESHOLD;
+    const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}`);
+    // High-value: pricingMid >= HK$8,000, OR 2+ cameras/photographers, OR video team
+    const isHighValue =
+      !isFHSource &&
+      (crewSignal.highValue ||
+        (isHighConfidence && estimatedTotal >= HIGH_VALUE_THRESHOLD));
+    if (isHighValue && crewSignal.highValue) {
+      console.log(
+        `[EmailInquiry] Crew high-value override for ${fromEmail}: ${crewSignal.reasons.join(", ")}`
+      );
+    }
     const inquiryStatus = isHighConfidence && !isFHSource && !isHighValue ? "pending_send" : "pending";
     // Generate meeting email draft for high-value inquiries using LLM
     let meetingEmailDraft: string | undefined;
@@ -1562,10 +1572,18 @@ export const emailInquiriesRouter = router({
         // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程）
         const isFHSrc = isFreehunterEmail(fromEmail, htmlBody);
         const isHighConf = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
-        // High-value inquiry: pricingMid >= HK$8,000 → meeting flow instead of auto-send
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
-        const isHighValueScan = isHighConf && !isFHSrc && estimatedTotalScan >= HIGH_VALUE_THRESHOLD_SCAN;
+        const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}`);
+        const isHighValueScan =
+          !isFHSrc &&
+          (crewSignalScan.highValue ||
+            (isHighConf && estimatedTotalScan >= HIGH_VALUE_THRESHOLD_SCAN));
+        if (isHighValueScan && crewSignalScan.highValue) {
+          console.log(
+            `[EmailInquiry] scanGmail crew high-value override for ${fromEmail}: ${crewSignalScan.reasons.join(", ")}`
+          );
+        }
         const inqStatus = isHighConf && !isFHSrc && !isHighValueScan ? "pending_send" : "pending";
         let meetingEmailDraftScan: string | undefined;
         if (isHighValueScan) {
