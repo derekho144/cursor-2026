@@ -371,19 +371,18 @@ export default function LinkedInOps() {
       <div className="min-w-0">
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">LinkedIn 營運</h1>
         <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-          內容工廠：每週 3 篇 → 批核 → Buffer → LinkedIn 自動發佈。招聘 DM／聯絡人跟進請去「客戶開拓」。
+          內容工廠：每週 2 篇（項目案例＋幕後 · 數據＋視覺）→ 批核 → Buffer → LinkedIn 自動發佈。招聘 DM／聯絡人跟進請去「客戶開拓」。
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-3 sm:px-4 text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
-          每週 3 篇：項目＋幕後 · 教育＋洞察 · 數據＋視覺。批准後經 Buffer 自動發 LinkedIn。
+          每週 2 篇：項目案例＋幕後（真實工作流程）· 數據＋視覺化（吸引商業客戶）。批准後經 Buffer 自動發 LinkedIn。
           <div className="text-xs mt-1 break-words">{contentMeta?.scheduleNote}</div>
           {contentMeta?.typeBlurbs && (
             <ul className="text-xs mt-2 space-y-1.5 list-none">
-              <li>🥇 項目案例 + 幕後故事 — {(contentMeta.typeBlurbs as any).project_bts}</li>
-              <li>🥈 攝影教育 + 行業洞察 — {(contentMeta.typeBlurbs as any).photo_education}</li>
-              <li>🥉 數據 + 視覺化 — {(contentMeta.typeBlurbs as any).data_viz}</li>
+              <li>① 項目案例 + 幕後故事 — {(contentMeta.typeBlurbs as any).project_bts}</li>
+              <li>② 數據 + 視覺化 — {(contentMeta.typeBlurbs as any).data_viz}</li>
             </ul>
           )}
           {(contentMeta as any)?.buffer && (
@@ -563,7 +562,7 @@ export default function LinkedInOps() {
                     <Input
                       value={sbExperiment}
                       onChange={(e) => setSbExperiment(e.target.value)}
-                      placeholder="例如：教育帖加 DM CTA"
+                      placeholder="例如：數據帖加預算對比圖"
                     />
                   </div>
                   <div>
@@ -581,7 +580,7 @@ export default function LinkedInOps() {
                         <SelectValue placeholder="選一個" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="keep">維持 3 篇／週</SelectItem>
+                        <SelectItem value="keep">維持 2 篇／週</SelectItem>
                         <SelectItem value="improve_cta">改 CTA／導流</SelectItem>
                         <SelectItem value="reduce">減產，轉 outreach</SelectItem>
                         <SelectItem value="scale_winner">放大勝出題材</SelectItem>
@@ -752,7 +751,7 @@ export default function LinkedInOps() {
                 </div>
               ) : (assets?.length ?? 0) === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground border border-dashed rounded-md">
-                  未有相片 — 上傳後，「生成本週 3 篇」會自動抽相
+                  未有相片 — 上傳後，「生成本週 2 篇」會自動抽相
                 </div>
               ) : (
                 <div className="max-h-56 sm:max-h-64 overflow-y-auto rounded-md border bg-muted/10 p-2">
@@ -829,7 +828,7 @@ export default function LinkedInOps() {
               onClick={() => {
                 if (
                   confirm(
-                    "取消全部未發佈排程（含 Buffer），並按時間表重新生成？\n（Tue 08:00 項目 · Wed 12:00 教育 · Fri 16:00 數據；若本週已過會自動轉下週）"
+                    "取消全部未發佈排程（含 Buffer），並按時間表重新生成？\n（Tue 08:00 項目案例＋幕後 · Fri 16:00 數據＋視覺；若本週已過會自動轉下週）"
                   )
                 ) {
                   resetRegen.mutate();
@@ -845,7 +844,7 @@ export default function LinkedInOps() {
               disabled={genWeek.isPending || resetRegen.isPending}
             >
               {genWeek.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {(contentStats?.weekPending ?? 0) > 0 ? "重新生成 3 篇" : "生成本週 3 篇"}
+              {(contentStats?.weekPending ?? 0) > 0 ? "重新生成 2 篇" : "生成本週 2 篇"}
             </Button>
           </div>
         </div>
@@ -915,7 +914,7 @@ export default function LinkedInOps() {
                 </Button>
               </>
             ) : (
-              <p>未有內容 — 撳「生成本週 3 篇」或等週一上午自動產生</p>
+              <p>未有內容 — 撳「生成本週 2 篇」或等週一上午自動產生</p>
             )}
           </div>
         ) : (

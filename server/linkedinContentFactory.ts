@@ -1,9 +1,9 @@
 /**
  * LinkedIn Content Factory — Authority 內容工廠
- * 每週自動產出 3 類高互動草稿（研究 Type A/B/C）：
- * 1) 項目案例 + 幕後故事
- * 2) 攝影教育 + 行業洞察
- * 3) 數據 + 視覺化
+ * 每週自動產出 2 類高互動草稿：
+ * 1) 項目案例 + 幕後故事 — 展示真實工作流程
+ * 2) 數據 + 視覺化 — 吸引商業客戶
+ * （教育／洞察已停產；舊稿仍可顯示）
  * 你批核 → Buffer → LinkedIn
  */
 import { getDb } from "./db";
@@ -46,7 +46,7 @@ export const CONTENT_TYPE_LABELS: Record<LinkedInContentType, string> = {
 
 export const CONTENT_TYPE_BLURBS: Record<LinkedInContentType, string> = {
   project_bts: "展示真實工作流程",
-  photo_education: "建立思想領導力",
+  photo_education: "（已停產）建立思想領導力",
   data_viz: "吸引商業客戶",
 };
 
@@ -69,11 +69,13 @@ function getMondayHkt(date = new Date()): Date {
   return new Date(monday.getTime() - 8 * 60 * 60 * 1000);
 }
 
-const WEEK_SLOTS: Array<{ type: LinkedInContentType; dayOffset: number; hourHkt: number }> = [
+/** Active weekly cadence — education posts are no longer generated. */
+export const WEEK_SLOTS: Array<{ type: LinkedInContentType; dayOffset: number; hourHkt: number }> = [
   { type: "project_bts", dayOffset: 1, hourHkt: 8 }, // Tue 8–9am → 08:00
-  { type: "photo_education", dayOffset: 2, hourHkt: 12 }, // Wed 12–1pm → 12:00
   { type: "data_viz", dayOffset: 4, hourHkt: 16 }, // Fri 4–5pm → 16:00
 ];
+
+export const ACTIVE_CONTENT_TYPES: LinkedInContentType[] = WEEK_SLOTS.map((s) => s.type);
 
 export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt: number): Date {
   const hktMidnight = weekMondayUtc.getTime() + 8 * 60 * 60 * 1000;
@@ -83,7 +85,7 @@ export function scheduledForSlot(weekMondayUtc: Date, dayOffset: number, hourHkt
 
 /**
  * Content week for generation/UI: if this week's Fri 16:00 HKT is already past,
- * roll forward to next Mon–Fri timetable (Tue 08 / Wed 12 / Fri 16).
+ * roll forward to next Mon–Fri timetable (Tue 08 / Fri 16).
  */
 export function resolveContentWeek(date = new Date()): {
   weekKey: string;
@@ -400,7 +402,7 @@ export async function pickAssetsForType(
 
   try {
     const { harvestJdStudioWebsiteImages } = await import("./jdStudioWebsiteImages");
-    // Always tag harvested stock as "any" so all 3 themes can use them.
+    // Always tag harvested stock as "any" so both active themes can use them.
     // (Theme-specific tags are for manually curated uploads.)
     const imported = await harvestJdStudioWebsiteImages({
       maxNew: Math.max(maxAssets * 2, 8),
@@ -544,11 +546,12 @@ function buildAssetBrief(assets: LinkedInContentAsset[]): string {
 
 const TYPE_PROMPTS: Record<LinkedInContentType, { angle: string; mediaHint: string }> = {
   project_bts: {
-    angle: `Theme Type A only — Michele Galeotto 項目案例 + 幕後.
-ENGLISH primary project diary + reflection. Open on what happened on set. Honest challenge vivid photo beat quiet insight soft CTA then site line.
-Then --- short 繁中 digest. No punctuation. Match real shoot type.`,
+    angle: `Theme Type A only — 項目案例 + 幕後故事. Goal: show the REAL work process so commercial buyers trust how JD shoots.
+ENGLISH primary: walk through the job as it actually happened — brief → constraints → on-set choices → one unrehearsed beat → what we delivered.
+Open on the work not the studio intro. Honest friction. Specific process (crew lighting timing client note) from captions only when real.
+Soft CTA then site line. Then --- short 繁中 digest. No punctuation. Match real shoot type.`,
     mediaHint:
-      "輪播 Type A（5–7 頁）：P1 故事開場 → P2 真實挑戰 → P3 現場選擇 → P4 幕後一刻 → P5 結果 → P6 思考 → P7 CTA",
+      "輪播 Type A（5–7 頁）：P1 真實現場開場 → P2 簡報／限制 → P3 現場流程選擇 → P4 幕後一刻 → P5 結果 → P6 從呢單學到嘅流程判斷 → P7 CTA",
   },
   photo_education: {
     angle: `Theme Type B only — Educator / Myth-bust 攝影教育 + 行業洞察.
@@ -558,11 +561,11 @@ Then --- short 繁中 digest. No punctuation.`,
       "輪播 Type B（5–6 頁）：P1 點解／迷思 Hook → P2 ❌ vs ✓ → P3 對比例子 → P4 可練習做法 → P5 行業洞察 → P6 CTA",
   },
   data_viz: {
-    angle: `Theme Type C only — Commercial data 數據 + 視覺化.
-ENGLISH primary: number with stakes → second figure → buyer meaning → craft judgment → soft CTA → site line.
-Then --- short 繁中 digest. No fake JD ROI. No punctuation.`,
+    angle: `Theme Type C only — 數據 + 視覺化. Goal: attract commercial / brand / marketing buyers who decide with numbers.
+ENGLISH primary: one surprising production or buyer number with stakes → second figure or comparison → what it means for brand teams upstairs → one JD craft judgment → soft CTA → site line.
+Write for marketing managers not photographers. No fake JD ROI. Then --- short 繁中 digest. No punctuation.`,
     mediaHint:
-      "輪播 Type C（4–5 頁）：P1 有張力數字 → P2 第二組數字／對比 → P3 對買家意味 → P4 判斷 → P5 CTA",
+      "輪播 Type C（4–5 頁）：P1 有張力商業數字 → P2 第二組數字／對比 → P3 對品牌／市場部意味 → P4 判斷 → P5 CTA",
   },
 };
 
@@ -1157,7 +1160,7 @@ export async function runScheduledContentFactory(): Promise<void> {
         title: `✍️ LinkedIn 內容工廠：本週 ${result.created} 篇草稿待批核`,
         content: [
           `週次：${result.weekKey}`,
-          `主題：輪播案例 · 外包vs自聘 · 反常識`,
+          `主題：項目案例＋幕後（真實流程）· 數據＋視覺化（商業客戶）`,
           `新增草稿：${result.created}`,
           `已有（略過）：${result.existing}`,
           `請到「LinkedIn 營運 → 內容工廠」批核。`,

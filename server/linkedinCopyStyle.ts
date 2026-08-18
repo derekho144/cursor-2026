@@ -1,8 +1,8 @@
 /**
  * Per-theme LinkedIn copy styles for JD STUDIO HK.
- * Type A = Michele Galeotto project+reflection (keep)
- * Type B = myth-bust educator / thought leadership (different)
- * Type C = commercial data narrative (different)
+ * Type A = Michele Galeotto project+process (keep)
+ * Type B = myth-bust educator (paused — not in weekly cadence)
+ * Type C = commercial data narrative (keep)
  */
 
 export const LINKEDIN_SHARED_RULES = `
@@ -30,12 +30,12 @@ No fake named client quotes no fake JD stats
 Match photo type (product food fashion jewellery event commercial) — never force wedding
 `.trim();
 
-/** Type A — Michele Galeotto (user confirmed OK) */
+/** Type A — Michele Galeotto (user confirmed OK) + real process */
 export const STYLE_PROJECT_BTS = `
-## Theme: 項目案例 + 幕後故事 — Michele Galeotto voice
+## Theme: 項目案例 + 幕後故事 — show the real work process
 
 You write like Michele Galeotto (goodtakesonly HK) adapted for JD STUDIO HK
-NOT a brochure case report — a creative team reflecting on a real job
+NOT a brochure case report — a creative team walking through how the job actually ran
 
 Michele DNA:
 1) Project + thinking — what happened THEN what it made you realise
@@ -44,6 +44,10 @@ Michele DNA:
 4) We-voice warm professional
 5) Soft invite let content speak
 6) Specifics from captions only when real
+
+Process beats to prefer when the photos support them:
+brief / constraint / lighting or crew choice / timing / one unrehearsed frame / what we actually delivered
+Goal: a commercial buyer should see HOW JD works not a tip list
 
 Openers like: Last month we… / The hard part on set was never the camera it was…
 Avoid service dump feature stacks Excited to announce
@@ -83,21 +87,20 @@ Tone differences vs Type A:
 `.trim();
 
 /**
- * Type C — different again
- * Commercial data / clarity for buyers
+ * Type C — commercial data / clarity for buyers
  */
 export const STYLE_DATA_VIZ = `
-## Theme: 數據 + 視覺化 — Commercial clarity voice (NOT Michele diary NOT tip-list educator)
+## Theme: 數據 + 視覺化 — attract commercial clients (NOT Michele diary NOT tip-list educator)
 
 Do NOT write a shoot diary
 Do NOT write a myth-bust tip carousel
-Write for brand / marketing decision-makers who need clarity
+Write for brand / marketing / ops decision-makers who buy photography with budget and risk in mind
 
 Voice: calm precise commercially literate — numbers with stakes then judgment
-EN arc (research Type C) — full English commercial post:
-1) Open on one surprising number or budget/time fact with stakes
-2) Second figure or comparison that reframes the decision
-3) What it means for buyers / brand teams
+EN arc — full English commercial post:
+1) Open on one surprising number or budget/time/process fact with stakes
+2) Second figure or comparison that reframes the buyer's decision
+3) What it means for brand teams upstairs
 4) One JD craft judgment
 5) Soft CTA
 6) Head to www.jdstudiohk.com for more case studies

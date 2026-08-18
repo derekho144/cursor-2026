@@ -25,6 +25,8 @@ import {
   ensureSelectedMediaForType,
   CONTENT_TYPE_LABELS,
   CONTENT_TYPE_BLURBS,
+  ACTIVE_CONTENT_TYPES,
+  WEEK_SLOTS,
   notifyDuePublishes,
   getWeekRangeUtc,
 } from "../linkedinContentFactory";
@@ -217,13 +219,15 @@ export const linkedinContentRouter = router({
     return {
       typeLabels: CONTENT_TYPE_LABELS,
       typeBlurbs: CONTENT_TYPE_BLURBS,
+      activeTypes: ACTIVE_CONTENT_TYPES,
+      postsPerWeek: WEEK_SLOTS.length,
       statusLabels: STATUS_LABELS,
       categoryLabels: CATEGORY_LABELS,
       preferredLabels: PREFERRED_LABELS,
       bufferStatusLabels: BUFFER_STATUS_LABELS,
       buffer,
       scheduleNote:
-        "每週自動（HKT）：Tue 08:00 項目＋幕後 · Wed 12:00 教育＋洞察 · Fri 16:00 數據＋視覺。批准後推去 Buffer。抽相：每張最多用 2 次。超過 3 週嘅高表現帖可自動重發一次。",
+        "每週自動 2 篇（HKT）：Tue 08:00 項目案例＋幕後（真實工作流程）· Fri 16:00 數據＋視覺化（吸引商業客戶）。教育／洞察已停產。批准後推去 Buffer。抽相：每張最多用 2 次。超過 3 週嘅高表現帖可自動重發一次。",
     };
   }),
 
