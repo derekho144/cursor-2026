@@ -1355,7 +1355,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
     const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}`);
-    // High-value: pricingMid >= HK$8,000, OR 2+ cameras/photographers, OR video team
+    // High-value: pricingMid >= HK$8,000, OR video team (2+ photographers alone is not enough)
     const isHighValue =
       !isFHSource &&
       (crewSignal.highValue ||
@@ -1575,6 +1575,7 @@ export const emailInquiriesRouter = router({
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
         const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}`);
+        // High-value: pricingMid >= HK$8,000, OR video team (2+ photographers alone is not enough)
         const isHighValueScan =
           !isFHSrc &&
           (crewSignalScan.highValue ||

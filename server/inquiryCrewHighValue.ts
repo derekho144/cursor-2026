@@ -61,15 +61,13 @@ export function detectCrewHighValue(subjectAndBody: string): CrewHighValueSignal
     /(助理|團隊).{0,8}(video|錄影|攝錄)/i.test(text);
 
   const reasons: string[] = [];
-  if (photographerCount >= 2) reasons.push(`${photographerCount} photographers`);
-  if (cameraCount >= 2) reasons.push(`${cameraCount} cameras`);
   if (hasVideoTeam) reasons.push("video team");
   if (assistantCount >= 2 && hasVideoTeam) reasons.push(`${assistantCount} video assistants`);
 
-  const highValue =
-    photographerCount >= 2 ||
-    cameraCount >= 2 ||
-    hasVideoTeam;
+  // 2+ photographers / cameras is NOT automatically high-value
+  // (e.g. 2 photographers × 3 hours can be under HK$8,000).
+  // Video crew/team always is. Photographer headcount is priced in AI rules, then $8,000 applies.
+  const highValue = hasVideoTeam;
 
   return {
     highValue,
@@ -100,8 +98,8 @@ Example — "2 Chief photographer + 2 拍攝助理 (video)", duration not stated
   Transport HKD 320
   TOTAL ≈ HKD 17,220
 
-HIGH-VALUE OVERRIDE (must follow even if hours are short):
-  - 2 or more photographers / cameras / 機 → HIGH VALUE
-  - Any video team / videographer / 拍攝助理 (video) / video crew → HIGH VALUE
-  These inquiries go to the meeting-email flow, not a cheap single-cam quote.
+HIGH-VALUE OVERRIDE (code + prompt):
+  - Video team / videographer / 拍攝助理 (video) / video crew → HIGH VALUE (meeting email).
+  - 2+ photographers or 2 cameras alone is NOT automatically high value
+    (2 photographers × 3 hours can be under HK$8,000). Price per head, then apply the HK$8,000 total threshold.
 `;
