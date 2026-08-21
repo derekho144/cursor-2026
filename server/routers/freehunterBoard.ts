@@ -175,18 +175,32 @@ export const freehunterBoardRouter = router({
           .select({ lastScrapedAt: sql<Date | null>`MAX(${freehunterJobs.scrapedAt})` })
           .from(freehunterJobs);
         const lastDb = row?.lastScrapedAt ? new Date(row.lastScrapedAt) : null;
-        const { lastFreehunterScrapeAt, lastFreehunterScrapeResult } = await import("../scheduler");
+        const {
+          lastFreehunterScrapeAt,
+          lastFreehunterScrapeResult,
+          getPersistedFreehunterScrapeStatus,
+        } = await import("../scheduler");
         const { getWatchdogStatus } = await import("../watchdog");
+        const persisted = await getPersistedFreehunterScrapeStatus();
         const lastMem = lastFreehunterScrapeAt;
         const lastAt =
-          [lastDb, lastMem].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null;
+          [lastDb, lastMem, persisted.at]
+            .filter(Boolean)
+            .sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null;
         const ageHours = lastAt ? (Date.now() - lastAt.getTime()) / (3600 * 1000) : null;
         const hktHour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
         const inActiveHours = hktHour >= 8 && hktHour < 21;
         const scrapeStale = inActiveHours && (ageHours == null || ageHours > 2);
+        const lastScrapeResult =
+          lastFreehunterScrapeResult ??
+          (persisted.ok === true && persisted.newJobs != null
+            ? { newJobs: persisted.newJobs, emailsFetched: persisted.emailsFetched ?? 0 }
+            : null);
         return {
           lastScrapedAt: lastAt?.toISOString() ?? null,
-          lastScrapeResult: lastFreehunterScrapeResult,
+          lastScrapeResult,
+          lastScrapeOk: persisted.ok,
+          lastScrapeRaw: persisted.raw,
           ageHours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
           scrapeStale,
           sessionConnected: sessionStatus.connected,
@@ -288,10 +302,24 @@ export const freehunterBoardRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
+        const { recordFreehunterScrapeResult } = await import("../scheduler");
+        const { releaseLock } = await import("../schedulerLock");
+        // Clear any stuck scrape mutex so manual trigger always runs
+        await releaseLock("fh-scrape").catch(() => {});
         const result = await scrapeFreehunterBoard(input.fetchEmails, input.maxJobs);
+        await recordFreehunterScrapeResult({
+          ok: result.success,
+          newJobs: result.newJobs,
+          emailsFetched: result.emailsFetched,
+          error: result.error,
+        });
         return result;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
+        try {
+          const { recordFreehunterScrapeResult } = await import("../scheduler");
+          await recordFreehunterScrapeResult({ ok: false, error: msg });
+        } catch (_) {}
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: msg });
       }
     }),

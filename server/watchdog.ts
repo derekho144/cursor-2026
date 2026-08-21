@@ -170,19 +170,20 @@ async function checkFHSessionHealth(): Promise<{ ok: boolean; alerts: string[] }
 // ─── Check C: FH scrape staleness ─────────────────────────────────────────────
 
 function checkFHScrapeStaleness(): { stale: boolean; alerts: string[] } {
+  // Async persistence is checked in runWatchdog via getPersistedFreehunterScrapeStatus
   const alerts: string[] = [];
 
   if (!isWithinActiveHours()) return { stale: false, alerts };
 
   if (!lastFreehunterScrapeAt) {
-    // Server just started, not a stale condition
+    // Server just started — do not treat as stale yet (persisted check runs separately)
     return { stale: false, alerts };
   }
 
   const elapsed = Date.now() - lastFreehunterScrapeAt.getTime();
   if (elapsed > TWO_HOURS_MS) {
     const elapsedMin = Math.round(elapsed / 60000);
-    alerts.push(`⚠️ FH 工作板已 ${elapsedMin} 分鐘未更新（正常應每 30 分鐘一次）`);
+    alerts.push(`⚠️ FH 工作板已 ${elapsedMin} 分鐘未更新（正常應每 15–30 分鐘一次）`);
     return { stale: true, alerts };
   }
 
@@ -239,6 +240,25 @@ export async function runWatchdog(): Promise<void> {
     if (sessionOk) {
       const { alerts: scrapeAlerts } = checkFHScrapeStaleness();
       allAlerts.push(...scrapeAlerts);
+
+      // Also check persisted status (survives cold start when in-memory stamp is null)
+      try {
+        const { getPersistedFreehunterScrapeStatus } = await import("./scheduler");
+        const persisted = await getPersistedFreehunterScrapeStatus();
+        if (persisted.at) {
+          const age = Date.now() - persisted.at.getTime();
+          if (age > TWO_HOURS_MS) {
+            const elapsedMin = Math.round(age / 60000);
+            allAlerts.push(
+              `⚠️ FH 持久化狀態顯示已 ${elapsedMin} 分鐘未成功爬取${persisted.raw ? `（${persisted.raw}）` : ""}`
+            );
+          } else if (persisted.ok === false) {
+            allAlerts.push(`⚠️ FH 最近一次爬取失敗：${persisted.raw || "unknown"}`);
+          }
+        } else if (!lastFreehunterScrapeAt) {
+          allAlerts.push("⚠️ FH 尚無成功爬取紀錄（Heartbeat / 排程可能未運行）");
+        }
+      } catch (_) {}
     }
 
     // Check D: Gmail scan staleness

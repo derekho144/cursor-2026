@@ -784,6 +784,9 @@ export default function FreehunterBoard() {
               {(data as any).health.lastScrapeResult
                 ? ` · 最近一次 +${(data as any).health.lastScrapeResult.newJobs} 新工作 / ${(data as any).health.lastScrapeResult.emailsFetched} 電郵`
                 : ""}
+              {(data as any).health.lastScrapeOk === false && (data as any).health.lastScrapeRaw
+                ? ` · 上次失敗：${(data as any).health.lastScrapeRaw}`
+                : ""}
             </p>
           </div>
         </div>

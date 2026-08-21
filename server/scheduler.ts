@@ -20,7 +20,7 @@ import {
 import { sendEmail } from "./resendEmail";
 import { runQuoteFollowUps } from "./gmailFollowUp";
 import { runWatchdog } from "./watchdog";
-import { withSchedulerLock } from "./schedulerLock";
+import { withSchedulerLock, releaseLock } from "./schedulerLock";
 import { runOutreachPipeline } from "./scrapers/pitchOutreach";
 import { runScheduledContentFactory, notifyDuePublishes } from "./linkedinContentFactory";
 import { buildWaTrackUrl } from "./_core/waTracking";
@@ -35,9 +35,86 @@ let gmailScanTimer: ReturnType<typeof setInterval> | null = null;
 let freehunterScrapeTimer: ReturnType<typeof setInterval> | null = null;
 let pitchOutreachTimer: ReturnType<typeof setInterval> | null = null;
 
-// Track last Freehunter scrape time
+// Track last Freehunter scrape time (in-memory; also persisted — see recordFreehunterScrapeResult)
 export let lastFreehunterScrapeAt: Date | null = null;
 export let lastFreehunterScrapeResult: { newJobs: number; emailsFetched: number } | null = null;
+
+const FH_SCRAPE_STATUS_KEY = "fh-scrape-status";
+
+/** Persist last scrape attempt so health survives cold starts / restarts. */
+export async function recordFreehunterScrapeResult(opts: {
+  ok: boolean;
+  newJobs?: number;
+  emailsFetched?: number;
+  error?: string;
+}): Promise<void> {
+  const newJobs = opts.newJobs ?? 0;
+  const emailsFetched = opts.emailsFetched ?? 0;
+  lastFreehunterScrapeAt = new Date();
+  lastFreehunterScrapeResult = { newJobs, emailsFetched };
+
+  const by = (
+    opts.ok
+      ? `ok:${newJobs}/${emailsFetched}`
+      : `fail:${(opts.error || "error").replace(/\s+/g, " ").slice(0, 55)}`
+  ).slice(0, 64);
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.execute(sql`
+      INSERT INTO scheduler_locks (lock_key, locked_at, locked_until, locked_by)
+      VALUES (${FH_SCRAPE_STATUS_KEY}, NOW(), NOW(), ${by})
+      ON DUPLICATE KEY UPDATE
+        locked_at = NOW(),
+        locked_until = NOW(),
+        locked_by = VALUES(locked_by)
+    `);
+  } catch (e) {
+    console.warn("[Scheduler] Failed to persist FH scrape status:", e);
+  }
+}
+
+/** Read persisted scrape status (for health UI after process restart). */
+export async function getPersistedFreehunterScrapeStatus(): Promise<{
+  at: Date | null;
+  ok: boolean | null;
+  newJobs: number | null;
+  emailsFetched: number | null;
+  raw: string | null;
+}> {
+  try {
+    const db = await getDb();
+    if (!db) return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+    const { schedulerLocks } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await db
+      .select({
+        at: schedulerLocks.lockedAt,
+        raw: schedulerLocks.lockedBy,
+      })
+      .from(schedulerLocks)
+      .where(eq(schedulerLocks.lockKey, FH_SCRAPE_STATUS_KEY))
+      .limit(1);
+    if (!row) return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+    const at = row.at ? new Date(row.at) : null;
+    const raw = String(row.raw ?? "");
+    if (raw.startsWith("ok:")) {
+      const [a, b] = raw.slice(3).split("/");
+      return {
+        at,
+        ok: true,
+        newJobs: Number(a) || 0,
+        emailsFetched: Number(b) || 0,
+        raw,
+      };
+    }
+    return { at, ok: false, newJobs: null, emailsFetched: null, raw };
+  } catch (e) {
+    console.warn("[Scheduler] Failed to read FH scrape status:", e);
+    return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+  }
+}
 
 const FREEHUNTER_SCRAPE_INTERVAL_MS = 15 * 60 * 1000; // every 15 minutes
 const PITCH_OUTREACH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24 hours
@@ -116,8 +193,11 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
         setTimeout(() => reject(new Error("Freehunter scrape timed out after 12 minutes")), SCRAPE_TIMEOUT_MS)
       ),
     ]);
-    lastFreehunterScrapeAt = new Date();
-    lastFreehunterScrapeResult = { newJobs: result.newJobs, emailsFetched: result.emailsFetched };
+    await recordFreehunterScrapeResult({
+      ok: true,
+      newJobs: result.newJobs,
+      emailsFetched: result.emailsFetched,
+    });
     const autoSent = result.autoEmailsSent ?? 0;
     console.log(`[Scheduler] Freehunter scrape done: ${result.newJobs} new jobs, ${result.emailsFetched} emails fetched, ${autoSent} auto emails sent`);
 
@@ -151,7 +231,11 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
       }
     }
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[Scheduler] Freehunter scrape error:", err);
+    await recordFreehunterScrapeResult({ ok: false, error: msg });
+    // Free the mutex early so the next 15-min tick (or Heartbeat) can retry
+    await releaseLock("fh-scrape").catch(() => {});
   }
   }); // end withSchedulerLock("fh-scrape")
 }
@@ -1017,7 +1101,7 @@ export function startScheduler(): void {
     runScheduledGmailScan().catch(console.error);
   }, GMAIL_SCAN_INTERVAL_MS);
 
-  // Freehunter job board scrape: every 1 hour (with time-of-day guard inside)
+  // Freehunter job board scrape: every 15 min (with time-of-day guard inside)
   freehunterScrapeTimer = setInterval(() => {
     runScheduledFreehunterScrape().catch(console.error);
   }, FREEHUNTER_SCRAPE_INTERVAL_MS);
