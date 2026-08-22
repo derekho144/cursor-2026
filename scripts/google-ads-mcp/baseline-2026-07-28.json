@@ -1,0 +1,33 @@
+{
+  "label": "pre-optimization baseline (7d window ending 2026-07-28)",
+  "capturedAt": "2026-07-28T18:23:00+08:00",
+  "compareAfter": "2026-08-04",
+  "customerId": "4839352747",
+  "campaignId": "24002224927",
+  "optimizationsAppliedAt": "2026-07-28",
+  "account": {
+    "costHkd": 661.96,
+    "impressions": 239,
+    "clicks": 25,
+    "conversions": 3,
+    "cpaHkd": 220.65,
+    "ctrPct": 10.46
+  },
+  "searchCampaign": {
+    "costHkd": 661.96,
+    "impressions": 239,
+    "clicks": 25,
+    "conversions": 3,
+    "cpaHkd": 220.65
+  },
+  "eventPhotoAdGroup": {
+    "costHkd": 240.04,
+    "clicks": 6,
+    "conversions": 1,
+    "cpaHkd": 240.04
+  },
+  "settings": {
+    "targetCpaHkd": 135,
+    "dailyBudgetHkd": 120
+  }
+}
