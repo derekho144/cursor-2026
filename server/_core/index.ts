@@ -68,10 +68,8 @@ async function startServer() {
 
   // ─── Scheduled: Airwallex payment sync (backup if webhook missed) ────────
   app.post("/api/scheduled/airwallex-sync", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     res.json({ ok: true, started: true, time: new Date().toISOString() });
     import("../airwallexPayment")
       .then(({ syncRecentAirwallexPayments }) => syncRecentAirwallexPayments(48))
@@ -265,10 +263,8 @@ async function startServer() {
 
   // ─── Heartbeat: FH job board scrape (every 30 min, 08:00-21:00 HKT) ──────
   app.post("/api/scheduled/fh-scrape", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     // Time-of-day guard: only run 08:00-21:00 HKT
     const nowHKT = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const hourHKT = nowHKT.getUTCHours();
@@ -286,10 +282,8 @@ async function startServer() {
 
   // ─── Heartbeat: Gmail scan (every 30 min, 09:00-21:00 HKT) ───────────────
   app.post("/api/scheduled/gmail-scan", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     const nowHKT = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const hourHKT = nowHKT.getUTCHours();
     if (hourHKT < 9 || hourHKT >= 21) {
@@ -304,10 +298,8 @@ async function startServer() {
 
   // ─── Heartbeat: Quote follow-up emails (every hour) ───────────────────────
   app.post("/api/scheduled/quote-followup", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     res.json({ ok: true, started: true, time: new Date().toISOString() });
     import("../gmailFollowUp").then(({ runQuoteFollowUps }) =>
       runQuoteFollowUps()
@@ -317,10 +309,8 @@ async function startServer() {
 
   // ─── Heartbeat: FH follow-up + backfill emails (every hour) ──────────────
   app.post("/api/scheduled/fh-followup", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     res.json({ ok: true, started: true, time: new Date().toISOString() });
     Promise.all([
       import("../scheduler").then(({ runFHFollowUpEmails, runFHHighConfidenceBackfill }) =>
@@ -333,10 +323,8 @@ async function startServer() {
 
   // ─── Heartbeat: Pitch Outreach (daily 09:00 HKT) ─────────────────────────────
   app.post("/api/scheduled/pitch-outreach", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     res.json({ ok: true, started: true, time: new Date().toISOString() });
     // Use locked scheduler entry (avoids concurrent outreach with in-process timer)
     import("../scheduler")
@@ -347,10 +335,8 @@ async function startServer() {
 
   // ─── Heartbeat: Loyalty remarketing — seasonal + winback (hourly) ───────────
   app.post("/api/scheduled/loyalty-remarketing", async (req, res) => {
-    const { sdk: authSdk } = await import("./sdk");
-    let user: any = null;
-    try { user = await authSdk.authenticateRequest(req); } catch (_) {}
-    if (!user?.isCron) { res.status(403).json({ ok: false, error: "cron-only" }); return; }
+    const { requireScheduledAuth } = await import("./scheduledAuth");
+    if (!(await requireScheduledAuth(req, res))) return;
     res.json({ ok: true, started: true, time: new Date().toISOString() });
     import("../scheduler")
       .then(({ runScheduledLoyaltyRemarketing }) => runScheduledLoyaltyRemarketing())
