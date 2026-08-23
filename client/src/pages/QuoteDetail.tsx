@@ -436,15 +436,6 @@ export default function QuoteDetail() {
                 </span>
               )}
             </button>
-            {/* Preview Button */}
-            <button
-              onClick={() => window.open(`/print/quote/${quoteId}`, "_blank")}
-              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-80 flex-shrink-0"
-              style={{ background: "#1a1a2e", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.3)", fontWeight: 600, letterSpacing: "0.1em" }}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              預覽
-            </button>
             {/* HelloToby Refund Button */}
             <button
               onClick={() => window.open("https://docs.google.com/forms/d/16tvtqYkB2hWQd8A7DbUtNZ-gielzuLyyWWWqiCQVacs/viewform?ts=659f9d54&edit_requested=true", "_blank")}
