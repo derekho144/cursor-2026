@@ -439,30 +439,24 @@ export default function QuotePrintPage() {
                 ? `DEPOSIT (HKD ${depositAmt.toLocaleString('en-HK')})`
                 : `DEPOSIT (${depositPct}%)`;
               return (
-                <div style={{
-                  background: "#f9f6ef",
-                  padding: "8px 10px",
-                  marginTop: 8,
-                  WebkitPrintColorAdjust: "exact" as const,
-                  printColorAdjust: "exact" as const,
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 32 }}>
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 8 }}>
                     <span style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "#aaa" }}>
                       {depositLabel}
                     </span>
-                    <span style={{ fontSize: 14, color: "#c8922a", fontWeight: 600 }}>
-                      ${depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: 10.5, color: "#111", fontWeight: 600 }}>
+                      HKD {depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   {!isFullPayment && (
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 4 }}>
                       <span style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "#aaa" }}>NET PAYMENT</span>
-                      <span style={{ fontSize: 12, color: "#555" }}>
-                        ${netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      <span style={{ fontSize: 10.5, color: "#555" }}>
+                        HKD {netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   )}
-                </div>
+                </>
               );
             })()}
           </div>

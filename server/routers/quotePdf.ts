@@ -142,26 +142,18 @@ export function generateQuotePdfHtml(
     ? `DEPOSIT (HKD ${depositAmt.toLocaleString()})`
     : `DEPOSIT (${depositPct}%)`;
   const isFullPayment = depositAmt >= Number(quote.total);
-  const depositRow = hasDeposit
+  const depositBlock = hasDeposit
     ? `
-  <tr>
-    <td colspan="2" style="background:#f9f6ef;padding:10px 0 4px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <table align="right" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-        <tr>
-          <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">${depositLabel}</td>
-          <td style="vertical-align:middle;">
-            <span style="font-size:16px;font-weight:600;color:#c8922a;letter-spacing:0.01em;">$${depositAmt.toLocaleString()}.00</span>
-          </td>
-        </tr>
-        ${!isFullPayment ? `<tr>
-          <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding:8px 24px 4px 0;vertical-align:middle;">NET PAYMENT</td>
-          <td style="vertical-align:middle;padding-top:8px;">
-            <span style="font-size:14px;font-weight:400;color:#333333;letter-spacing:0.01em;">$${netPayment.toLocaleString()}.00</span>
-          </td>
-        </tr>` : ""}
-      </table>
-    </td>
-  </tr>`
+    <div style="margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;gap:32px;">
+        <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">${depositLabel}</span>
+        <span style="font-size:10.5px;color:#111111;font-weight:600;">HKD ${depositAmt.toLocaleString()}</span>
+      </div>
+      ${!isFullPayment ? `<div style="display:flex;justify-content:space-between;gap:32px;margin-top:4px;">
+        <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">NET PAYMENT</span>
+        <span style="font-size:10.5px;color:#555555;">HKD ${netPayment.toLocaleString()}</span>
+      </div>` : ""}
+    </div>`
     : "";
 
   const termsItems = [
@@ -216,10 +208,10 @@ export function generateQuotePdfHtml(
         </div>
       </td>
       <td style="vertical-align:top;text-align:right;width:45%;">
-        <div style="font-size:7.5px;letter-spacing:0.28em;text-transform:uppercase;color:#888888;margin-bottom:8px;">${docType}</div>
-        <div style="font-size:38px;font-weight:300;letter-spacing:0.01em;color:#ffffff;line-height:1;">${quote.quoteNumber}</div>
+        <div style="font-size:7.5px;letter-spacing:0.25em;text-transform:uppercase;color:#888888;margin-bottom:5px;">${docType}</div>
+        <div style="font-size:28px;font-weight:300;letter-spacing:0.01em;color:#ffffff;line-height:1;">${quote.quoteNumber}</div>
         <div style="width:100%;height:1px;background:#444444;margin:14px 0 10px;"></div>
-        <div style="font-size:9px;color:#888888;letter-spacing:0.14em;text-transform:uppercase;">DATE &nbsp; ${formatDate(quote.createdAt)}</div>
+        <div style="font-size:9px;color:#888888;letter-spacing:0.12em;text-transform:uppercase;">DATE &nbsp; ${formatDate(quote.createdAt)}</div>
       </td>
     </tr>
   </table>
@@ -268,23 +260,17 @@ export function generateQuotePdfHtml(
     </tbody>
   </table>
 
-  <!-- TOTAL -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e0e0e0;border-collapse:collapse;">
-    <tr>
-      <td style="padding:12px 32px 12px 32px;text-align:right;">
-        ${discountRow}
-          <table align="right" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          <tr>
-            <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">TOTAL AMOUNT</td>
-            <td style="vertical-align:middle;border-top:1px solid #333333;padding-top:8px;">
-              <span style="font-size:28px;font-weight:300;color:#111111;letter-spacing:0.01em;">$${Number(quote.total).toLocaleString()}.00</span>
-            </td>
-          </tr>
-          ${depositRow}
-        </table>
-      </td>
-    </tr>
-  </table>
+  <!-- TOTAL — stacked layout matching /print/quote -->
+  <div style="padding:10px 32px 6px 32px;display:flex;justify-content:flex-end;">
+    <div style="text-align:right;min-width:200px;padding-right:4px;">
+      ${discountRow}
+      <div style="border-top:1px solid #cccccc;padding-top:8px;margin-top:4px;">
+        <div style="font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;margin-bottom:4px;">TOTAL AMOUNT</div>
+        <div style="font-size:22px;font-weight:300;color:#111111;letter-spacing:-0.02em;">$${Number(quote.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+      </div>
+      ${depositBlock}
+    </div>
+  </div>
 
   ${notesHtml ? `
   <!-- NOTES -->
