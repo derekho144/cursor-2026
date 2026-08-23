@@ -1,8 +1,12 @@
 {
   "mcpServers": {
     "google-ads-mcp": {
-      "command": "/Users/derek/Desktop/jd-studio-admin/scripts/google-ads-mcp/run.sh",
-      "args": []
+      "type": "stdio",
+      "command": "bash",
+      "args": ["${workspaceFolder}/scripts/google-ads-mcp/run.sh"],
+      "env": {
+        "GOOGLE_ADS_ENV_FILE": "${userHome}/.config/jd-studio/google-ads.env"
+      }
     }
   }
 }

@@ -239,7 +239,10 @@ async function startServer() {
   // ─── WhatsApp Click Tracking ──────────────────────────────────────────────
   // When client clicks WhatsApp link from email, redirect to WhatsApp and record the click
   // URL format: /api/track/wa?src=fh_first_email&inq=123&fhj=456
+  // Prefill wording differs from the official-site button (same meaning, no "Email" label)
+  // so staff can tell email-link vs website-button from the first chat line.
   app.get("/api/track/wa", async (req, res) => {
+    const { waMeUrlWithPrefill } = await import("./waTracking");
     const source = (req.query.src as string) || "other";
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
     const fhJobId = req.query.fhj ? parseInt(req.query.fhj as string, 10) : undefined;
@@ -257,8 +260,8 @@ async function startServer() {
       ip,
       userAgent,
     }).catch(err => console.error("[WA Track] Failed:", err));
-    // Redirect to WhatsApp
-    res.redirect("https://wa.me/85291531976");
+    // Email / system tracked links → email prefill (website button keeps its own wording)
+    res.redirect(waMeUrlWithPrefill("email"));
   });
 
   // ─── Heartbeat: FH job board scrape (every 30 min, 08:00-21:00 HKT) ──────

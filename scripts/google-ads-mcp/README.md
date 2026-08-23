@@ -1,54 +1,79 @@
-# Google Ads MCP (Claude Code / Cursor)
-#
-# 1. Fill credentials:
-#    mkdir -p ~/.config/jd-studio
-#    cp scripts/google-ads-mcp/env.example ~/.config/jd-studio/google-ads.env
-#    # edit google-ads.env with production values
-#
-# 2. Reload MCP in Cursor (Settings → MCP) or Claude Code (`claude mcp list`).
-#
-# 3. Prompt example:
-#    List accessible Google Ads customers, then health-check account 4839352747
-#    (campaigns, spend last 30 days, conversion tracking, policy issues).
+# Google Ads MCP（Cursor / Claude Code）
 
-## Setup
-- Official server: https://github.com/googleads/google-ads-mcp (read-only)
-- Runner: `scripts/google-ads-mcp/run.sh`
-- Secrets: `~/.config/jd-studio/google-ads.env` (not in git)
-- ADC file generated at runtime: `~/.config/jd-studio/google-ads-adc.json`
+把官方 [google-ads-mcp](https://github.com/googleads/google-ads-mcp) 接到 Cursor，用 AI 讀 live 帳況（**只讀**，唔會自動改 campaign）。
 
-## Account IDs (JD Studio)
-- MCC / login-customer-id: `9876630892`
-- Ad account: `4839352747`
-
-## Where to get secrets (production)
-
-**jdsys.biz 冇 Settings → Secrets UI。** 憑證喺 Manus deployment 環境變數 + DB `platform_credentials`（refresh token）。
-
-### 方法 A（推薦）：Manus 匯出
-
-喺 Manus production 跑：
+## Cursor 一鍵接線（本機）
 
 ```bash
-npx tsx scripts/google-ads-mcp/export-local-env.ts --check   # 只睇有/無
-npx tsx scripts/google-ads-mcp/export-local-env.ts > google-ads.env
+cd ~/Desktop/jd-studio-admin   # 或你嘅 repo 路徑
+bash scripts/google-ads-mcp/setup-cursor.sh
 ```
 
-將輸出 paste 入本機 `~/.config/jd-studio/google-ads.env`（唔好 commit）。
+腳本會：
+1. 建立 `~/.config/jd-studio/google-ads.env`（若未有）
+2. 檢查必填 key
+3. 用 pipx 安裝 `google-ads-mcp`
+4. 產生 ADC JSON
 
-### 方法 B：Manus 專案環境變數
+然後喺 **Cursor Desktop**：
+1. 開呢個 repo 做 workspace
+2. **Settings → MCP** → `google-ads-mcp` 應係綠色
+3. 紅色就 Reload MCP / 重開 Cursor
 
-[manus.im](https://manus.im/app) → JD SYS 專案 → Environment / Variables，搵 `GOOGLE_ADS_*`。
+試用 prompt：
+```
+list_accessible_customers，再 health-check customer 4839352747
+（campaigns、近 7/30 日 spend、CPA、Search #3 tCPA／預算、政策問題）
+```
 
-### 方法 C：手動來源
+## 憑證（唔好 commit）
 
 | Key | 來源 |
 |-----|------|
-| `GOOGLE_ADS_DEVELOPER_TOKEN` | [Google Ads API Center](https://ads.google.com/aw/apicenter) |
-| `GOOGLE_ADS_CLIENT_ID` / `SECRET` | [GCP Console](https://console.cloud.google.com/) → APIs → Credentials |
-| `GOOGLE_ADS_REFRESH_TOKEN` | jdsys **廣告同步** →「重新授權 Google Ads」（存 DB）；或 Manus export script |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | [Ads API Center](https://ads.google.com/aw/apicenter) |
+| `GOOGLE_ADS_CLIENT_ID` / `SECRET` | GCP OAuth client |
+| `GOOGLE_ADS_REFRESH_TOKEN` | jdsys「廣告同步」重新授權；或 Manus export |
 
-`GOOGLE_PROJECT_ID` 可留空；填好 `GOOGLE_ADS_CLIENT_ID` 後 `run.sh` 會用 numeric prefix（例如 `4821341680`）。
+**Manus production 匯出：**
+```bash
+npx tsx scripts/google-ads-mcp/export-local-env.ts --check
+npx tsx scripts/google-ads-mcp/export-local-env.ts > ~/.config/jd-studio/google-ads.env
+chmod 600 ~/.config/jd-studio/google-ads.env
+```
 
-After filling `~/.config/jd-studio/google-ads.env`: **Cursor → Settings → MCP → Reload**, then prompt:
-`list_accessible_customers，再 health-check customer 4839352747`
+## Account IDs（JD Studio）
+
+- MCC / login-customer-id: `9876630892`
+- Ad account: `4839352747`
+
+## 專案 MCP 設定
+
+`.cursor/mcp.json` 用 `${workspaceFolder}`，唔綁死本機絕對路徑：
+
+```json
+{
+  "mcpServers": {
+    "google-ads-mcp": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["${workspaceFolder}/scripts/google-ads-mcp/run.sh"],
+      "env": {
+        "GOOGLE_ADS_ENV_FILE": "${userHome}/.config/jd-studio/google-ads.env"
+      }
+    }
+  }
+}
+```
+
+## 相關腳本
+
+| 檔案 | 用途 |
+|------|------|
+| `run.sh` | Cursor MCP 啟動器 |
+| `setup-cursor.sh` | 本機安裝／檢查 |
+| `export-local-env.ts` | 由 production 匯出 env |
+| `weekly-compare.sh` | 對比 `baseline-2026-07-28.json` |
+
+```bash
+bash scripts/google-ads-mcp/weekly-compare.sh
+```

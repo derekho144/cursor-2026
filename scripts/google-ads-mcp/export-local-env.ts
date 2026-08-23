@@ -31,11 +31,22 @@ async function main() {
   const fromEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]?.trim() || ""]));
 
   let refreshToken = fromEnv.GOOGLE_ADS_REFRESH_TOKEN;
-  try {
-    const cred = await getPlatformCredential("google_ads");
-    if (cred?.refreshToken) refreshToken = cred.refreshToken;
-  } catch {
-    // DB optional for --check
+  // Skip DB when --env-only / SKIP_DB=1 (avoids hung MySQL on some sandboxes)
+  const skipDb =
+    process.argv.includes("--env-only") || process.env.SKIP_DB === "1";
+  if (!skipDb) {
+    try {
+      const cred = await Promise.race([
+        getPlatformCredential("google_ads"),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("DB credential lookup timeout")), 8_000)
+        ),
+      ]);
+      if (cred?.refreshToken) refreshToken = cred.refreshToken;
+    } catch (err) {
+      console.error(`[export-local-env] DB skip: ${String(err)}`);
+      // continue with env refresh token
+    }
   }
 
   const loginCustomerId = (
