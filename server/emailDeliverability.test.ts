@@ -51,4 +51,18 @@ describe("email deliverability From / Reply-To", () => {
     process.env.GMAIL_USER = "info.exposurehk@gmail.com";
     expect(resolveReplyTo({})).toBe("info.exposurehk@gmail.com");
   });
+
+  it("domain From still Reply-To Gmail by default", () => {
+    process.env.GMAIL_USER = "info.exposurehk@gmail.com";
+    process.env.RESEND_FROM_EMAIL = "JD Studio HK <info@jdstudiohk.com>";
+    expect(resolveFromAddress({ purpose: "transactional" })).toContain(
+      "info@jdstudiohk.com"
+    );
+    expect(resolveReplyTo({})).toBe("info.exposurehk@gmail.com");
+  });
+
+  it("EMAIL_REPLY_TO overrides Gmail reply mailbox", () => {
+    process.env.EMAIL_REPLY_TO = "other@example.com";
+    expect(resolveReplyTo({})).toBe("other@example.com");
+  });
 });

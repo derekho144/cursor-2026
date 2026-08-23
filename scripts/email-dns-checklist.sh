@@ -1,19 +1,41 @@
 #!/usr/bin/env bash
-# Email deliverability notes for JD Studio
-# Current production From: info.exposurehk@gmail.com (Gmail SMTP)
+# Email deliverability for JD Studio
+# Target: From @jdstudiohk.com + Reply-To info.exposurehk@gmail.com
 set -euo pipefail
 
-echo "=== Current setup ==="
-echo "From: JD Studio HK <info.exposurehk@gmail.com> via Gmail SMTP"
-echo "App password must be set on GMAIL_USER / GMAIL_APP_PASSWORD"
-echo
-echo "=== Reduce Gmail → spam (practical) ==="
-echo "1. Google Account → send as yourself only (no spoofed From)"
-echo "2. Ask clients to Add to contacts / Not spam"
-echo "3. Avoid sudden spikes of cold outreach from the same mailbox"
-echo "4. Keep quote PDF attachments; avoid spammy subject lines"
-echo
-echo "=== Optional later: custom domain via Resend ==="
-echo "If you switch to @jdstudiohk.com later:"
-echo "  RESEND_FROM_EMAIL=\"JD Studio HK <info@jdstudiohk.com>\""
-echo "  + Resend domain verify (DKIM/SPF on send.jdstudiohk.com)"
+cat <<'EOF'
+=== Current production ===
+From:     JD Studio HK <info.exposurehk@gmail.com>  (Gmail SMTP)
+Reply-To: same (clients reply to the Gmail they already know)
+
+=== Upgrade path (better inbox, same reply mailbox) ===
+Goal:
+  From:     JD Studio HK <info@jdstudiohk.com>   ← Resend + verified domain
+  Reply-To: info.exposurehk@gmail.com            ← clients still reply here
+
+Steps in Resend (https://resend.com/domains):
+  1. Add domain: jdstudiohk.com
+  2. Add the DNS records Resend shows (usually):
+       - DKIM  CNAME  (resend._domainkey…)
+       - SPF   TXT or MX for send subdomain (e.g. send.jdstudiohk.com)
+       - Optional DMARC TXT on _dmarc.jdstudiohk.com
+  3. Wait until Resend shows domain = Verified
+  4. Send a test from Resend dashboard as info@jdstudiohk.com
+
+Then set Manus / server env:
+  RESEND_FROM_EMAIL="JD Studio HK <info@jdstudiohk.com>"
+  EMAIL_REPLY_TO="info.exposurehk@gmail.com"
+  RESEND_API_KEY=…   (already set)
+  GMAIL_USER / GMAIL_APP_PASSWORD stay for outreach + fallback
+
+Code already:
+  - Uses RESEND_FROM_EMAIL for quote/transactional when set
+  - Sets Reply-To to Gmail by default
+  - Keeps Freehunter / cold mail on Gmail (purpose: outreach)
+
+After env change: Manus Pull/Sync + Publish (or manus-auto-deploy.sh).
+
+=== While still on Gmail From ===
+  - Ask clients to Add contact / Not spam
+  - Avoid blasting cold outreach from the same mailbox as quotes
+EOF

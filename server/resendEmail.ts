@@ -5,8 +5,10 @@
  * Deliverability rules:
  * - Never send as onboarding@resend.dev (shared domain → spam).
  * - Default From: GMAIL_USER (info.exposurehk@gmail.com) via Gmail SMTP.
- * - Optional RESEND_FROM_EMAIL for a verified custom domain later.
- * - Cold outreach stays on Gmail so it does not poison a future brand domain.
+ * - Optional RESEND_FROM_EMAIL = verified @jdstudiohk.com (better inbox).
+ * - Reply-To always prefers info.exposurehk@gmail.com so clients reply to the
+ *   public mailbox even when From is the brand domain.
+ * - Cold outreach stays on Gmail so it does not poison the brand domain.
  */
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
@@ -95,15 +97,19 @@ export function resolveFromAddress(
   return formatGmailFrom(gmailMailbox());
 }
 
+/**
+ * Prefer the long-standing public mailbox for replies.
+ * When From is @jdstudiohk.com (Resend), Reply-To stays Gmail unless overridden.
+ */
 export function resolveReplyTo(
-  opts: Pick<SendEmailOptions, "replyTo">
+  opts: Pick<SendEmailOptions, "replyTo" | "from" | "purpose"> = {}
 ): string | undefined {
-  const reply =
-    opts.replyTo ||
-    process.env.EMAIL_REPLY_TO ||
-    ENV.emailReplyTo ||
-    gmailMailbox();
-  return reply || undefined;
+  const explicit =
+    opts.replyTo || process.env.EMAIL_REPLY_TO || ENV.emailReplyTo || "";
+  if (explicit) return explicit;
+
+  // Public contact clients already know
+  return gmailMailbox() || undefined;
 }
 
 /**
