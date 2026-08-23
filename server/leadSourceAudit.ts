@@ -10,7 +10,7 @@
  *   npx tsx scripts/audit-quote-lead-sources.ts --dry-run
  *   npx tsx scripts/audit-quote-lead-sources.ts --apply
  */
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { eq, isNotNull, or } from "drizzle-orm";
 import { resolveQuoteLeadSource } from "./_core/leadSource";
 import { getDb } from "./db";
 import { clients, emailInquiries, freehunterJobs, quotes, whatsappClickEvents } from "../drizzle/schema";
