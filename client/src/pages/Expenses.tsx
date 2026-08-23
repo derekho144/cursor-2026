@@ -405,6 +405,11 @@ export default function Expenses() {
                               <Badge variant="outline" className={`text-xs ${catStyle.color}`}>
                                 {expense.categoryLabel}
                               </Badge>
+                              {expense.isFromQuoteCost && (
+                                <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-600/40">
+                                  報價成本
+                                </Badge>
+                              )}
                               <span className="text-xs text-muted-foreground">
                                 {new Date(expense.date).toLocaleDateString("zh-HK", { month: "short", day: "numeric" })}
                               </span>

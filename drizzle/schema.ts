@@ -384,6 +384,8 @@ export const expenses = mysqlTable("expenses", {
   payee: varchar("payee", { length: 255 }),       // 收款方（人名或公司）
   receiptUrl: varchar("receipt_url", { length: 1024 }), // 收據圖片 URL
   notes: text("notes"),
+  /** Set when auto-created from a quote_costs row (收入及支出 sync). */
+  quoteCostId: int("quote_cost_id"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

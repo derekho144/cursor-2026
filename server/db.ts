@@ -3,6 +3,11 @@ import { and, desc, eq, inArray, isNotNull, isNull, like, lte, or, sql } from "d
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
 import {
+  mapQuoteCostCategoryToExpense,
+  formatQuoteCostExpenseDescription,
+  resolveExpenseDateFromQuote,
+} from "./quoteCostExpenseSync";
+import {
   adExpenses,
   adPlatformConfigs,
   adSyncLogs,
@@ -492,14 +497,15 @@ export async function getDashboardStatsQuick(year?: number, month?: number) {
       .select({ total: sql<number>`SUM(amount)` })
       .from(adExpenses)
       .where(and(eq(adExpenses.year, targetYear), eq(adExpenses.month, targetMonth))),
-    // Monthly business expenses for selected month
+    // Monthly business expenses (exclude rows synced from quote_costs — those are projectCosts)
     db
       .select({ total: sql<number>`SUM(amount)` })
       .from(expenses)
       .where(
         and(
           sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`
+          sql`MONTH(date) = ${targetMonth}`,
+          isNull(expenses.quoteCostId)
         )
       ),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
@@ -681,14 +687,15 @@ export async function getDashboardStats(year?: number, month?: number) {
         )
       )
       .groupBy(quotes.leadSource),
-    // Monthly business expenses for selected month
+    // Monthly business expenses (exclude quote-cost sync rows — counted as projectCosts)
     db
       .select({ total: sql<number>`SUM(amount)` })
       .from(expenses)
       .where(
         and(
           sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`
+          sql`MONTH(date) = ${targetMonth}`,
+          isNull(expenses.quoteCostId)
         )
       ),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
@@ -2986,9 +2993,56 @@ export async function createQuoteCost(data: InsertQuoteCost) {
   return created;
 }
 
+/** Auto-create 收入及支出 expense row linked to a quote_costs id. */
+export async function createExpenseFromQuoteCost(params: {
+  quoteCostId: number;
+  quoteNumber: string;
+  clientName?: string | null;
+  shootingDate?: string | null;
+  category: string;
+  description: string;
+  amount: string | number;
+  payee?: string | null;
+  notes?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  const expenseCategory = mapQuoteCostCategoryToExpense(params.category);
+  const description = formatQuoteCostExpenseDescription(
+    params.quoteNumber,
+    params.clientName,
+    params.description
+  );
+  const date = resolveExpenseDateFromQuote(params.shootingDate);
+  const noteParts = [
+    "自動由報價成本同步",
+    params.notes?.trim() || null,
+  ].filter(Boolean);
+
+  const [result] = await db.insert(expenses).values({
+    date,
+    category: expenseCategory,
+    description,
+    amount: String(params.amount),
+    payee: params.payee ?? null,
+    notes: noteParts.join(" · "),
+    quoteCostId: params.quoteCostId,
+  });
+  return { id: (result as { insertId?: number }).insertId };
+}
+
+export async function deleteExpenseByQuoteCostId(quoteCostId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(expenses).where(eq(expenses.quoteCostId, quoteCostId));
+}
+
 export async function deleteQuoteCost(id: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  // Remove linked 收入及支出 row first (if any)
+  await deleteExpenseByQuoteCostId(id);
   await db.delete(quoteCosts).where(eq(quoteCosts.id, id));
 }
 

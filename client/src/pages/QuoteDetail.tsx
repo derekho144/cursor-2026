@@ -299,9 +299,15 @@ export default function QuoteDetail() {
     { enabled: !!quoteId }
   );
   const createCostMutation = trpc.quoteCosts.create.useMutation({
-    onSuccess: () => {
-      toast.success("成本已新增");
+    onSuccess: (data) => {
+      toast.success(
+        data?.syncedToExpense
+          ? "成本已新增，並已同步到收入及支出"
+          : "成本已新增"
+      );
       utils.quoteCosts.summary.invalidate({ quoteId });
+      utils.expenses.list.invalidate();
+      utils.expenses.monthlySummary.invalidate();
       setCostDialogOpen(false);
       setCostForm({ category: "freelancer", description: "", amount: "", payee: "" });
     },
@@ -310,6 +316,8 @@ export default function QuoteDetail() {
   const deleteCostMutation = trpc.quoteCosts.delete.useMutation({
     onSuccess: () => {
       toast.success("已刪除");
+      utils.expenses.list.invalidate();
+      utils.expenses.monthlySummary.invalidate();
       utils.quoteCosts.summary.invalidate({ quoteId });
     },
     onError: (e) => toast.error(`刪除失敗：${e.message}`),
