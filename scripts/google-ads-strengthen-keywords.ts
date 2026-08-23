@@ -77,7 +77,7 @@ const KEYWORD_BATCHES: Array<{ niche: string; adGroupRn: string; keywords: strin
   },
 ];
 
-function loadEnvFile() {
+async function loadEnv() {
   const keys = [
     "GOOGLE_ADS_DEVELOPER_TOKEN",
     "GOOGLE_ADS_CLIENT_ID",
@@ -85,26 +85,47 @@ function loadEnvFile() {
     "GOOGLE_ADS_REFRESH_TOKEN",
   ] as const;
 
-  // Prefer process.env (Manus / production) so we can skip hung DB export.
-  const fromProcess: Record<string, string> = {};
+  const env: Record<string, string> = {};
   for (const k of keys) {
     const v = process.env[k]?.trim();
-    if (v) fromProcess[k] = v;
-  }
-  if (keys.every((k) => fromProcess[k])) {
-    console.log("Using Google Ads credentials from process.env");
-    return fromProcess;
+    if (v) env[k] = v;
   }
 
   const path = process.env.GOOGLE_ADS_ENV_FILE ?? join(homedir(), ".config/jd-studio/google-ads.env");
-  const env: Record<string, string> = { ...fromProcess };
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const s = line.trim();
-    if (!s || s.startsWith("#") || !s.includes("=")) continue;
-    const i = s.indexOf("=");
-    const k = s.slice(0, i);
-    const v = s.slice(i + 1).trim();
-    if (v && !env[k]) env[k] = v;
+  try {
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      const s = line.trim();
+      if (!s || s.startsWith("#") || !s.includes("=")) continue;
+      const i = s.indexOf("=");
+      const k = s.slice(0, i);
+      const v = s.slice(i + 1).trim();
+      if (v && !env[k]) env[k] = v;
+    }
+  } catch {
+    // file optional when process.env is complete
+  }
+
+  // Prefer DB refresh token (jdsys re-auth) over stale process.env — with timeout
+  if (process.env.SKIP_DB !== "1") {
+    try {
+      const { getPlatformCredential } = await import("../server/db");
+      const cred = await Promise.race([
+        getPlatformCredential("google_ads"),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("DB timeout")), 8_000)
+        ),
+      ]);
+      if (cred?.refreshToken) {
+        env.GOOGLE_ADS_REFRESH_TOKEN = cred.refreshToken;
+        console.log("Using refresh token from DB (platform_credentials)");
+      }
+    } catch (err) {
+      console.warn(`[strengthen-keywords] DB refresh skip: ${String(err)}`);
+    }
+  }
+
+  for (const k of keys) {
+    if (!env[k]) throw new Error(`Missing credential: ${k}`);
   }
   return env;
 }
@@ -177,7 +198,7 @@ function buildOps() {
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
-  const env = loadEnvFile();
+  const env = await loadEnv();
   const token = await getAccessToken(env);
   const operations = buildOps();
 
