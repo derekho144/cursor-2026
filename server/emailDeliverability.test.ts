@@ -18,7 +18,11 @@ describe("email deliverability From / Reply-To", () => {
   it("never defaults to onboarding@resend.dev", () => {
     const from = resolveFromAddress({ purpose: "transactional" });
     expect(from.toLowerCase()).not.toContain("@resend.dev");
-    expect(from).toContain("@jdstudiohk.com");
+  });
+
+  it("defaults transactional From to info.exposurehk@gmail.com", () => {
+    const from = resolveFromAddress({ purpose: "transactional" });
+    expect(from).toContain("info.exposurehk@gmail.com");
   });
 
   it("rejects shared resend.dev even if passed as from", () => {
@@ -27,16 +31,17 @@ describe("email deliverability From / Reply-To", () => {
       purpose: "transactional",
     });
     expect(from.toLowerCase()).not.toContain("@resend.dev");
+    expect(from).toContain("info.exposurehk@gmail.com");
   });
 
-  it("uses RESEND_FROM_EMAIL when set", () => {
+  it("uses RESEND_FROM_EMAIL when set to a real domain", () => {
     process.env.RESEND_FROM_EMAIL = "JD Studio HK <quotes@jdstudiohk.com>";
     expect(resolveFromAddress({ purpose: "transactional" })).toBe(
       "JD Studio HK <quotes@jdstudiohk.com>"
     );
   });
 
-  it("outreach prefers Gmail when no outreach From configured", () => {
+  it("outreach uses GMAIL_USER", () => {
     process.env.GMAIL_USER = "info.exposurehk@gmail.com";
     const from = resolveFromAddress({ purpose: "outreach" });
     expect(from).toContain("info.exposurehk@gmail.com");

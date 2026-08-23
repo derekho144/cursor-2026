@@ -4,10 +4,9 @@
  *
  * Deliverability rules:
  * - Never send as onboarding@resend.dev (shared domain → spam).
- * - Prefer verified @jdstudiohk.com via Resend (RESEND_FROM_EMAIL).
- * - If Resend domain is not verified, fall back to Gmail SMTP.
- * - Keep cold outreach on a separate From (RESEND_FROM_OUTREACH / Gmail)
- *   so quote reputation is not mixed with pitch/FH mail.
+ * - Default From: GMAIL_USER (info.exposurehk@gmail.com) via Gmail SMTP.
+ * - Optional RESEND_FROM_EMAIL for a verified custom domain later.
+ * - Cold outreach stays on Gmail so it does not poison a future brand domain.
  */
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
@@ -31,13 +30,13 @@ export interface SendEmailOptions {
   subject: string;
   html?: string;
   text?: string;
-  /** Optional: from address. Defaults by purpose (quotes vs outreach). */
+  /** Optional: from address. Defaults to GMAIL_USER (info.exposurehk@gmail.com). */
   from?: string;
   /** Reply-To (defaults to EMAIL_REPLY_TO or Gmail user). */
   replyTo?: string;
   /**
-   * transactional = quotes / receipts / client follow-ups (brand domain).
-   * outreach = Freehunter / pitch / cold mail (separate From to protect reputation).
+   * transactional = quotes / receipts / client follow-ups.
+   * outreach = Freehunter / pitch / cold mail.
    */
   purpose?: EmailPurpose;
   attachments?: Array<{
@@ -55,15 +54,27 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   success: boolean;
-  /** Resend message ID — used to correlate with webhook events */
+  /** Resend / Gmail message ID */
   messageId?: string;
   error?: string;
   /** Which provider was used */
   provider?: "resend" | "gmail";
 }
 
-const DEFAULT_TRANSACTIONAL_FROM = "JD Studio HK <info@jdstudiohk.com>";
 const BLOCKED_SHARED_FROM = /@resend\.dev\b/i;
+
+function gmailMailbox(): string {
+  return process.env.GMAIL_USER || ENV.gmailUser || "info.exposurehk@gmail.com";
+}
+
+function formatGmailFrom(email: string): string {
+  if (email.includes("<")) return email;
+  return `JD Studio HK <${email}>`;
+}
+
+function isGmailFrom(from: string): boolean {
+  return /@gmail\.com\b/i.test(from);
+}
 
 /** Resolve From address — never use Resend's shared onboarding domain. */
 export function resolveFromAddress(
@@ -73,22 +84,15 @@ export function resolveFromAddress(
 
   const purpose = opts.purpose ?? "transactional";
   if (purpose === "outreach") {
-    const outreach =
-      process.env.RESEND_FROM_OUTREACH ||
-      ENV.resendFromOutreach ||
-      "";
+    const outreach = process.env.RESEND_FROM_OUTREACH || ENV.resendFromOutreach || "";
     if (outreach && !BLOCKED_SHARED_FROM.test(outreach)) return outreach;
-    // Prefer Gmail identity for cold outreach until a dedicated subdomain is verified
-    const gmailUser = process.env.GMAIL_USER || ENV.gmailUser;
-    if (gmailUser) return `"JD Studio HK" <${gmailUser}>`;
+    return formatGmailFrom(gmailMailbox());
   }
 
-  const transactional =
-    process.env.RESEND_FROM_EMAIL ||
-    ENV.resendFromEmail ||
-    DEFAULT_TRANSACTIONAL_FROM;
-  if (BLOCKED_SHARED_FROM.test(transactional)) return DEFAULT_TRANSACTIONAL_FROM;
-  return transactional;
+  // Quotes / transactional: prefer explicit env, else Gmail mailbox
+  const configured = process.env.RESEND_FROM_EMAIL || ENV.resendFromEmail || "";
+  if (configured && !BLOCKED_SHARED_FROM.test(configured)) return configured;
+  return formatGmailFrom(gmailMailbox());
 }
 
 export function resolveReplyTo(
@@ -98,15 +102,13 @@ export function resolveReplyTo(
     opts.replyTo ||
     process.env.EMAIL_REPLY_TO ||
     ENV.emailReplyTo ||
-    process.env.GMAIL_USER ||
-    ENV.gmailUser ||
-    "";
+    gmailMailbox();
   return reply || undefined;
 }
 
 /**
  * Send an email via Gmail SMTP (Nodemailer).
- * Used as fallback when Resend domain is not verified, and for outreach.
+ * Primary path while From is info.exposurehk@gmail.com.
  */
 export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailResult> {
   const gmailUser = process.env.GMAIL_USER || ENV.gmailUser;
@@ -120,14 +122,8 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
     service: "gmail",
     auth: { user: gmailUser, pass: gmailPass },
   });
-  const from = resolveFromAddress({ ...opts, purpose: opts.purpose ?? "outreach" });
-  // If From is @jdstudiohk.com, Gmail SMTP cannot send as that address unless alias is configured —
-  // fall back to authenticated Gmail mailbox while keeping Reply-To on brand address.
-  const gmailFrom = from.includes("@gmail.com") || from.includes(gmailUser)
-    ? from.startsWith('"') || from.includes("<")
-      ? from
-      : `"JD Studio HK" <${gmailUser}>`
-    : `"JD Studio HK" <${gmailUser}>`;
+  // Gmail SMTP must send as the authenticated mailbox (or an allowed alias)
+  const gmailFrom = formatGmailFrom(gmailUser);
   const replyTo = resolveReplyTo(opts);
   try {
     console.log(`[Gmail] Sending email with subject: ${opts.subject}`);
@@ -163,17 +159,17 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
 }
 
 /**
- * Send an email via Resend API (preferred for transactional / quotes).
- * Falls back to Gmail when the sending domain is not verified.
+ * Send email. Uses Gmail SMTP when From is @gmail.com (current production).
+ * Uses Resend only when From is a verified custom domain.
  */
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
   const purpose = opts.purpose ?? "transactional";
   const from = resolveFromAddress({ ...opts, purpose });
   const replyTo = resolveReplyTo(opts);
 
-  // Outreach: prefer Gmail to avoid mixing cold-mail reputation with quote domain
-  if (purpose === "outreach" && !opts.from) {
-    process.stderr.write(`[Email] Outreach → Gmail SMTP (protects @jdstudiohk.com reputation)\n`);
+  // Gmail From (info.exposurehk@gmail.com) → always Gmail SMTP
+  if (isGmailFrom(from) || purpose === "outreach") {
+    process.stderr.write(`[Email] Using Gmail SMTP from=${from} purpose=${purpose}\n`);
     return sendViaGmail({ ...opts, purpose, from, replyTo });
   }
 

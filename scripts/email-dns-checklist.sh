@@ -1,37 +1,19 @@
 #!/usr/bin/env bash
-# Print DNS checklist for Resend + Google on jdstudiohk.com
-# Run: bash scripts/email-dns-checklist.sh
+# Email deliverability notes for JD Studio
+# Current production From: info.exposurehk@gmail.com (Gmail SMTP)
 set -euo pipefail
 
-DOMAIN="${1:-jdstudiohk.com}"
-
-echo "=== Email deliverability DNS checklist for ${DOMAIN} ==="
+echo "=== Current setup ==="
+echo "From: JD Studio HK <info.exposurehk@gmail.com> via Gmail SMTP"
+echo "App password must be set on GMAIL_USER / GMAIL_APP_PASSWORD"
 echo
-echo "1) Resend Dashboard → Domains → Add ${DOMAIN}"
-echo "   Copy the exact records Resend shows (usually):"
-echo "   - TXT  resend._domainkey.${DOMAIN}   (DKIM)"
-echo "   - TXT  send.${DOMAIN}                (SPF include:amazonses.com)"
-echo "   - MX   send.${DOMAIN}                (bounce / feedback)"
+echo "=== Reduce Gmail → spam (practical) ==="
+echo "1. Google Account → send as yourself only (no spoofed From)"
+echo "2. Ask clients to Add to contacts / Not spam"
+echo "3. Avoid sudden spikes of cold outreach from the same mailbox"
+echo "4. Keep quote PDF attachments; avoid spammy subject lines"
 echo
-echo "2) Apex SPF (merge carefully — only ONE v=spf1 TXT on ${DOMAIN}):"
-echo "   v=spf1 include:_spf.google.com include:amazonses.com ~all"
-echo
-echo "3) DMARC (start monitor-only):"
-echo "   TXT _dmarc.${DOMAIN}"
-echo "   v=DMARC1; p=none; rua=mailto:info@${DOMAIN};"
-echo
-echo "4) Env after verify (Manus / production):"
-echo "   RESEND_FROM_EMAIL=\"JD Studio HK <info@${DOMAIN}>\""
-echo "   EMAIL_REPLY_TO=\"info@${DOMAIN}\""
-echo
-echo "=== Current public DNS ==="
-echo "-- TXT ${DOMAIN} --"
-dig +short TXT "${DOMAIN}" || true
-echo "-- TXT _dmarc.${DOMAIN} --"
-dig +short TXT "_dmarc.${DOMAIN}" || true
-echo "-- TXT resend._domainkey.${DOMAIN} --"
-dig +short TXT "resend._domainkey.${DOMAIN}" || true
-echo "-- TXT send.${DOMAIN} --"
-dig +short TXT "send.${DOMAIN}" || true
-echo "-- MX send.${DOMAIN} --"
-dig +short MX "send.${DOMAIN}" || true
+echo "=== Optional later: custom domain via Resend ==="
+echo "If you switch to @jdstudiohk.com later:"
+echo "  RESEND_FROM_EMAIL=\"JD Studio HK <info@jdstudiohk.com>\""
+echo "  + Resend domain verify (DKIM/SPF on send.jdstudiohk.com)"
