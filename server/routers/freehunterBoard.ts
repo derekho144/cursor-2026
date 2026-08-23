@@ -806,6 +806,7 @@ ${trackingPixel}
         subject: input.subject,
         html: htmlBody,
         text: input.body,
+        purpose: "outreach",
         tags: [{ name: "type", value: "fh_manual_send" }],
       });
 

@@ -322,6 +322,7 @@ ${bodyHtml}
         to: lead[0].contactEmail,
         subject: subject ?? "Photography & Video Production Services — JD STUDIO HK",
         html: htmlBody,
+        purpose: "outreach",
       });
 
       await db.insert(pitchSendLog).values({
