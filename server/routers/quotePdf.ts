@@ -113,12 +113,21 @@ export function generateQuotePdfHtml(
          </div>`
       : "";
 
-  const depositPct = Number(quote.depositPercentage ?? 50);
-  const depositAmt = Math.round(Number(quote.total) * depositPct / 100);
+  const depositMode = (quote as any).depositMode ?? "percent";
+  const depositPct = Number((quote as any).depositPercent ?? (quote as any).depositPercentage ?? 50);
+  const depositFixedAmt = Number((quote as any).depositFixedAmount ?? 0);
+  const hasDeposit = depositMode === "fixed" ? depositFixedAmt > 0 : depositPct > 0;
+  const depositAmt = depositMode === "fixed"
+    ? depositFixedAmt
+    : Math.round(Number(quote.total) * depositPct / 100);
   const netPayment = Number(quote.total) - depositAmt;
-  const depositRow = `
+  const depositLabel = depositMode === "fixed"
+    ? `DEPOSIT (HKD ${depositAmt.toLocaleString()})`
+    : `DEPOSIT (${depositPct}%)`;
+  const depositRow = hasDeposit
+    ? `
   <tr>
-    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">DEPOSIT (${depositPct}%)</td>
+    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">${depositLabel}</td>
     <td style="vertical-align:middle;">
       <span style="font-size:16px;font-weight:500;color:#C9A84C;letter-spacing:0.01em;">$${depositAmt.toLocaleString()}.00</span>
     </td>
@@ -128,7 +137,8 @@ export function generateQuotePdfHtml(
     <td style="vertical-align:middle;">
       <span style="font-size:14px;font-weight:400;color:#333333;letter-spacing:0.01em;">$${netPayment.toLocaleString()}.00</span>
     </td>
-  </tr>`;
+  </tr>`
+    : "";
 
   const termsItems = [
     "訂金不設退款 &middot; Deposit is non-refundable",
@@ -329,3 +339,25 @@ export function generateQuotePdfHtml(
 </body>
 </html>`;
 }
+
+/**
+ * Render the same visual template as /print/quote (browser download) to a PDF buffer.
+ * Uses Chromium HTML→PDF so email attachments match the printed quotation layout.
+ */
+export async function renderQuotePdfLikePrint(
+  quote: any,
+  llmDescription: string,
+  serviceTypeLabels: Record<string, string>,
+  docType: "QUOTATION" | "RECEIPT" = "QUOTATION",
+  signatureData?: string | null
+): Promise<Buffer> {
+  const html = generateQuotePdfHtml(
+    quote,
+    llmDescription,
+    serviceTypeLabels,
+    docType,
+    signatureData
+  );
+  return generatePdfFromHtml(html, "[QuotePDF-Print]", [], 1500);
+}
+

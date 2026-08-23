@@ -24,13 +24,41 @@ import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { generateQuotePdfBuffer } from "./quotePdfKit";
+import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
 } from "../airwallexPayment";
-// Legacy HTML PDF (unused): keep re-export for tests only — live generation uses PDFKit.
+
+/** Prefer print-page HTML→PDF (matches 下載 PDF); fall back to PDFKit if Chromium fails. */
+async function generateEmailQuotePdf(
+  quote: any,
+  llmDescription: string,
+  signatureData?: string | null
+): Promise<Buffer> {
+  try {
+    const buf = await renderQuotePdfLikePrint(
+      quote,
+      llmDescription,
+      SERVICE_TYPE_LABELS,
+      "QUOTATION",
+      signatureData
+    );
+    console.log(`[QuoteEmail] Using print-format PDF (${buf.length} bytes)`);
+    return buf;
+  } catch (err) {
+    console.error("[QuoteEmail] Print-format PDF failed, falling back to PDFKit:", err);
+    return generateQuotePdfBuffer(
+      quote,
+      llmDescription,
+      SERVICE_TYPE_LABELS,
+      "QUOTATION",
+      signatureData
+    );
+  }
+}
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
 /**
@@ -408,10 +436,10 @@ ${itemsText}
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
 
-      // Generate PDF using PDFKit (fast, no Chromium needed)
+      // Same layout as 「下載 PDF」(/print/quote) — HTML print template via Chromium
       const llmDescription = quote.llmDescription || "感謝您選擇 JD Studio HK 的專業攝影服務。";
       const signatureData = (quote as any).signatureData || null;
-      const pdfBuffer = await generateQuotePdfBuffer(quote, llmDescription, SERVICE_TYPE_LABELS, "QUOTATION", signatureData);
+      const pdfBuffer = await generateEmailQuotePdf(quote, llmDescription, signatureData);
 
       // Pre-create email log to get the ID for tracking pixel
       const logId = await createEmailLog({
