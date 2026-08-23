@@ -10,7 +10,7 @@ Reply-To: same (clients reply to the Gmail they already know)
 
 === Upgrade path (better inbox, same reply mailbox) ===
 Goal:
-  From:     JD Studio HK <info@jdstudiohk.com>   ← Resend + verified domain
+  From:     JD Studio HK <info@jdstudiohk.com>   ← Resend + verified domain (chosen)
   Reply-To: info.exposurehk@gmail.com            ← clients still reply here
 
 Steps in Resend (https://resend.com/domains):
