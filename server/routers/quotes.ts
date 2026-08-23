@@ -133,6 +133,35 @@ export const quotesRouter = router({
     return backfillEmailInquiryLeadSources();
   }),
 
+  /** Full cross-check audit (FH email/name, WA clicks, walk-in → Google). Default dry-run. */
+  auditLeadSources: protectedProcedure
+    .input(
+      z
+        .object({
+          apply: z.boolean().default(false),
+          overrideProtected: z.boolean().default(false),
+        })
+        .optional()
+    )
+    .mutation(async ({ input }) => {
+      const { auditQuoteLeadSources } = await import("../leadSourceAudit");
+      const result = await auditQuoteLeadSources({
+        apply: input?.apply === true,
+        overrideProtected: input?.overrideProtected === true,
+      });
+      // Cap payload — full list can be large
+      return {
+        scanned: result.scanned,
+        wouldChange: result.wouldChange,
+        applied: result.applied,
+        bySuggested: result.bySuggested,
+        protectedSkipped: result.protectedSkipped,
+        highCount: result.rows.filter((r) => r.confidence === "high").length,
+        mediumCount: result.rows.filter((r) => r.confidence === "medium").length,
+        sample: result.rows.slice(0, 50),
+      };
+    }),
+
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
