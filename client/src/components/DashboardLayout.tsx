@@ -57,11 +57,17 @@ import {
   Crown,
   Target,
   Linkedin,
+  UserCog,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import {
+  resolvePageIdForPath,
+  userCanAccessPage,
+  type PageId,
+} from "@shared/pagePermissions";
 
 const DEFAULT_MENU_ITEMS = [
   { id: "dashboard", icon: LayoutDashboard, label: "儀表板", path: "/" },
@@ -79,6 +85,7 @@ const DEFAULT_MENU_ITEMS = [
   { id: "follow-up", icon: Mail, label: "報價跟進", path: "/follow-up" },
   { id: "pitch-outreach", icon: Target, label: "開拓客戶", path: "/pitch-outreach" },
   { id: "linkedin-ops", icon: Linkedin, label: "LinkedIn 內容", path: "/linkedin-ops" },
+  { id: "employees", icon: UserCog, label: "員工管理", path: "/employees" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "jd-sidebar-width";
@@ -104,6 +111,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "follow-up": Mail,
   "pitch-outreach": Target,
   "linkedin-ops": Linkedin,
+  employees: UserCog,
 };
 
 // Safe localStorage wrapper – returns null if unavailable (e.g. iframe, SSR, blocked storage)
@@ -210,7 +218,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const saved = safeLocalStorageGet(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
+  const { loading, user, logout } = useAuth();
 
   useEffect(() => {
     safeLocalStorageSet(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -284,6 +292,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  if (user.role !== "admin" && user.isActive === false) {
+    return (
+      <div
+        className="flex items-center justify-center min-h-screen"
+        style={{ background: "#0a0a0a" }}
+      >
+        <div className="flex flex-col items-center gap-6 p-8 max-w-sm w-full text-center">
+          <h2 className="text-lg font-light text-foreground">帳戶已停用</h2>
+          <p className="text-sm text-muted-foreground">
+            你的員工帳戶尚未開啟使用，請聯絡管理員。
+          </p>
+          <Button
+            onClick={() => logout()}
+            variant="outline"
+            className="w-full"
+          >
+            登出
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider
       style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
@@ -314,13 +345,40 @@ function DashboardLayoutContent({
   const [menuItems, setMenuItems] = useState(() => loadMenuOrder());
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter((item) =>
+      userCanAccessPage({
+        role: user?.role,
+        isActive: user?.isActive,
+        allowedPages: user?.allowedPages,
+        pageId: item.id as PageId,
+      })
+    );
+  }, [menuItems, user?.role, user?.isActive, user?.allowedPages]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
     })
   );
 
-  const activeMenuItem = menuItems.find((item) => item.path === location);
+  const activeMenuItem = visibleMenuItems.find((item) => item.path === location);
+
+  // Redirect if current path is not permitted
+  useEffect(() => {
+    const pageId = resolvePageIdForPath(location);
+    if (!pageId) return;
+    const ok = userCanAccessPage({
+      role: user?.role,
+      isActive: user?.isActive,
+      allowedPages: user?.allowedPages,
+      pageId,
+    });
+    if (!ok) {
+      const fallback = visibleMenuItems[0]?.path ?? "/";
+      if (location !== fallback) setLocation(fallback);
+    }
+  }, [location, user, visibleMenuItems, setLocation]);
 
   // Close sidebar on mobile after navigation
   const handleNavigate = (path: string) => {
@@ -415,11 +473,11 @@ function DashboardLayoutContent({
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={menuItems.map((i) => i.id)}
+                items={visibleMenuItems.map((i) => i.id)}
                 strategy={verticalListSortingStrategy}
               >
                 <SidebarMenu className="px-2 py-1">
-                  {menuItems.map((item) => {
+                  {visibleMenuItems.map((item) => {
                     const isActive =
                       location === item.path ||
                       (item.path !== "/" && location.startsWith(item.path));

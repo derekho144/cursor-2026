@@ -132,6 +132,36 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function listUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users).orderBy(desc(users.lastSignedIn));
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return row;
+}
+
+export async function updateUserAccess(params: {
+  id: number;
+  isActive?: boolean;
+  allowedPages?: string[];
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const set: Record<string, unknown> = {};
+  if (params.isActive !== undefined) set.isActive = params.isActive;
+  if (params.allowedPages !== undefined) set.allowedPages = params.allowedPages;
+  if (params.role !== undefined) set.role = params.role;
+  if (Object.keys(set).length === 0) return getUserById(params.id);
+  await db.update(users).set(set).where(eq(users.id, params.id));
+  return getUserById(params.id);
+}
+
 // ─── Quotes ───────────────────────────────────────────────────────
 export async function generateQuoteNumber(): Promise<string> {
   const now = new Date();
