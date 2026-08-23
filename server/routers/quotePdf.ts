@@ -3,12 +3,21 @@
  * PDF generation helpers for JD Studio quotations and receipts.
  * Uses @sparticuz/chromium + puppeteer-core for serverless-compatible PDF generation.
  * Works in Cloud Run (Node.js only) without system Chrome or Python.
+ *
+ * Visual template matches /print/quote (「下載 PDF」) — used for email attachments.
  */
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { LOGO_BASE64_URL } from "./logoBase64";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
 export { SERVICE_TYPE_LABELS } from "./quotePdfKit";
+
+/** Same Noto CJK fonts as PDFKit — required so Chromium renders 中文 correctly. */
+const NOTO_CJK_REGULAR =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/NotoSansCJK-Regular_fc1f0423.otf";
+const NOTO_CJK_BOLD =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/NotoSansCJK-Bold_74a83bdc.otf";
 
 // ─── Shared PDF Generator (@sparticuz/chromium + puppeteer-core) ────────────
 /**
@@ -39,9 +48,17 @@ export async function generatePdfFromHtml(
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 30000 });
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+    // Wait for @font-face (Noto CJK) + inlined images to settle before capture
+    await page.evaluate(async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+    });
     if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
-    const pdfData = await page.pdf({ format: "A4", printBackground: true });
+    const pdfData = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
     const buf = Buffer.from(pdfData);
     process.stderr.write(`${logPrefix} PDF generated: ${buf.length} bytes\n`);
     return buf;
@@ -124,18 +141,25 @@ export function generateQuotePdfHtml(
   const depositLabel = depositMode === "fixed"
     ? `DEPOSIT (HKD ${depositAmt.toLocaleString()})`
     : `DEPOSIT (${depositPct}%)`;
+  const isFullPayment = depositAmt >= Number(quote.total);
   const depositRow = hasDeposit
     ? `
   <tr>
-    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">${depositLabel}</td>
-    <td style="vertical-align:middle;">
-      <span style="font-size:16px;font-weight:500;color:#C9A84C;letter-spacing:0.01em;">$${depositAmt.toLocaleString()}.00</span>
-    </td>
-  </tr>
-  <tr>
-    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">NET PAYMENT</td>
-    <td style="vertical-align:middle;">
-      <span style="font-size:14px;font-weight:400;color:#333333;letter-spacing:0.01em;">$${netPayment.toLocaleString()}.00</span>
+    <td colspan="2" style="background:#f9f6ef;padding:10px 0 4px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <table align="right" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        <tr>
+          <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">${depositLabel}</td>
+          <td style="vertical-align:middle;">
+            <span style="font-size:16px;font-weight:600;color:#c8922a;letter-spacing:0.01em;">$${depositAmt.toLocaleString()}.00</span>
+          </td>
+        </tr>
+        ${!isFullPayment ? `<tr>
+          <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding:8px 24px 4px 0;vertical-align:middle;">NET PAYMENT</td>
+          <td style="vertical-align:middle;padding-top:8px;">
+            <span style="font-size:14px;font-weight:400;color:#333333;letter-spacing:0.01em;">$${netPayment.toLocaleString()}.00</span>
+          </td>
+        </tr>` : ""}
+      </table>
     </td>
   </tr>`
     : "";
@@ -156,9 +180,20 @@ export function generateQuotePdfHtml(
 <meta charset="UTF-8">
 <title>JD Studio - ${quote.quoteNumber}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&display=swap');
+  @font-face {
+    font-family: 'NotoSansCJK';
+    src: url('${NOTO_CJK_REGULAR}') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+  }
+  @font-face {
+    font-family: 'NotoSansCJK';
+    src: url('${NOTO_CJK_BOLD}') format('opentype');
+    font-weight: 600;
+    font-style: normal;
+  }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#ffffff; color:#222; font-family:'Inter',Arial,sans-serif; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:794px; overflow-x:hidden; }
+  body { background:#ffffff; color:#222; font-family:'NotoSansCJK','Helvetica Neue',Helvetica,Arial,sans-serif; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:794px; overflow-x:hidden; }
   @media print {
     body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
@@ -172,7 +207,7 @@ export function generateQuotePdfHtml(
     <tr>
       <td style="vertical-align:top;width:55%;">
         <div style="margin-bottom:14px;">
-          <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/%E8%9E%A2%E5%B9%95%E6%88%AA%E5%9C%962026-03-2800.05.33_926f5e3f.png" alt="JD STUDIO" style="width:90px;height:auto;display:block;" />
+          <img src="${LOGO_BASE64_URL}" alt="JD STUDIO" style="width:90px;height:auto;display:block;" />
         </div>
         <div style="font-size:10px;line-height:2.2;">
           <span style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#777;font-weight:500;display:inline-block;width:40px;">TEL</span><span style="color:#cccccc;">+852 9153 1976</span><br>

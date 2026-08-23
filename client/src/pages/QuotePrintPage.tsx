@@ -323,12 +323,12 @@ export default function QuotePrintPage() {
             )}
             {quote.clientPhone && <div style={S.clientDetail}>{quote.clientPhone}</div>}
             {quote.clientEmail && <div style={S.clientDetail}>{quote.clientEmail}</div>}
-            {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
-            {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
           </div>
           <div style={S.serviceCol}>
             <div style={S.sectionLabel}>SERVICE DETAILS</div>
             <div style={S.serviceType}>{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
+            {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
+            {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
           </div>
         </div>
 
@@ -374,6 +374,31 @@ export default function QuotePrintPage() {
             );
           })}
 
+          {/* Extra meta rows (equipment / team / delivery) — match email & PDFKit */}
+          {([
+            quote.equipment ? { label: "LIGHTING & EQUIPMENT", value: quote.equipment } : null,
+            (quote as any).team ? { label: "TEAM", value: (quote as any).team } : null,
+            (quote as any).deliveryMethod ? { label: "PHOTO DELIVERY METHOD", value: (quote as any).deliveryMethod } : null,
+          ].filter(Boolean) as { label: string; value: string }[]).map((row, i) => {
+            const idx = items.length + i;
+            return (
+              <div key={`extra-${i}`} style={{
+                display: "flex",
+                borderBottom: "1px solid #eeeeee",
+                padding: "7px 0",
+                background: idx % 2 === 0 ? "#ffffff" : "#f7f7f7",
+                WebkitPrintColorAdjust: "exact" as const,
+                printColorAdjust: "exact" as const,
+              }}>
+                <div style={{ flex: 1, fontSize: 7.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#888", fontWeight: 600, paddingLeft: 8 }}>
+                  {row.label}
+                </div>
+                <div style={{ flex: 1, fontSize: 10.5, color: "#333", textAlign: "right", paddingRight: 4 }}>
+                  {row.value}
+                </div>
+              </div>
+            );
+          })}
 
         </div>
 
@@ -414,24 +439,30 @@ export default function QuotePrintPage() {
                 ? `DEPOSIT (HKD ${depositAmt.toLocaleString('en-HK')})`
                 : `DEPOSIT (${depositPct}%)`;
               return (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 8 }}>
+                <div style={{
+                  background: "#f9f6ef",
+                  padding: "8px 10px",
+                  marginTop: 8,
+                  WebkitPrintColorAdjust: "exact" as const,
+                  printColorAdjust: "exact" as const,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 32 }}>
                     <span style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "#aaa" }}>
                       {depositLabel}
                     </span>
-                    <span style={{ fontSize: 10.5, color: "#111", fontWeight: 600 }}>
-                      HKD {depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: 14, color: "#c8922a", fontWeight: 600 }}>
+                      ${depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   {!isFullPayment && (
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 32, marginTop: 6 }}>
                       <span style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: "#aaa" }}>NET PAYMENT</span>
-                      <span style={{ fontSize: 10.5, color: "#555" }}>
-                        HKD {netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      <span style={{ fontSize: 12, color: "#555" }}>
+                        ${netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   )}
-                </>
+                </div>
               );
             })()}
           </div>
