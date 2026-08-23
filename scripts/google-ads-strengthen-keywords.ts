@@ -78,13 +78,33 @@ const KEYWORD_BATCHES: Array<{ niche: string; adGroupRn: string; keywords: strin
 ];
 
 function loadEnvFile() {
+  const keys = [
+    "GOOGLE_ADS_DEVELOPER_TOKEN",
+    "GOOGLE_ADS_CLIENT_ID",
+    "GOOGLE_ADS_CLIENT_SECRET",
+    "GOOGLE_ADS_REFRESH_TOKEN",
+  ] as const;
+
+  // Prefer process.env (Manus / production) so we can skip hung DB export.
+  const fromProcess: Record<string, string> = {};
+  for (const k of keys) {
+    const v = process.env[k]?.trim();
+    if (v) fromProcess[k] = v;
+  }
+  if (keys.every((k) => fromProcess[k])) {
+    console.log("Using Google Ads credentials from process.env");
+    return fromProcess;
+  }
+
   const path = process.env.GOOGLE_ADS_ENV_FILE ?? join(homedir(), ".config/jd-studio/google-ads.env");
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = { ...fromProcess };
   for (const line of readFileSync(path, "utf8").split("\n")) {
     const s = line.trim();
     if (!s || s.startsWith("#") || !s.includes("=")) continue;
     const i = s.indexOf("=");
-    env[s.slice(0, i)] = s.slice(i + 1).trim();
+    const k = s.slice(0, i);
+    const v = s.slice(i + 1).trim();
+    if (v && !env[k]) env[k] = v;
   }
   return env;
 }
