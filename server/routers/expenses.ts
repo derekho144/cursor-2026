@@ -65,6 +65,7 @@ export const expensesRouter = router({
         ...r,
         amount: Number(r.amount),
         categoryLabel: CATEGORY_LABELS[r.category] ?? r.category,
+        isFromQuoteCost: r.quoteCostId != null,
       }));
     }),
 
