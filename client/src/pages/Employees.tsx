@@ -3,13 +3,15 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Shield, UserCheck, UserX } from "lucide-react";
+import { Loader2, Shield, UserCheck, UserX, Plus, KeyRound, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PageId } from "@shared/pagePermissions";
 
 type EmployeeRow = {
   id: number;
+  openId: string;
+  username: string | null;
   name: string | null;
   email: string | null;
   role: "user" | "admin";
@@ -17,6 +19,8 @@ type EmployeeRow = {
   allowedPages: PageId[];
   lastSignedIn: Date | string | null;
   isOwner: boolean;
+  isLocal?: boolean;
+  hasPassword?: boolean;
 };
 
 export default function Employees() {
@@ -26,8 +30,16 @@ export default function Employees() {
     trpc.employees.pageCatalog.useQuery();
   const { data: employees = [], isLoading } = trpc.employees.list.useQuery();
   const [editingId, setEditingId] = useState<number | null>(null);
-
   const [keepOpenId, setKeepOpenId] = useState<string>("");
+
+  const [createForm, setCreateForm] = useState({
+    username: "",
+    password: "",
+    name: "",
+    isActive: true,
+    allowedPages: [] as PageId[],
+  });
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -43,12 +55,40 @@ export default function Employees() {
     onError: (e) => toast.error(e.message),
   });
 
+  const createMutation = trpc.employees.create.useMutation({
+    onSuccess: () => {
+      toast.success("已建立員工帳號");
+      utils.employees.list.invalidate();
+      setCreateForm({
+        username: "",
+        password: "",
+        name: "",
+        isActive: true,
+        allowedPages: [],
+      });
+      setShowCreate(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const resetPasswordMutation = trpc.employees.resetPassword.useMutation({
+    onSuccess: () => toast.success("密碼已重設"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteMutation = trpc.employees.delete.useMutation({
+    onSuccess: () => {
+      toast.success("已刪除員工帳號");
+      utils.employees.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const purgeMutation = trpc.employees.purgeExcept.useMutation({
     onSuccess: (res) => {
       toast.success("已清除其他帳號，並保留你指定的 openId");
       utils.employees.list.invalidate();
       utils.auth.me.invalidate();
-      // Keep current draft openId
       setKeepOpenId(res.kept?.[0] ?? keepOpenId);
     },
     onError: (e) => toast.error(e.message),
@@ -65,23 +105,154 @@ export default function Employees() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <div
-            style={{
-              fontSize: "0.6rem",
-              letterSpacing: "0.2em",
-              color: "#d4a843",
-              textTransform: "uppercase",
-              marginBottom: "4px",
-            }}
-          >
-            Team Access
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div
+              style={{
+                fontSize: "0.6rem",
+                letterSpacing: "0.2em",
+                color: "#d4a843",
+                textTransform: "uppercase",
+                marginBottom: "4px",
+              }}
+            >
+              Team Access
+            </div>
+            <h1 className="text-2xl font-light">員工管理</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              幫員工建立帳號密碼，並勾選可看見的頁面。員工用帳號密碼登入系統。
+            </p>
           </div>
-          <h1 className="text-2xl font-light">員工管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            開啟員工使用權，並勾選該員工可看見的頁面。員工需先用 Manus 登入一次才會出現喺列表。
-          </p>
+          <button
+            onClick={() => setShowCreate((v) => !v)}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded"
+            style={{ background: "#d4a843", color: "#0a0a0a" }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {showCreate ? "取消" : "新增員工帳號"}
+          </button>
         </div>
+
+        {showCreate && (
+          <div
+            className="rounded border p-4 space-y-4"
+            style={{ borderColor: "rgba(212,168,67,0.25)", background: "#111" }}
+          >
+            <div className="text-sm font-medium text-foreground">新增員工帳號</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">登入帳號 *</label>
+                <input
+                  value={createForm.username}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, username: e.target.value }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded text-sm"
+                  style={{
+                    background: "#0a0a0a",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#fff",
+                  }}
+                  placeholder="例如：staff01"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">密碼 *（至少 8 位）</label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, password: e.target.value }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded text-sm"
+                  style={{
+                    background: "#0a0a0a",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#fff",
+                  }}
+                  placeholder="••••••••"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">顯示名稱</label>
+                <input
+                  value={createForm.name}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  className="mt-1 w-full px-3 py-2 rounded text-sm"
+                  style={{
+                    background: "#0a0a0a",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#fff",
+                  }}
+                  placeholder="例如：阿明"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-5">
+                <div>
+                  <div className="text-sm">開啟使用</div>
+                  <div className="text-xs text-muted-foreground">建立後可否登入</div>
+                </div>
+                <Switch
+                  checked={createForm.isActive}
+                  onCheckedChange={(v) =>
+                    setCreateForm((f) => ({ ...f, isActive: v }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm mb-2">可看見的頁面</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {catalog.map((page) => {
+                  const checked = createForm.allowedPages.includes(page.id);
+                  return (
+                    <label
+                      key={page.id}
+                      className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1.5 hover:bg-white/5"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          setCreateForm((f) => ({
+                            ...f,
+                            allowedPages: v
+                              ? Array.from(new Set([...f.allowedPages, page.id]))
+                              : f.allowedPages.filter((p) => p !== page.id),
+                          }));
+                        }}
+                      />
+                      <span>{page.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!createForm.username.trim() || createForm.password.length < 8) {
+                  toast.error("請填寫帳號，密碼至少 8 位");
+                  return;
+                }
+                createMutation.mutate({
+                  username: createForm.username.trim(),
+                  password: createForm.password,
+                  name: createForm.name.trim() || undefined,
+                  isActive: createForm.isActive,
+                  allowedPages: createForm.allowedPages,
+                });
+              }}
+              disabled={createMutation.isPending}
+              className="px-4 py-2 text-xs font-semibold rounded disabled:opacity-50"
+              style={{ background: "#d4a843", color: "#0a0a0a" }}
+            >
+              {createMutation.isPending ? "建立中…" : "建立帳號"}
+            </button>
+          </div>
+        )}
 
         <div
           className="rounded border p-4"
@@ -119,13 +290,10 @@ export default function Employees() {
                   border: "1px solid rgba(255,255,255,0.12)",
                   color: "#fff",
                 }}
-                placeholder="例如：xxxxxx"
               />
               <button
                 onClick={() =>
-                  purgeMutation.mutate({
-                    keepOpenId: keepOpenId.trim(),
-                  })
+                  purgeMutation.mutate({ keepOpenId: keepOpenId.trim() })
                 }
                 disabled={purgeMutation.isPending || !keepOpenId.trim()}
                 className="px-4 py-2 text-xs font-semibold rounded disabled:opacity-50"
@@ -144,7 +312,7 @@ export default function Employees() {
           </div>
         ) : employees.length === 0 ? (
           <div className="text-sm text-muted-foreground py-12 text-center">
-            尚無用戶。請先請同事用同一個系統連結登入。
+            尚無用戶。請先新增員工帳號。
           </div>
         ) : (
           <div className="space-y-3">
@@ -158,12 +326,23 @@ export default function Employees() {
                   catalog={catalog}
                   isEditing={isEditing}
                   saving={updateMutation.isPending && editingId === row.id}
-                  onToggleEdit={() =>
-                    setEditingId(isEditing ? null : row.id)
-                  }
+                  onToggleEdit={() => setEditingId(isEditing ? null : row.id)}
                   onSave={(patch) => {
                     setEditingId(row.id);
                     updateMutation.mutate({ userId: row.id, ...patch });
+                  }}
+                  onResetPassword={() => {
+                    const pwd = window.prompt(`為 ${row.username || row.name} 設定新密碼（至少 8 位）`);
+                    if (!pwd) return;
+                    if (pwd.length < 8) {
+                      toast.error("密碼至少 8 位");
+                      return;
+                    }
+                    resetPasswordMutation.mutate({ userId: row.id, password: pwd });
+                  }}
+                  onDelete={() => {
+                    if (!window.confirm(`確定刪除 ${row.username || row.name}？`)) return;
+                    deleteMutation.mutate({ userId: row.id });
                   }}
                 />
               );
@@ -182,6 +361,8 @@ function EmployeeCard({
   saving,
   onToggleEdit,
   onSave,
+  onResetPassword,
+  onDelete,
 }: {
   employee: EmployeeRow;
   catalog: Array<{ id: PageId; label: string }>;
@@ -193,6 +374,8 @@ function EmployeeCard({
     allowedPages?: PageId[];
     role?: "user" | "admin";
   }) => void;
+  onResetPassword: () => void;
+  onDelete: () => void;
 }) {
   const [draftPages, setDraftPages] = useState<PageId[]>(employee.allowedPages);
   const [draftActive, setDraftActive] = useState(employee.isActive);
@@ -216,8 +399,13 @@ function EmployeeCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-foreground font-medium">
-              {employee.name || "未命名用戶"}
+              {employee.name || employee.username || "未命名用戶"}
             </span>
+            {employee.username && (
+              <span className="text-xs font-mono text-emerald-300">
+                @{employee.username}
+              </span>
+            )}
             {employee.role === "admin" && (
               <span
                 className="text-xs px-2 py-0.5 rounded-sm flex items-center gap-1"
@@ -245,7 +433,8 @@ function EmployeeCard({
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {employee.email || "無電郵"} · 上次登入 {lastSeen}
+            {employee.email || (employee.isLocal ? "本系統帳號" : "無電郵")} · 上次登入{" "}
+            {lastSeen}
           </div>
           {employee.role !== "admin" && !isEditing && (
             <div className="text-xs text-muted-foreground mt-2">
@@ -253,9 +442,7 @@ function EmployeeCard({
               {employee.allowedPages.length === 0
                 ? "（無）"
                 : employee.allowedPages
-                    .map(
-                      (id) => catalog.find((c) => c.id === id)?.label ?? id
-                    )
+                    .map((id) => catalog.find((c) => c.id === id)?.label ?? id)
                     .join("、")}
             </div>
           )}
@@ -265,7 +452,7 @@ function EmployeeCard({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!employee.isOwner && employee.role !== "admin" && (
             <button
               onClick={isEditing ? onToggleEdit : openEdit}
@@ -276,6 +463,16 @@ function EmployeeCard({
               }}
             >
               {isEditing ? "取消" : "設定權限"}
+            </button>
+          )}
+          {employee.hasPassword && !employee.isOwner && (
+            <button
+              onClick={onResetPassword}
+              className="px-3 py-1.5 text-xs rounded flex items-center gap-1 text-muted-foreground hover:opacity-80"
+              style={{ border: "1px solid rgba(255,255,255,0.12)" }}
+            >
+              <KeyRound className="h-3 w-3" />
+              重設密碼
             </button>
           )}
           {!employee.isOwner && employee.role === "admin" && (
@@ -296,6 +493,16 @@ function EmployeeCard({
               disabled={saving}
             >
               設為管理員
+            </button>
+          )}
+          {!employee.isOwner && (
+            <button
+              onClick={onDelete}
+              className="px-3 py-1.5 text-xs rounded flex items-center gap-1 text-red-400 hover:opacity-80"
+              style={{ border: "1px solid rgba(248,113,113,0.35)" }}
+            >
+              <Trash2 className="h-3 w-3" />
+              刪除
             </button>
           )}
         </div>

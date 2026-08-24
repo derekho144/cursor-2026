@@ -414,6 +414,13 @@
       "when": 1787529000000,
       "tag": "0058_user_page_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1787562000000,
+      "tag": "0059_user_password_login",
+      "breakpoints": true
     }
   ]
 }
