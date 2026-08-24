@@ -1457,6 +1457,23 @@ export default function QuoteForm() {
               </div>
             )}
 
+            {priceSuggest &&
+              !priceSuggest.suggestion &&
+              form.serviceType &&
+              form.serviceType !== "other" &&
+              !DESIGN_SERVICE_TYPES.has(form.serviceType) && (
+              <div
+                className="md:col-span-2 p-3 rounded text-xs text-muted-foreground"
+                style={{
+                  background: "rgba(212,168,67,0.04)",
+                  border: "1px solid rgba(212,168,67,0.15)",
+                }}
+              >
+                定價學習由 {priceSuggest.learningStartLabel ?? "指定日期"}（香港時間）起計；
+                舊報價唔作參考。{priceSuggest.note ?? "新成交樣本不足，暫無建議價。"}
+              </div>
+            )}
+
             {/* 關聯詢盤 */}
             <FormField label="關聯詢盤（選填）">
               <div ref={inquirySearchRef} style={{ position: "relative" }}>

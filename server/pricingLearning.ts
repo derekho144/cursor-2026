@@ -3,7 +3,7 @@
  * Price mids / suggestions use accepted only; rejected are backfilled for learning features.
  * Accuracy focus: prefer structured fields, trim outliers, time-weight, coverage quality.
  */
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { emailInquiries, quoteItems, quotes } from "../drizzle/schema";
 import {
@@ -37,8 +37,17 @@ import {
   rejectReasonByLabel,
   rejectReasonCategoryLabel,
 } from "../shared/quoteRejectReasons";
+import {
+  formatPricingLearningStartAtLabel,
+  getPricingLearningStartAt,
+  pricingLearningStartAtIso,
+} from "../shared/pricingLearningConfig";
 
 const MIN_BUCKET_SAMPLES = 2;
+
+function pricingLearningStartCondition() {
+  return gte(quotes.createdAt, getPricingLearningStartAt());
+}
 
 export interface PricingLearningQuoteRow {
   id: number;
@@ -102,6 +111,7 @@ async function loadLearningQuotesWithItems(opts?: {
     inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
     ne(quotes.serviceType, "other"),
+    pricingLearningStartCondition(),
   ];
   if (opts?.serviceType) {
     conditions.push(eq(quotes.serviceType, opts.serviceType as any));
@@ -505,6 +515,9 @@ export async function getPricingLearningOverview() {
 
   return {
     generatedAt: new Date().toISOString(),
+    learningStartAt: pricingLearningStartAtIso(),
+    learningStartLabel: formatPricingLearningStartAtLabel(),
+    learningScopeNote: `只計 ${formatPricingLearningStartAtLabel()}（香港時間）之後建立嘅報價；以往舊單唔作學習參考。`,
     acceptedCount: rows.length,
     rejectedCount,
     coverage: {
@@ -556,6 +569,7 @@ export async function getPricingLearningOverview() {
                 100
             ),
       tips: [
+        `只計 ${formatPricingLearningStartAtLabel()}（香港時間）之後建立嘅報價；舊單已排除。`,
         "無法保證 100% 自動回填：只會寫入文字／項目裏已有明確訊號嘅欄位（例如「4小時」「Team 1P」「20張」）。",
         "已接受＋已拒絕都會回填結構化欄位；成交中位／建議價仍然只用已接受，避免拒單價拉歪。",
         "產品／食物／珠寶等：填「交付張數」；活動／錄影：填時數同人手。",
@@ -884,6 +898,8 @@ export async function suggestPriceFromLearning(input: {
   return {
     serviceType: input.serviceType,
     pricingMode: mode,
+    learningStartAt: pricingLearningStartAtIso(),
+    learningStartLabel: formatPricingLearningStartAtLabel(),
     filters: {
       hours: input.hours ?? null,
       hoursBucket: targetHours,
@@ -914,9 +930,9 @@ export async function suggestPriceFromLearning(input: {
       "唔好為成交砍穿成本底線；客人嫌貴優先出 Essential（減範圍），唔係減質素時薪。",
     note:
       summary.count < MIN_BUCKET_SAMPLES
-        ? mode === "shot_count"
-          ? "同類已接受報價樣本不足，建議先用市場價參考，並補齊交付張數。"
-          : "同類已接受報價樣本不足，建議先用市場價參考，並補齊時數／人手／時長套餐。"
+        ? `自 ${formatPricingLearningStartAtLabel()} 起累積樣本不足（${summary.count} 筆）；請先用市場價，並為新單填齊${
+            mode === "shot_count" ? "交付張數" : "時數／人手／時長套餐"
+          }。`
         : useRows.length < rows.length
           ? `已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
           : `基於 ${summary.count} 筆「${input.serviceType}」已接受報價（已剔除離群值）。`,
@@ -973,7 +989,7 @@ export async function backfillStructuredShootFields(opts?: {
       reason: string;
     }>,
     accuracyNote:
-      "自動回填只寫入文字／項目裏有明確訊號嘅欄位，無法保證 100% 覆蓋；無訊號嘅報價需人手補齊。",
+      "自動回填只處理學習起點之後嘅報價；只寫入文字／項目裏有明確訊號嘅欄位。",
   };
   if (!db) return emptyReport;
 
@@ -1002,6 +1018,7 @@ export async function backfillStructuredShootFields(opts?: {
       and(
         inArray(quotes.status, ["accepted", "rejected"]),
         sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
+        pricingLearningStartCondition(),
         or(
           isNull(quotes.shootHours),
           isNull(quotes.shotCount),
@@ -1256,7 +1273,8 @@ export async function refreshDurationPackageBackfill(opts?: {
     .where(
       and(
         inArray(quotes.status, ["accepted", "rejected"]),
-        sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`
+        sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
+        pricingLearningStartCondition()
       )
     )
     .orderBy(desc(quotes.updatedAt))

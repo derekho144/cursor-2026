@@ -251,10 +251,9 @@ export default function PricingLearning() {
             </h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            從已接受報價學習出價區間；已拒絕單亦會回填結構化欄位方便學習特徵。
-            「其他」服務類型不計入學習（內容太雜）。
-            自動回填只寫入文字裏已有明確訊號嘅欄位，無法保證 100%——無訊號要人手補。
-            成交中位／建議價仍然只用已接受，避免拒單價拉歪。
+            {overview?.learningScopeNote ??
+              "只計指定日期之後建立嘅報價；以往舊單唔作學習參考。"}
+            「其他」服務類型不計入學習。新單請填齊時長套餐、時數／張數、人手；拒絕時填原因＋預算。
           </p>
         </div>
 
@@ -957,8 +956,8 @@ export default function PricingLearning() {
           className="text-xs text-muted-foreground p-3 rounded"
           style={{ background: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.12)" }}
         >
-          提升準確率：開／改報價時請填「拍攝時數」同人手人數。可用上方「回填」把舊報價文字轉成結構化欄位。
-          報價單內建「建議價」會等學習質素夠高先加。
+          學習起點：{overview?.learningStartLabel ?? "—"}（香港時間）— 此前舊報價唔計入。
+          新單請填齊結構化欄位；回填只處理起點之後嘅報價。
         </div>
       </div>
     </DashboardLayout>
