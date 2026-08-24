@@ -3,12 +3,21 @@
  * PDF generation helpers for JD Studio quotations and receipts.
  * Uses @sparticuz/chromium + puppeteer-core for serverless-compatible PDF generation.
  * Works in Cloud Run (Node.js only) without system Chrome or Python.
+ *
+ * Visual template matches /print/quote (「下載 PDF」) — used for email attachments.
  */
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { LOGO_BASE64_URL } from "./logoBase64";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
 export { SERVICE_TYPE_LABELS } from "./quotePdfKit";
+
+/** Same Noto CJK fonts as PDFKit — required so Chromium renders 中文 correctly. */
+const NOTO_CJK_REGULAR =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/NotoSansCJK-Regular_fc1f0423.otf";
+const NOTO_CJK_BOLD =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/NotoSansCJK-Bold_74a83bdc.otf";
 
 // ─── Shared PDF Generator (@sparticuz/chromium + puppeteer-core) ────────────
 /**
@@ -39,9 +48,17 @@ export async function generatePdfFromHtml(
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 30000 });
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+    // Wait for @font-face (Noto CJK) + inlined images to settle before capture
+    await page.evaluate(async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+    });
     if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
-    const pdfData = await page.pdf({ format: "A4", printBackground: true });
+    const pdfData = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
     const buf = Buffer.from(pdfData);
     process.stderr.write(`${logPrefix} PDF generated: ${buf.length} bytes\n`);
     return buf;
@@ -113,22 +130,31 @@ export function generateQuotePdfHtml(
          </div>`
       : "";
 
-  const depositPct = Number(quote.depositPercentage ?? 50);
-  const depositAmt = Math.round(Number(quote.total) * depositPct / 100);
+  const depositMode = (quote as any).depositMode ?? "percent";
+  const depositPct = Number((quote as any).depositPercent ?? (quote as any).depositPercentage ?? 50);
+  const depositFixedAmt = Number((quote as any).depositFixedAmount ?? 0);
+  const hasDeposit = depositMode === "fixed" ? depositFixedAmt > 0 : depositPct > 0;
+  const depositAmt = depositMode === "fixed"
+    ? depositFixedAmt
+    : Math.round(Number(quote.total) * depositPct / 100);
   const netPayment = Number(quote.total) - depositAmt;
-  const depositRow = `
-  <tr>
-    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">DEPOSIT (${depositPct}%)</td>
-    <td style="vertical-align:middle;">
-      <span style="font-size:16px;font-weight:500;color:#C9A84C;letter-spacing:0.01em;">$${depositAmt.toLocaleString()}.00</span>
-    </td>
-  </tr>
-  <tr>
-    <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">NET PAYMENT</td>
-    <td style="vertical-align:middle;">
-      <span style="font-size:14px;font-weight:400;color:#333333;letter-spacing:0.01em;">$${netPayment.toLocaleString()}.00</span>
-    </td>
-  </tr>`;
+  const depositLabel = depositMode === "fixed"
+    ? `DEPOSIT (HKD ${depositAmt.toLocaleString()})`
+    : `DEPOSIT (${depositPct}%)`;
+  const isFullPayment = depositAmt >= Number(quote.total);
+  const depositBlock = hasDeposit
+    ? `
+    <div style="margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;gap:32px;">
+        <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">${depositLabel}</span>
+        <span style="font-size:10.5px;color:#111111;font-weight:600;">HKD ${depositAmt.toLocaleString()}</span>
+      </div>
+      ${!isFullPayment ? `<div style="display:flex;justify-content:space-between;gap:32px;margin-top:4px;">
+        <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">NET PAYMENT</span>
+        <span style="font-size:10.5px;color:#555555;">HKD ${netPayment.toLocaleString()}</span>
+      </div>` : ""}
+    </div>`
+    : "";
 
   const termsItems = [
     "訂金不設退款 &middot; Deposit is non-refundable",
@@ -146,9 +172,20 @@ export function generateQuotePdfHtml(
 <meta charset="UTF-8">
 <title>JD Studio - ${quote.quoteNumber}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&display=swap');
+  @font-face {
+    font-family: 'NotoSansCJK';
+    src: url('${NOTO_CJK_REGULAR}') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+  }
+  @font-face {
+    font-family: 'NotoSansCJK';
+    src: url('${NOTO_CJK_BOLD}') format('opentype');
+    font-weight: 600;
+    font-style: normal;
+  }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#ffffff; color:#222; font-family:'Inter',Arial,sans-serif; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:794px; overflow-x:hidden; }
+  body { background:#ffffff; color:#222; font-family:'NotoSansCJK','Helvetica Neue',Helvetica,Arial,sans-serif; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:794px; overflow-x:hidden; }
   @media print {
     body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
@@ -162,7 +199,7 @@ export function generateQuotePdfHtml(
     <tr>
       <td style="vertical-align:top;width:55%;">
         <div style="margin-bottom:14px;">
-          <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/%E8%9E%A2%E5%B9%95%E6%88%AA%E5%9C%962026-03-2800.05.33_926f5e3f.png" alt="JD STUDIO" style="width:90px;height:auto;display:block;" />
+          <img src="${LOGO_BASE64_URL}" alt="JD STUDIO" style="width:90px;height:auto;display:block;" />
         </div>
         <div style="font-size:10px;line-height:2.2;">
           <span style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#777;font-weight:500;display:inline-block;width:40px;">TEL</span><span style="color:#cccccc;">+852 9153 1976</span><br>
@@ -171,10 +208,10 @@ export function generateQuotePdfHtml(
         </div>
       </td>
       <td style="vertical-align:top;text-align:right;width:45%;">
-        <div style="font-size:7.5px;letter-spacing:0.28em;text-transform:uppercase;color:#888888;margin-bottom:8px;">${docType}</div>
-        <div style="font-size:38px;font-weight:300;letter-spacing:0.01em;color:#ffffff;line-height:1;">${quote.quoteNumber}</div>
+        <div style="font-size:7.5px;letter-spacing:0.25em;text-transform:uppercase;color:#888888;margin-bottom:5px;">${docType}</div>
+        <div style="font-size:28px;font-weight:300;letter-spacing:0.01em;color:#ffffff;line-height:1;">${quote.quoteNumber}</div>
         <div style="width:100%;height:1px;background:#444444;margin:14px 0 10px;"></div>
-        <div style="font-size:9px;color:#888888;letter-spacing:0.14em;text-transform:uppercase;">DATE &nbsp; ${formatDate(quote.createdAt)}</div>
+        <div style="font-size:9px;color:#888888;letter-spacing:0.12em;text-transform:uppercase;">DATE &nbsp; ${formatDate(quote.createdAt)}</div>
       </td>
     </tr>
   </table>
@@ -223,23 +260,17 @@ export function generateQuotePdfHtml(
     </tbody>
   </table>
 
-  <!-- TOTAL -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e0e0e0;border-collapse:collapse;">
-    <tr>
-      <td style="padding:12px 32px 12px 32px;text-align:right;">
-        ${discountRow}
-          <table align="right" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          <tr>
-            <td style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;padding-right:24px;vertical-align:middle;">TOTAL AMOUNT</td>
-            <td style="vertical-align:middle;border-top:1px solid #333333;padding-top:8px;">
-              <span style="font-size:28px;font-weight:300;color:#111111;letter-spacing:0.01em;">$${Number(quote.total).toLocaleString()}.00</span>
-            </td>
-          </tr>
-          ${depositRow}
-        </table>
-      </td>
-    </tr>
-  </table>
+  <!-- TOTAL — stacked layout matching /print/quote -->
+  <div style="padding:10px 32px 6px 32px;display:flex;justify-content:flex-end;">
+    <div style="text-align:right;min-width:200px;padding-right:4px;">
+      ${discountRow}
+      <div style="border-top:1px solid #cccccc;padding-top:8px;margin-top:4px;">
+        <div style="font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;margin-bottom:4px;">TOTAL AMOUNT</div>
+        <div style="font-size:22px;font-weight:300;color:#111111;letter-spacing:-0.02em;">$${Number(quote.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+      </div>
+      ${depositBlock}
+    </div>
+  </div>
 
   ${notesHtml ? `
   <!-- NOTES -->
@@ -288,6 +319,26 @@ export function generateQuotePdfHtml(
       ${termsItems}
     </ul>
   </div>
+  ${docType !== "RECEIPT" ? `
+  <!-- GOOGLE REVIEW — matches /print/quote -->
+  <div style="margin:0 32px 10px 32px;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="width:36px;vertical-align:top;font-size:24px;line-height:1;padding-top:1px;">⭐</td>
+      <td style="vertical-align:top;">
+        <div style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#e8d5a0;margin-bottom:5px;letter-spacing:0.02em;">Google Review</div>
+        <div style="font-size:10px;color:#cccccc;line-height:1.7;margin-bottom:2px;">
+          Leave us a Google review &amp; follow our Instagram <span style="color:#c9a84c;font-style:italic;">@jdstudiohk</span> to enjoy a special discount on this shoot.
+        </div>
+        <div style="font-size:8.5px;color:#777777;line-height:1.7;margin-bottom:9px;">
+          於 Google 留下您的真實評價，並追蹤我們的 Instagram <span style="color:#a07830;font-style:italic;">@jdstudiohk</span>，即可於本次攝影服務中享有特別折扣。
+        </div>
+        <div style="background:#1a1a1a;border:1px solid #3a2e14;border-radius:4px;padding:7px 14px;display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="font-size:10px;color:#c9a84c;letter-spacing:0.06em;margin-bottom:1px;">Google Review + Follow IG &nbsp;→&nbsp; 10% Discount</div>
+          <div style="font-size:8.5px;color:#a07830;letter-spacing:0.04em;">Google 好評 + Follow IG &nbsp;→&nbsp; 10% 折扣優惠</div>
+        </div>
+      </td>
+    </tr></table>
+  </div>` : ""}
   ${signatureData ? `
   <!-- SIGNATURE BLOCK -->
   <div style="padding:8px 32px 10px 32px;border-top:1px solid #e8e8e8;page-break-inside:avoid;break-inside:avoid;">
@@ -329,3 +380,25 @@ export function generateQuotePdfHtml(
 </body>
 </html>`;
 }
+
+/**
+ * Render the same visual template as /print/quote (browser download) to a PDF buffer.
+ * Uses Chromium HTML→PDF so email attachments match the printed quotation layout.
+ */
+export async function renderQuotePdfLikePrint(
+  quote: any,
+  llmDescription: string,
+  serviceTypeLabels: Record<string, string>,
+  docType: "QUOTATION" | "RECEIPT" = "QUOTATION",
+  signatureData?: string | null
+): Promise<Buffer> {
+  const html = generateQuotePdfHtml(
+    quote,
+    llmDescription,
+    serviceTypeLabels,
+    docType,
+    signatureData
+  );
+  return generatePdfFromHtml(html, "[QuotePDF-Print]", [], 1500);
+}
+

@@ -24,13 +24,45 @@ import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { generateQuotePdfBuffer } from "./quotePdfKit";
+import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
 } from "../airwallexPayment";
-// Legacy HTML PDF (unused): keep re-export for tests only — live generation uses PDFKit.
+
+/**
+ * Prefer print-page HTML→PDF (same layout as 「下載 PDF」/print/quote).
+ * Falls back to PDFKit only if Chromium is unavailable.
+ */
+async function generateQuotePdfMatchingDownload(
+  quote: any,
+  llmDescription: string,
+  docType: "QUOTATION" | "RECEIPT" = "QUOTATION",
+  signatureData?: string | null
+): Promise<Buffer> {
+  try {
+    const buf = await renderQuotePdfLikePrint(
+      quote,
+      llmDescription,
+      SERVICE_TYPE_LABELS,
+      docType,
+      signatureData
+    );
+    console.log(`[QuotePDF] Using print-format PDF (${docType}, ${buf.length} bytes)`);
+    return buf;
+  } catch (err) {
+    console.error("[QuotePDF] Print-format PDF failed, falling back to PDFKit:", err);
+    return generateQuotePdfBuffer(
+      quote,
+      llmDescription,
+      SERVICE_TYPE_LABELS,
+      docType,
+      signatureData
+    );
+  }
+}
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
 /**
@@ -64,7 +96,7 @@ ${itemsText}
       });
       const llmDescription = extractLLMText(llmResponse.choices?.[0]?.message?.content)
         || `感謝您選擇 JD Studio HK。我們將為您提供專業的${SERVICE_TYPE_LABELS[quote.serviceType] || '攝影'}服務。`;
-      const pdfBuffer = await generateQuotePdfBuffer(quote, llmDescription, SERVICE_TYPE_LABELS);
+      const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription);
       const fileKey = `quotes/${quote.quoteNumber}-${nanoid(8)}.pdf`;
       const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
       await updateQuote(quoteId, { pdfUrl: url, pdfKey: fileKey, llmDescription });
@@ -365,7 +397,7 @@ ${itemsText}
 
       const llmDescription = extractLLMText(llmResponse.choices?.[0]?.message?.content)
         || "感謝您選擇 JD Studio HK 的專業攝影服務。我們將以最高水準為您提供專業的視覺內容製作，確保每個細節都能完美呈現您的品牌形象。";
-      const pdfBuffer = await generateQuotePdfBuffer(quote, llmDescription, SERVICE_TYPE_LABELS);
+      const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription);
       const fileKey = `quotes/${quote.quoteNumber}-${nanoid(8)}.pdf`;
       const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
       await updateQuote(input.id, { pdfUrl: url, pdfKey: fileKey, llmDescription });
@@ -386,7 +418,7 @@ ${itemsText}
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
 
       const llmDescription = quote.llmDescription || "感謝您選擇 JD Studio HK 的專業攝影服務。";
-      const pdfBuffer = await generateQuotePdfBuffer(quote, llmDescription, SERVICE_TYPE_LABELS, "RECEIPT");
+      const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription, "RECEIPT");
       const fileKey = `receipts/${quote.quoteNumber}-${nanoid(8)}.pdf`;
       const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
       await updateQuote(input.id, { receiptUrl: url, receiptKey: fileKey } as any);
@@ -408,10 +440,10 @@ ${itemsText}
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
 
-      // Generate PDF using PDFKit (fast, no Chromium needed)
+      // Same visual template as /print/quote (list/detail download button)
       const llmDescription = quote.llmDescription || "感謝您選擇 JD Studio HK 的專業攝影服務。";
       const signatureData = (quote as any).signatureData || null;
-      const pdfBuffer = await generateQuotePdfBuffer(quote, llmDescription, SERVICE_TYPE_LABELS, "QUOTATION", signatureData);
+      const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription, "QUOTATION", signatureData);
 
       // Pre-create email log to get the ID for tracking pixel
       const logId = await createEmailLog({
