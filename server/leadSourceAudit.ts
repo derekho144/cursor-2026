@@ -43,7 +43,9 @@ function normName(s: string | null | undefined): string {
   return (s || "")
     .toLowerCase()
     .replace(/\s+/g, " ")
-    .replace(/[^\p{L}\p{N}\s@.+-]/gu, "")
+    // Avoid Unicode property escapes for older TS targets.
+    // Keeps: latin letters/numbers, common CJK ranges, whitespace, and basic email punctuation.
+    .replace(/[^0-9a-zA-Z\s\u4E00-\u9FFF\u3400-\u4DBF\u3000-\u303F\u3040-\u30FF\uAC00-\uD7AF@.+-]/g, "")
     .trim();
 }
 

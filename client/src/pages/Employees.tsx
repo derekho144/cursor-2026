@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Shield, UserCheck, UserX } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -27,11 +27,29 @@ export default function Employees() {
   const { data: employees = [], isLoading } = trpc.employees.list.useQuery();
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  const [keepOpenId, setKeepOpenId] = useState<string>("");
+
+  useEffect(() => {
+    if (!user) return;
+    setKeepOpenId(user.openId || "");
+  }, [user]);
+
   const updateMutation = trpc.employees.updateAccess.useMutation({
     onSuccess: () => {
       toast.success("員工權限已儲存");
       utils.employees.list.invalidate();
       utils.auth.me.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const purgeMutation = trpc.employees.purgeExcept.useMutation({
+    onSuccess: (res) => {
+      toast.success("已清除其他帳號，並保留你指定的 openId");
+      utils.employees.list.invalidate();
+      utils.auth.me.invalidate();
+      // Keep current draft openId
+      setKeepOpenId(res.kept?.[0] ?? keepOpenId);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -63,6 +81,60 @@ export default function Employees() {
           <p className="text-sm text-muted-foreground mt-1">
             開啟員工使用權，並勾選該員工可看見的頁面。員工需先用 Manus 登入一次才會出現喺列表。
           </p>
+        </div>
+
+        <div
+          className="rounded border p-4"
+          style={{
+            borderColor: "rgba(255,255,255,0.08)",
+            background: "#0f0f0f",
+          }}
+        >
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-[240px]">
+              <div className="text-sm font-medium">清除其他帳號（保留你）</div>
+              <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                會刪走除 keepOpenId 以外的所有 users 記錄，並把 keepOpenId 設為管理員。
+                <br />
+                <span className="text-amber-400">
+                  ⚠️ 這只影響本系統的帳號記錄，不會刪除 Manus 原本帳戶。
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                你目前的 openId：
+                <span className="ml-2 font-mono text-emerald-300">
+                  {user?.openId || "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 w-full sm:w-[360px]">
+              <label className="text-xs text-muted-foreground">保留的 openId</label>
+              <input
+                value={keepOpenId}
+                onChange={(e) => setKeepOpenId(e.target.value)}
+                className="px-3 py-2 rounded text-xs"
+                style={{
+                  background: "#111",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "#fff",
+                }}
+                placeholder="例如：xxxxxx"
+              />
+              <button
+                onClick={() =>
+                  purgeMutation.mutate({
+                    keepOpenId: keepOpenId.trim(),
+                  })
+                }
+                disabled={purgeMutation.isPending || !keepOpenId.trim()}
+                className="px-4 py-2 text-xs font-semibold rounded disabled:opacity-50"
+                style={{ background: "#d4a843", color: "#0a0a0a" }}
+              >
+                {purgeMutation.isPending ? "清除中…" : "全部刪走，保留我"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {isLoading || catalogLoading ? (
