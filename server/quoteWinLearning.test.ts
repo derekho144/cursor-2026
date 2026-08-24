@@ -9,7 +9,8 @@ import { isPricingLearningServiceType } from "../shared/quotePricingMode";
 describe("duration package", () => {
   it("infers from hours", () => {
     expect(inferDurationPackageFromHours(2)).toBe("hours");
-    expect(inferDurationPackageFromHours(4)).toBe("half_day");
+    expect(inferDurationPackageFromHours(4)).toBe("hours");
+    expect(inferDurationPackageFromHours(5)).toBe("half_day");
     expect(inferDurationPackageFromHours(8)).toBe("full_day");
     expect(inferDurationPackageFromHours(14)).toBe("multi_day");
   });
