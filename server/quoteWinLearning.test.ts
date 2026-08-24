@@ -4,6 +4,7 @@ import {
   resolveDurationPackage,
 } from "../shared/quoteDurationPackage";
 import { rejectReasonByLabel } from "../shared/quoteRejectReasons";
+import { isPricingLearningServiceType } from "../shared/quotePricingMode";
 
 describe("duration package", () => {
   it("infers from hours", () => {
@@ -34,8 +35,6 @@ describe("reject reasons", () => {
     expect(rejectReasonByLabel("項目取消")?.priceRelated).toBe(false);
   });
 });
-
-import { isPricingLearningServiceType } from "../shared/quotePricingMode";
 
 describe("pricing learning exclusions", () => {
   it("excludes other service type", () => {
