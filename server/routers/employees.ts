@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, router } from "../_core/trpc";
-import { listUsers, updateUserAccess, getUserById } from "../db";
+import {
+  listUsers,
+  updateUserAccess,
+  getUserById,
+  upsertUserByOpenIdAccess,
+  deleteUsersExceptOpenIds,
+} from "../db";
 import {
   ASSIGNABLE_PAGE_IDS,
   PAGE_CATALOG,
@@ -84,5 +90,47 @@ export const employeesRouter = router({
         role: input.role,
       });
       return serializeUser(updated);
+    }),
+
+  /**
+   * Clear all employee user rows except the specified keepOpenId.
+   * Also ensures keepOpenId exists and is enabled as admin.
+   */
+  purgeExcept: adminProcedure
+    .input(
+      z.object({
+        keepOpenId: z.string().min(1).max(64),
+        // optional metadata for convenience (does not replace Manus identity)
+        name: z.string().max(255).optional(),
+        email: z.string().email().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user?.openId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "No current user" });
+      }
+
+      const keepOpenIds = Array.from(
+        new Set(
+          [
+            input.keepOpenId,
+            ctx.user.openId, // never delete the currently logged-in admin row
+            ENV.ownerOpenId, // never delete system owner row
+          ].filter(Boolean)
+        )
+      );
+
+      await upsertUserByOpenIdAccess({
+        openId: input.keepOpenId,
+        name: input.name ?? null,
+        email: input.email ?? null,
+        loginMethod: null,
+        role: "admin",
+        isActive: true,
+        allowedPages: [], // admin sees everything
+      });
+
+      await deleteUsersExceptOpenIds({ excludeOpenIds: keepOpenIds });
+      return { success: true, kept: keepOpenIds };
     }),
 });

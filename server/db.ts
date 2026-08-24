@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
 import {
@@ -160,6 +160,66 @@ export async function updateUserAccess(params: {
   if (Object.keys(set).length === 0) return getUserById(params.id);
   await db.update(users).set(set).where(eq(users.id, params.id));
   return getUserById(params.id);
+}
+
+export async function upsertUserByOpenIdAccess(params: {
+  openId: string;
+  name?: string | null;
+  email?: string | null;
+  loginMethod?: string | null;
+  role: "user" | "admin";
+  isActive: boolean;
+  allowedPages?: string[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  await db
+    .insert(users)
+    .values({
+      openId: params.openId,
+      name: params.name ?? null,
+      email: params.email ?? null,
+      loginMethod: params.loginMethod ?? null,
+      role: params.role,
+      isActive: params.isActive,
+      allowedPages: params.allowedPages ?? [],
+      lastSignedIn: new Date(),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        name: params.name ?? null,
+        email: params.email ?? null,
+        loginMethod: params.loginMethod ?? null,
+        role: params.role,
+        isActive: params.isActive,
+        allowedPages: params.allowedPages ?? [],
+        lastSignedIn: new Date(),
+      },
+    });
+}
+
+export async function deleteUsersExceptOpenIds(params: {
+  excludeOpenIds: string[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const id of params.excludeOpenIds.filter(Boolean)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+  if (unique.length === 0) return 0;
+
+  const conditions = unique.map((id) => ne(users.openId, id));
+  const whereClause = and(...conditions);
+  const res = await db.delete(users).where(whereClause);
+  // mysql2/drizzle returns different shapes depending on driver; ignore.
+  // Callers can just re-list.
+  return (res as any)?.affectedRows ?? 0;
 }
 
 // ─── Quotes ───────────────────────────────────────────────────────

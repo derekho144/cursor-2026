@@ -16,8 +16,10 @@ function normalizeCrewText(raw: string): string {
 
 function maxCapturedCount(text: string, re: RegExp): number {
   let max = 0;
-  const copy = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
-  for (const m of text.matchAll(copy)) {
+  const baseFlags = re.flags.includes("g") ? re.flags : `${re.flags}g`;
+  const copy = new RegExp(re.source, baseFlags);
+  let m: RegExpExecArray | null = null;
+  while ((m = copy.exec(text)) !== null) {
     const n = Number(m[1]);
     if (Number.isFinite(n) && n >= 1 && n <= 30) max = Math.max(max, n);
   }
