@@ -45,9 +45,9 @@ describe("extractCrewFromText", () => {
     expect(c.headcount).toBe(3);
   });
 
-  it("parses 1P / 2P shorthand", () => {
-    expect(extractCrewFromText("1P").headcount).toBe(1);
-    expect(extractCrewFromText("2P").headcount).toBe(2);
+  it("parses Team 1P / Team 2P line items", () => {
+    expect(extractCrewFromText("Team 1P").headcount).toBe(1);
+    expect(extractCrewFromText("Team 2P").headcount).toBe(2);
   });
 });
 
@@ -63,6 +63,18 @@ describe("extractQuoteShootFeatures", () => {
     expect(f.crewBucket).toBe("pair");
     expect(f.crew.photographers).toBe(1);
     expect(f.crew.assistants).toBe(1);
+  });
+
+  it("reads Team 1P from line items when structured empty", () => {
+    const f = extractQuoteShootFeatures({
+      items: [
+        { description: "Event Photoshoot", quantity: 1 },
+        { description: "Team 1P", quantity: 1 },
+      ],
+    });
+    expect(f.crewBucket).toBe("solo");
+    expect(f.crew.headcount).toBe(1);
+    expect(f.crewSource).toBe("items");
   });
 
   it("prefers structured hours and crew over free text", () => {

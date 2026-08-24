@@ -27,6 +27,10 @@ import { generateQuotePdfBuffer } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
+  extractQuoteShootFeatures,
+  formatTeamFromStructured,
+} from "../pricingLearningExtract";
+import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
@@ -62,6 +66,84 @@ async function generateQuotePdfMatchingDownload(
       signatureData
     );
   }
+}
+
+/**
+ * Fill missing structured hours/crew from free-text (Team XP lines, notes, team field).
+ * Keeps explicit structured values when already provided.
+ */
+function enrichShootFundamentals(input: {
+  shootHours?: number | string | null;
+  crewPhotographers?: number | null;
+  crewAssistants?: number | null;
+  crewVideographers?: number | null;
+  crewOthers?: number | null;
+  team?: string | null;
+  notes?: string | null;
+  equipment?: string | null;
+  items?: Array<{ description?: string | null }>;
+}) {
+  const features = extractQuoteShootFeatures({
+    shootHours: input.shootHours,
+    crewPhotographers: input.crewPhotographers,
+    crewAssistants: input.crewAssistants,
+    crewVideographers: input.crewVideographers,
+    crewOthers: input.crewOthers,
+    team: input.team,
+    notes: input.notes,
+    equipment: input.equipment,
+    items: input.items,
+  });
+
+  const shootHours =
+    input.shootHours != null && Number(input.shootHours) > 0
+      ? String(input.shootHours)
+      : features.hours != null
+        ? String(features.hours)
+        : null;
+
+  let crewPhotographers = Math.max(0, Math.floor(Number(input.crewPhotographers) || 0));
+  let crewAssistants = Math.max(0, Math.floor(Number(input.crewAssistants) || 0));
+  let crewVideographers = Math.max(0, Math.floor(Number(input.crewVideographers) || 0));
+  let crewOthers = Math.max(0, Math.floor(Number(input.crewOthers) || 0));
+  const existingCrew =
+    crewPhotographers + crewAssistants + crewVideographers + crewOthers;
+
+  if (existingCrew <= 0 && features.crew.headcount > 0) {
+    if (
+      features.crew.photographers +
+        features.crew.assistants +
+        features.crew.videographers +
+        features.crew.others >
+      0
+    ) {
+      crewPhotographers = features.crew.photographers;
+      crewAssistants = features.crew.assistants;
+      crewVideographers = features.crew.videographers;
+      crewOthers = features.crew.others;
+    } else {
+      crewPhotographers = features.crew.headcount;
+    }
+  }
+
+  const team =
+    (input.team && String(input.team).trim()) ||
+    formatTeamFromStructured({
+      photographers: crewPhotographers,
+      assistants: crewAssistants,
+      videographers: crewVideographers,
+      others: crewOthers,
+    }) ||
+    null;
+
+  return {
+    shootHours,
+    crewPhotographers,
+    crewAssistants,
+    crewVideographers,
+    crewOthers,
+    team: team ? team.slice(0, 128) : null,
+  };
 }
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
@@ -238,9 +320,20 @@ export const quotesRouter = router({
     )
     .mutation(async ({ input }) => {
       const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, ...quoteDataRest } = input;
+      const enriched = enrichShootFundamentals({
+        shootHours,
+        crewPhotographers: input.crewPhotographers,
+        crewAssistants: input.crewAssistants,
+        crewVideographers: input.crewVideographers,
+        crewOthers: input.crewOthers,
+        team: input.team,
+        notes: input.notes,
+        equipment: input.equipment,
+        items,
+      });
       const quoteData = {
         ...quoteDataRest,
-        shootHours: shootHours != null ? String(shootHours) : null,
+        ...enriched,
         depositPercent: input.depositPercent ?? 50,
         depositMode: input.depositMode ?? "percent",
         depositFixedAmount: input.depositFixedAmount,
@@ -332,9 +425,48 @@ export const quotesRouter = router({
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
       const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
+
+      const shouldEnrich =
+        shootHours !== undefined ||
+        input.crewPhotographers !== undefined ||
+        input.crewAssistants !== undefined ||
+        input.crewVideographers !== undefined ||
+        input.crewOthers !== undefined ||
+        input.team !== undefined ||
+        items !== undefined ||
+        input.notes !== undefined;
+
+      let enrichedPatch: Record<string, unknown> = {};
+      if (shouldEnrich) {
+        const existing = await getQuoteById(id);
+        const existingItems = items ?? existing?.items ?? [];
+        enrichedPatch = enrichShootFundamentals({
+          shootHours:
+            shootHours !== undefined
+              ? shootHours
+              : (existing as any)?.shootHours,
+          crewPhotographers:
+            input.crewPhotographers ?? (existing as any)?.crewPhotographers,
+          crewAssistants:
+            input.crewAssistants ?? (existing as any)?.crewAssistants,
+          crewVideographers:
+            input.crewVideographers ?? (existing as any)?.crewVideographers,
+          crewOthers: input.crewOthers ?? (existing as any)?.crewOthers,
+          team: input.team !== undefined ? input.team : existing?.team,
+          notes: input.notes !== undefined ? input.notes : existing?.notes,
+          equipment:
+            input.equipment !== undefined ? input.equipment : existing?.equipment,
+          items: existingItems,
+        });
+      }
+
       const result = await updateQuote(id, {
         ...rest,
-        ...(shootHours !== undefined && { shootHours: shootHours != null ? String(shootHours) : null }),
+        ...enrichedPatch,
+        ...(shootHours !== undefined &&
+          !("shootHours" in enrichedPatch) && {
+            shootHours: shootHours != null ? String(shootHours) : null,
+          }),
         ...(subtotal !== undefined && { subtotal: String(subtotal) }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),
         ...(discountAmount !== undefined && { discountAmount: String(discountAmount) }),

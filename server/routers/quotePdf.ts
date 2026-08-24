@@ -105,6 +105,9 @@ export function generateQuotePdfHtml(
     .join("");
 
   const extraRowDefs = [
+    (quote as any).shootHours != null && Number((quote as any).shootHours) > 0
+      ? { label: "SHOOT<br>HOURS", value: `${Number((quote as any).shootHours)} hours` }
+      : null,
     quote.equipment ? { label: "LIGHTING &amp;<br>EQUIPMENT", value: quote.equipment } : null,
     quote.team ? { label: "TEAM", value: quote.team } : null,
     quote.deliveryMethod ? { label: "PHOTO<br>DELIVERY<br>METHOD", value: quote.deliveryMethod } : null,

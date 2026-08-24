@@ -550,6 +550,32 @@ export default function QuoteDetail() {
               </div>
               {quote.shootingDate && !(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && <div className="text-sm text-muted-foreground">拍攝日期：{quote.shootingDate}</div>}
               {quote.shootingLocation && <div className="text-sm text-muted-foreground mt-1">拍攝地點：{quote.shootingLocation}</div>}
+              {!(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  拍攝時數：
+                  {(quote as any).shootHours != null && Number((quote as any).shootHours) > 0
+                    ? `${Number((quote as any).shootHours)} 小時`
+                    : "未填"}
+                </div>
+              )}
+              {(() => {
+                const photogs = Number((quote as any).crewPhotographers ?? 0);
+                const asst = Number((quote as any).crewAssistants ?? 0);
+                const video = Number((quote as any).crewVideographers ?? 0);
+                const others = Number((quote as any).crewOthers ?? 0);
+                const parts: string[] = [];
+                if (photogs > 0) parts.push(`攝影師×${photogs}`);
+                if (video > 0) parts.push(`錄影×${video}`);
+                if (asst > 0) parts.push(`助理×${asst}`);
+                if (others > 0) parts.push(`其他×${others}`);
+                const teamText = (quote as any).team?.trim?.() || "";
+                const label = parts.length > 0 ? parts.join(" + ") : teamText || "未填";
+                return (
+                  <div className="text-sm text-muted-foreground mt-1">
+                    人手：{label}
+                  </div>
+                );
+              })()}
               {quote.shootingDate && !(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && quote.status === "accepted" && (
                 <div className="flex items-center gap-1.5 mt-2">
                   <span style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(212,168,67,0.6)", textTransform: "uppercase" }}>評價邀請</span>

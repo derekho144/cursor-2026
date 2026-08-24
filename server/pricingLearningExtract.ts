@@ -169,8 +169,8 @@ export function extractCrewFromText(text: string): CrewBreakdown {
     if (Number.isFinite(a) && Number.isFinite(b)) pax = Math.max(pax, a + b);
   }
 
-  // Shorthand "1P" / "2P" common in team field
-  const pShorthand = text.match(/(\d+)\s*[Pp]\b/);
+  // Shorthand "1P" / "2P" / "Team 1P" common in team field and line items
+  const pShorthand = text.match(/(?:team\s*)?(\d+)\s*[Pp]\b/);
   if (pShorthand) {
     const n = Number(pShorthand[1]);
     if (Number.isFinite(n) && n > 0 && n <= 20) pax = Math.max(pax, n);
