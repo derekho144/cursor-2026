@@ -24,6 +24,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { quotePricingMode } from "@shared/quotePricingMode";
+import {
+  DURATION_PACKAGE_OPTIONS,
+  inferDurationPackageFromHours,
+  type DurationPackage,
+} from "@shared/quoteDurationPackage";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -126,6 +131,8 @@ type FormData = {
   team: string;
   /** Structured hours for event/time-based pricing */
   shootHours: string;
+  /** hours | half_day | full_day | multi_day */
+  durationPackage: "" | Exclude<DurationPackage, "unknown">;
   /** Delivered shot count for product-style pricing (張數) */
   shotCount: string;
   crewPhotographers: number;
@@ -160,6 +167,7 @@ const emptyForm: FormData = {
   equipment: "",
   team: "",
   shootHours: "",
+  durationPackage: "",
   shotCount: "",
   crewPhotographers: 0,
   crewAssistants: 0,
@@ -192,6 +200,13 @@ function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData 
     ...base,
     ...raw,
     shootHours: raw.shootHours != null ? String(raw.shootHours) : "",
+    durationPackage:
+      raw.durationPackage === "hours" ||
+      raw.durationPackage === "half_day" ||
+      raw.durationPackage === "full_day" ||
+      raw.durationPackage === "multi_day"
+        ? raw.durationPackage
+        : "",
     shotCount: raw.shotCount != null ? String(raw.shotCount) : "",
     equipment: raw.equipment ?? "",
     team: raw.team ?? "",
@@ -434,6 +449,31 @@ export default function QuoteForm() {
     { enabled: showInquiryDropdown }
   );
 
+  const pricingMode = quotePricingMode(form.serviceType);
+  const suggestHours = form.shootHours.trim() ? Number(form.shootHours) : null;
+  const suggestCrew =
+    form.crewPhotographers +
+    form.crewAssistants +
+    form.crewVideographers +
+    form.crewOthers;
+  const suggestShots = form.shotCount.trim() ? Number(form.shotCount) : null;
+  const { data: priceSuggest } = trpc.pricingLearning.suggest.useQuery(
+    {
+      serviceType: form.serviceType as any,
+      hours:
+        suggestHours != null && Number.isFinite(suggestHours)
+          ? suggestHours
+          : null,
+      crewSize: suggestCrew > 0 ? suggestCrew : null,
+      shotCount:
+        suggestShots != null && Number.isFinite(suggestShots)
+          ? suggestShots
+          : null,
+      durationPackage: form.durationPackage || null,
+    },
+    { enabled: !!form.serviceType, refetchOnWindowFocus: false }
+  );
+
   // Phone auto-lookup state
   const [phoneQuery, setPhoneQuery] = useState("");
   const [showPhoneSuggestion, setShowPhoneSuggestion] = useState(false);
@@ -639,6 +679,13 @@ export default function QuoteForm() {
           (existingQuote as any).shootHours != null &&
           Number((existingQuote as any).shootHours) > 0
             ? String(Number((existingQuote as any).shootHours))
+            : "",
+        durationPackage:
+          (existingQuote as any).durationPackage === "hours" ||
+          (existingQuote as any).durationPackage === "half_day" ||
+          (existingQuote as any).durationPackage === "full_day" ||
+          (existingQuote as any).durationPackage === "multi_day"
+            ? ((existingQuote as any).durationPackage as FormData["durationPackage"])
             : "",
         shotCount:
           (existingQuote as any).shotCount != null &&
@@ -850,6 +897,7 @@ export default function QuoteForm() {
       items,
       shootHours,
       shotCount,
+      durationPackage: form.durationPackage || null,
       ...crew,
       team,
       // For new quotes: use backend syncToClients to upsert client automatically
@@ -939,6 +987,14 @@ export default function QuoteForm() {
                         (existingQuote as any).shootHours != null &&
                         Number((existingQuote as any).shootHours) > 0
                           ? String(Number((existingQuote as any).shootHours))
+                          : "",
+                      durationPackage:
+                        (existingQuote as any).durationPackage === "hours" ||
+                        (existingQuote as any).durationPackage === "half_day" ||
+                        (existingQuote as any).durationPackage === "full_day" ||
+                        (existingQuote as any).durationPackage === "multi_day"
+                          ? ((existingQuote as any)
+                              .durationPackage as FormData["durationPackage"])
                           : "",
                       shotCount:
                         (existingQuote as any).shotCount != null &&
@@ -1199,7 +1255,22 @@ export default function QuoteForm() {
                   max={72}
                   step={0.5}
                   value={form.shootHours ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, shootHours: e.target.value }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm((p) => {
+                      const n = v.trim() ? Number(v) : null;
+                      const inferred =
+                        n != null && Number.isFinite(n)
+                          ? inferDurationPackageFromHours(n)
+                          : "unknown";
+                      const nextPkg =
+                        !p.durationPackage &&
+                        inferred !== "unknown"
+                          ? (inferred as FormData["durationPackage"])
+                          : p.durationPackage;
+                      return { ...p, shootHours: v, durationPackage: nextPkg };
+                    });
+                  }}
                   placeholder="例如 4"
                   style={{
                     ...inputStyle,
@@ -1208,6 +1279,33 @@ export default function QuoteForm() {
                       : undefined,
                   }}
                 />
+              </FormField>
+            )}
+            {quotePricingMode(form.serviceType) === "time_crew" && (
+              <FormField label="時長套餐">
+                <Select
+                  value={form.durationPackage || ""}
+                  onValueChange={(v) =>
+                    setForm((p) => ({
+                      ...p,
+                      durationPackage: v as FormData["durationPackage"],
+                    }))
+                  }
+                >
+                  <SelectTrigger style={inputStyle}>
+                    <SelectValue placeholder="按小時／半日／全日／多日" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DURATION_PACKAGE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}（{o.hint}）
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  半日／全日／多日成功率較低；用套餐標記方便學習勝率
+                </div>
               </FormField>
             )}
             {quotePricingMode(form.serviceType) === "shot_count" && (
@@ -1301,6 +1399,57 @@ export default function QuoteForm() {
                       />
                     </FormField>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {priceSuggest?.suggestion && (
+              <div
+                className="md:col-span-2 p-3 rounded space-y-2"
+                style={{
+                  background: "rgba(212,168,67,0.06)",
+                  border: "1px solid rgba(212,168,67,0.22)",
+                }}
+              >
+                <div
+                  className="text-xs"
+                  style={{ color: "#d4a843", letterSpacing: "0.1em" }}
+                >
+                  定價參考（學習）
+                  {priceSuggest.winRate?.winPct != null
+                    ? ` · 同類勝率 ${priceSuggest.winRate.winPct}%（${priceSuggest.winRate.accepted}/${priceSuggest.winRate.decided}）`
+                    : ""}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                  {priceSuggest.packages &&
+                    (
+                      [
+                        ["essential", priceSuggest.packages.essential],
+                        ["standard", priceSuggest.packages.standard],
+                        ["coverage", priceSuggest.packages.coverage],
+                      ] as const
+                    ).map(([key, pkg]) => (
+                      <div
+                        key={key}
+                        className="p-2 rounded"
+                        style={{ background: "rgba(0,0,0,0.25)" }}
+                      >
+                        <div className="text-muted-foreground">{pkg.label}</div>
+                        <div style={{ color: "#e8e0d0", fontSize: "1.05rem" }}>
+                          HK$ {pkg.mid.toLocaleString("en-HK")}
+                        </div>
+                        <div className="text-muted-foreground mt-0.5">{pkg.note}</div>
+                      </div>
+                    ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {priceSuggest.costFloorNote}
+                  {pricingMode === "time_crew" &&
+                  (form.durationPackage === "half_day" ||
+                    form.durationPackage === "full_day" ||
+                    form.durationPackage === "multi_day")
+                    ? " 半日／全日／多日請用套餐思維，唔好死跟 $1000×小時。"
+                    : ""}
                 </div>
               </div>
             )}

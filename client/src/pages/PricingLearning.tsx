@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { quotePricingMode } from "@shared/quotePricingMode";
+import { DURATION_PACKAGE_OPTIONS } from "@shared/quoteDurationPackage";
 
 function money(n: number) {
   return `HK$ ${n.toLocaleString("en-HK")}`;
@@ -164,6 +165,7 @@ export default function PricingLearning() {
   const [hours, setHours] = useState<string>("");
   const [crewSize, setCrewSize] = useState<string>("");
   const [shotCount, setShotCount] = useState<string>("");
+  const [durationPackage, setDurationPackage] = useState<string>("");
 
   const pricingMode = quotePricingMode(serviceType);
 
@@ -200,6 +202,13 @@ export default function PricingLearning() {
       hours: hoursNum && Number.isFinite(hoursNum) ? hoursNum : null,
       crewSize: crewNum && Number.isFinite(crewNum) ? crewNum : null,
       shotCount: shotNum && Number.isFinite(shotNum) ? shotNum : null,
+      durationPackage:
+        durationPackage === "hours" ||
+        durationPackage === "half_day" ||
+        durationPackage === "full_day" ||
+        durationPackage === "multi_day"
+          ? (durationPackage as any)
+          : null,
     },
     { enabled: !!serviceType, refetchOnWindowFocus: false }
   );
@@ -413,6 +422,120 @@ export default function PricingLearning() {
           )}
         </div>
 
+        {/* Win-rate analytics */}
+        {(overview as any)?.winAnalytics && (
+          <div
+            className="p-4 rounded space-y-3"
+            style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.18)" }}
+          >
+            <div
+              className="text-xs"
+              style={{ color: "#d4a843", letterSpacing: "0.12em", textTransform: "uppercase" }}
+            >
+              勝率 · 時長套餐 · 拒絕原因
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-muted-foreground">
+              <div>
+                整體勝率{" "}
+                <span style={{ color: "#e8e0d0" }}>
+                  {(overview as any).winAnalytics.overall?.winPct ?? "—"}%
+                </span>
+                <span className="ml-1">
+                  （{(overview as any).winAnalytics.overall?.accepted}/
+                  {(overview as any).winAnalytics.overall?.decided}）
+                </span>
+              </div>
+              <div>
+                活動攝影勝率{" "}
+                <span style={{ color: "#e8e0d0" }}>
+                  {(overview as any).winAnalytics.corporateEvent?.winPct ?? "—"}%
+                </span>
+              </div>
+              <div>
+                時數類勝率{" "}
+                <span style={{ color: "#e8e0d0" }}>
+                  {(overview as any).winAnalytics.timeCrew?.winPct ?? "—"}%
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(overview as any).winAnalytics.tip}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ color: "#777" }}>
+                    <th className="text-left py-1 font-normal">時長套餐</th>
+                    <th className="text-right py-1 font-normal">勝率</th>
+                    <th className="text-right py-1 font-normal">成交／決標</th>
+                    <th className="text-right py-1 font-normal">成交均價</th>
+                    <th className="text-right py-1 font-normal">拒單均價</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((overview as any).winAnalytics.byDuration ?? []).map(
+                    (d: any) => (
+                      <tr key={d.key}>
+                        <td className="py-1.5" style={{ color: "#e8e0d0" }}>
+                          {d.label}
+                        </td>
+                        <td className="py-1.5 text-right" style={{ color: "#d4a843" }}>
+                          {d.winPct != null ? `${d.winPct}%` : "—"}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {d.accepted}/{d.decided}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {d.avgAccepted != null ? money(d.avgAccepted) : "—"}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {d.avgRejected != null ? money(d.avgRejected) : "—"}
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto pt-1">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ color: "#777" }}>
+                    <th className="text-left py-1 font-normal">拒絕原因（歸類）</th>
+                    <th className="text-right py-1 font-normal">筆數</th>
+                    <th className="text-right py-1 font-normal">平均報價</th>
+                    <th className="text-left py-1 font-normal">學習標記</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((overview as any).winAnalytics.byRejectReason ?? [])
+                    .slice(0, 10)
+                    .map((r: any) => (
+                      <tr key={r.label}>
+                        <td className="py-1.5" style={{ color: "#e8e0d0" }}>
+                          {r.label}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {r.count}
+                        </td>
+                        <td className="py-1.5 text-right text-muted-foreground">
+                          {money(r.avgTotal)}
+                        </td>
+                        <td className="py-1.5 text-muted-foreground">
+                          {r.priceRelated ? "影響定價" : "非價格"}
+                          {r.withBudget ? ` · 有預算 ${r.withBudget}` : ""}
+                          {r.withCompetitor
+                            ? ` · 有對手價 ${r.withCompetitor}`
+                            : ""}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Service type ranking */}
         <div
           className="rounded overflow-hidden"
@@ -527,7 +650,26 @@ export default function PricingLearning() {
                 </>
               ) : (
                 <>
-                  <div className="text-xs text-muted-foreground mb-1.5">時數（可選）</div>
+                  <div className="text-xs text-muted-foreground mb-1.5">時長套餐</div>
+                  <Select
+                    value={durationPackage || "none"}
+                    onValueChange={(v) =>
+                      setDurationPackage(v === "none" ? "" : v)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="可選" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">不指定</SelectItem>
+                      {DURATION_PACKAGE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground mb-1.5 mt-2">時數（可選）</div>
                   <Input
                     type="number"
                     min={0.5}
@@ -572,6 +714,11 @@ export default function PricingLearning() {
                     低 {money(suggestion.suggestion.low)} · 高{" "}
                     {money(suggestion.suggestion.high)}
                   </div>
+                  {suggestion.winRate?.winPct != null && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      勝率約 {suggestion.winRate.winPct}%
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground">
@@ -580,6 +727,27 @@ export default function PricingLearning() {
               )}
             </div>
           </div>
+          {suggestion?.packages && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              {[
+                suggestion.packages.essential,
+                suggestion.packages.standard,
+                suggestion.packages.coverage,
+              ].map((pkg) => (
+                <div
+                  key={pkg.label}
+                  className="p-3 rounded"
+                  style={{ background: "rgba(0,0,0,0.35)" }}
+                >
+                  <div className="text-muted-foreground">{pkg.label}</div>
+                  <div className="text-lg" style={{ color: "#d4a843" }}>
+                    {money(pkg.mid)}
+                  </div>
+                  <div className="text-muted-foreground mt-1">{pkg.note}</div>
+                </div>
+              ))}
+            </div>
+          )}
           {suggestion?.note && suggestion.suggestion && (
             <div className="text-xs text-muted-foreground">{suggestion.note}</div>
           )}

@@ -87,6 +87,11 @@ export const quotes = mysqlTable("quotes", {
   shootHours: decimal("shootHours", { precision: 6, scale: 2 }),
   /** Delivered photo/shot count for product-style pricing (張數) */
   shotCount: int("shotCount"),
+  /**
+   * Event duration packaging: hours | half_day | full_day | multi_day
+   * Used for win-rate learning (flat hourly on long packages loses more).
+   */
+  durationPackage: varchar("durationPackage", { length: 16 }),
   crewPhotographers: int("crewPhotographers").notNull().default(0),
   crewAssistants: int("crewAssistants").notNull().default(0),
   crewVideographers: int("crewVideographers").notNull().default(0),
@@ -102,6 +107,10 @@ export const quotes = mysqlTable("quotes", {
   signatureData: text("signatureData"), // base64 PNG of signature
   signAttachments: text("signAttachments"), // JSON array of { name, url, key }
   rejectedReason: varchar("rejected_reason", { length: 255 }),
+  /** Client budget ceiling when rejected for price (HKD) */
+  rejectedBudgetMax: int("rejectedBudgetMax"),
+  /** Competitor quote approx when lost to another photographer (HKD) */
+  rejectedCompetitorPrice: int("rejectedCompetitorPrice"),
   reviewEmailSentAt: timestamp("reviewEmailSentAt"), // Google review invite sent timestamp
   // Payment tracking
   depositPaidAmount: decimal("depositPaidAmount", { precision: 10, scale: 2 }), // 已付訂金金額（null = 未記錄）

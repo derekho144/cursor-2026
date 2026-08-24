@@ -26,6 +26,15 @@ import {
   shotCountBucketLabel,
   SHOT_COUNT_SERVICE_TYPES,
 } from "../shared/quotePricingMode";
+import {
+  durationPackageLabel,
+  resolveDurationPackage,
+  type DurationPackage,
+} from "../shared/quoteDurationPackage";
+import {
+  rejectReasonByLabel,
+  rejectReasonCategoryLabel,
+} from "../shared/quoteRejectReasons";
 
 const MIN_BUCKET_SAMPLES = 2;
 
@@ -47,6 +56,12 @@ export interface PricingLearningQuoteRow {
   hasStructuredHours: boolean;
   hasStructuredShotCount: boolean;
   hasStructuredCrew: boolean;
+  durationPackage: DurationPackage;
+  rejectedReason: string | null;
+  rejectedReasonCategory: string;
+  rejectedBudgetMax: number | null;
+  rejectedCompetitorPrice: number | null;
+  priceRelatedReject: boolean;
 }
 
 function bucketStats<T extends string>(
@@ -101,10 +116,14 @@ async function loadLearningQuotesWithItems(opts?: {
       emailInquiryId: quotes.emailInquiryId,
       shootHours: quotes.shootHours,
       shotCount: quotes.shotCount,
+      durationPackage: quotes.durationPackage,
       crewPhotographers: quotes.crewPhotographers,
       crewAssistants: quotes.crewAssistants,
       crewVideographers: quotes.crewVideographers,
       crewOthers: quotes.crewOthers,
+      rejectedReason: quotes.rejectedReason,
+      rejectedBudgetMax: quotes.rejectedBudgetMax,
+      rejectedCompetitorPrice: quotes.rejectedCompetitorPrice,
     })
     .from(quotes)
     .where(and(...conditions))
@@ -188,6 +207,11 @@ async function loadLearningQuotesWithItems(opts?: {
 
     const status =
       q.status === "rejected" ? ("rejected" as const) : ("accepted" as const);
+    const reasonDef = rejectReasonByLabel(q.rejectedReason);
+    const durationPackage = resolveDurationPackage({
+      durationPackage: q.durationPackage,
+      shootHours: q.shootHours,
+    });
 
     return {
       id: q.id,
@@ -212,8 +236,105 @@ async function loadLearningQuotesWithItems(opts?: {
       hasStructuredHours,
       hasStructuredShotCount,
       hasStructuredCrew,
+      durationPackage,
+      rejectedReason: q.rejectedReason ?? null,
+      rejectedReasonCategory: rejectReasonCategoryLabel(q.rejectedReason),
+      rejectedBudgetMax:
+        q.rejectedBudgetMax != null && Number.isFinite(Number(q.rejectedBudgetMax))
+          ? Number(q.rejectedBudgetMax)
+          : null,
+      rejectedCompetitorPrice:
+        q.rejectedCompetitorPrice != null &&
+        Number.isFinite(Number(q.rejectedCompetitorPrice))
+          ? Number(q.rejectedCompetitorPrice)
+          : null,
+      priceRelatedReject: !!reasonDef?.priceRelated,
     } satisfies PricingLearningQuoteRow;
   });
+}
+
+function winRateStats(rows: PricingLearningQuoteRow[]) {
+  const decided = rows.filter(
+    (r) => r.status === "accepted" || r.status === "rejected"
+  );
+  const accepted = decided.filter((r) => r.status === "accepted").length;
+  const rejected = decided.length - accepted;
+  return {
+    decided: decided.length,
+    accepted,
+    rejected,
+    winPct:
+      decided.length === 0
+        ? null
+        : Math.round((accepted / decided.length) * 1000) / 10,
+  };
+}
+
+function buildWinAnalytics(allRows: PricingLearningQuoteRow[]) {
+  const photoish = allRows.filter(
+    (r) => quotePricingMode(r.serviceType) === "time_crew"
+  );
+  const durationOrder: DurationPackage[] = [
+    "hours",
+    "half_day",
+    "full_day",
+    "multi_day",
+    "unknown",
+  ];
+  const byDuration = durationOrder.map((key) => {
+    const slice = photoish.filter((r) => r.durationPackage === key);
+    return {
+      key,
+      label: durationPackageLabel(key),
+      ...winRateStats(slice),
+      avgAccepted:
+        summarizeTotals(
+          slice.filter((r) => r.status === "accepted").map((r) => r.total)
+        ).avg || null,
+      avgRejected:
+        summarizeTotals(
+          slice.filter((r) => r.status === "rejected").map((r) => r.total)
+        ).avg || null,
+    };
+  });
+
+  const reasonMap = new Map<string, PricingLearningQuoteRow[]>();
+  for (const r of allRows.filter((x) => x.status === "rejected")) {
+    const key = r.rejectedReasonCategory;
+    const list = reasonMap.get(key) ?? [];
+    list.push(r);
+    reasonMap.set(key, list);
+  }
+  const byRejectReason = Array.from(reasonMap.entries())
+    .map(([label, list]) => ({
+      label,
+      count: list.length,
+      avgTotal: summarizeTotals(list.map((r) => r.total)).avg,
+      priceRelated: list.some((r) => r.priceRelatedReject),
+      withBudget: list.filter((r) => r.rejectedBudgetMax != null).length,
+      withCompetitor: list.filter((r) => r.rejectedCompetitorPrice != null)
+        .length,
+      avgBudgetGap:
+        (() => {
+          const gaps = list
+            .filter((r) => r.rejectedBudgetMax != null && r.rejectedBudgetMax! > 0)
+            .map((r) => r.total - r.rejectedBudgetMax!);
+          if (gaps.length === 0) return null;
+          return Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+        })(),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const eventRows = allRows.filter((r) => r.serviceType === "corporate_event");
+  return {
+    overall: winRateStats(allRows),
+    timeCrew: winRateStats(photoish),
+    corporateEvent: winRateStats(eventRows),
+    byDuration: byDuration.filter((d) => d.decided > 0),
+    byRejectReason,
+    tip:
+      "半日／全日／多日用「時長套餐」標記；拒絕時填細原因＋預算／對手價，學習先準。",
+  };
 }
 
 export async function getPricingLearningOverview() {
@@ -448,6 +569,7 @@ export async function getPricingLearningOverview() {
     crewBuckets,
     shotBuckets,
     aiAccuracy,
+    winAnalytics: buildWinAnalytics(allRows),
   };
 }
 
@@ -571,6 +693,8 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       hours: r.features.hours,
       hoursLabel: hoursBucketLabel(r.features.hoursBucket),
       hoursSource: r.features.hoursSource,
+      durationPackage: r.durationPackage,
+      durationLabel: durationPackageLabel(r.durationPackage),
       shotCount: r.features.shotCount,
       shotCountLabel: shotCountBucketLabel(r.features.shotCountBucket),
       shotCountSource: r.features.shotCountSource,
@@ -579,6 +703,8 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       crewSource: r.features.crewSource,
       pricePerHour: r.features.pricePerHour,
       pricePerShot: r.features.pricePerShot,
+      rejectedReason: r.rejectedReason,
+      rejectedReasonCategory: r.rejectedReasonCategory,
       structured:
         r.hasStructuredHours ||
         r.hasStructuredCrew ||
@@ -587,25 +713,32 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       estimatedTotal: r.estimatedTotal,
       accuracyPct: r.accuracyPct,
     })),
+    winAnalytics: buildWinAnalytics(allRows),
   };
 }
 
 /**
  * Statistical price suggestion from accepted history, filtered by fundamentals.
- * Uses outlier-trimmed stats + prefers structured matches when available.
+ * Also returns win-rate context (accepted vs rejected) and 3-tier package hints.
  */
 export async function suggestPriceFromLearning(input: {
   serviceType: string;
   hours?: number | null;
   crewSize?: number | null;
   shotCount?: number | null;
+  durationPackage?: string | null;
 }) {
-  const rows = await loadLearningQuotesWithItems({
+  const allRows = await loadLearningQuotesWithItems({
     serviceType: input.serviceType,
     limit: 1000,
-    statuses: ["accepted"],
+    statuses: ["accepted", "rejected"],
   });
+  const rows = allRows.filter((r) => r.status === "accepted");
   const mode = quotePricingMode(input.serviceType);
+  const durationPkg = resolveDurationPackage({
+    durationPackage: input.durationPackage,
+    shootHours: input.hours,
+  });
 
   const targetHours =
     input.hours != null && input.hours > 0
@@ -637,6 +770,10 @@ export async function suggestPriceFromLearning(input: {
       if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
     }
   } else {
+    if (durationPkg !== "unknown") {
+      const byPkg = matched.filter((r) => r.durationPackage === durationPkg);
+      if (byPkg.length >= MIN_BUCKET_SAMPLES) matched = byPkg;
+    }
     if (targetHours && targetHours !== "unknown") {
       const filtered = matched.filter(
         (r) => r.features.hoursBucket === targetHours
@@ -688,6 +825,54 @@ export async function suggestPriceFromLearning(input: {
       ? Math.round(perShot.p50 * input.shotCount)
       : null;
 
+  const mid = weightedMid ?? summary.p50;
+  const packages =
+    summary.count >= MIN_BUCKET_SAMPLES
+      ? {
+          essential: {
+            label: "Essential（減範圍保質素）",
+            mid: summary.p25,
+            note: "縮時數／張數／人手，唔減每小時質素標價",
+          },
+          standard: {
+            label: "Standard（成交帶）",
+            mid,
+            note: "對齊歷史成交中位",
+          },
+          coverage: {
+            label: "Coverage（完整覆蓋）",
+            mid: summary.p75,
+            note:
+              durationPkg === "half_day" ||
+              durationPkg === "full_day" ||
+              durationPkg === "multi_day"
+                ? "長套餐建議日費思維；高檔勝率通常較低"
+                : "加人／加時完整方案",
+          },
+        }
+      : null;
+
+  // Win rate among decided quotes in same duration / type band
+  let winPool = allRows;
+  if (mode !== "shot_count" && durationPkg !== "unknown") {
+    const byPkg = allRows.filter((r) => r.durationPackage === durationPkg);
+    if (byPkg.length >= 3) winPool = byPkg;
+  }
+  const win = winRateStats(winPool);
+  const durationWin = buildWinAnalytics(allRows).byDuration;
+
+  const priceRejects = allRows.filter(
+    (r) => r.status === "rejected" && r.priceRelatedReject
+  );
+  const avgOverBudget =
+    (() => {
+      const gaps = priceRejects
+        .filter((r) => r.rejectedBudgetMax != null && r.rejectedBudgetMax! > 0)
+        .map((r) => r.total - r.rejectedBudgetMax!);
+      if (gaps.length < 2) return null;
+      return Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+    })();
+
   return {
     serviceType: input.serviceType,
     pricingMode: mode,
@@ -698,6 +883,7 @@ export async function suggestPriceFromLearning(input: {
       crewBucket: targetCrew,
       shotCount: input.shotCount ?? null,
       shotCountBucket: targetShots,
+      durationPackage: durationPkg,
     },
     sampleCount: summary.count,
     preferredStructured: structuredMatched.length >= MIN_BUCKET_SAMPLES,
@@ -705,20 +891,26 @@ export async function suggestPriceFromLearning(input: {
       summary.count >= MIN_BUCKET_SAMPLES
         ? {
             low: summary.p25,
-            mid: weightedMid ?? summary.p50,
+            mid,
             high: summary.p75,
             avg: summary.avg,
             fromPerHour: hoursHint,
             fromPerShot: shotsHint,
           }
         : null,
+    packages,
+    winRate: win,
+    durationWinRates: durationWin,
+    avgOverBudgetOnPriceRejects: avgOverBudget,
+    costFloorNote:
+      "唔好為成交砍穿成本底線；客人嫌貴優先出 Essential（減範圍），唔係減質素時薪。",
     note:
       summary.count < MIN_BUCKET_SAMPLES
         ? mode === "shot_count"
           ? "同類已接受報價樣本不足，建議先用市場價參考，並補齊交付張數。"
-          : "同類已接受報價樣本不足，建議先用市場價參考，並補齊時數／人手欄位。"
+          : "同類已接受報價樣本不足，建議先用市場價參考，並補齊時數／人手／時長套餐。"
         : useRows.length < rows.length
-          ? `已按${mode === "shot_count" ? "張數" : "時數／人手"}篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
+          ? `已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
           : `基於 ${summary.count} 筆「${input.serviceType}」已接受報價（已剔除離群值）。`,
     comparables: useRows.slice(0, 8).map((r) => ({
       id: r.id,
@@ -726,6 +918,7 @@ export async function suggestPriceFromLearning(input: {
       total: r.total,
       hours: r.features.hours,
       shotCount: r.features.shotCount,
+      durationPackage: r.durationPackage,
       crewLabel: r.features.crewLabel,
       clientName: r.clientCompany || r.clientName,
       structured:
@@ -790,6 +983,7 @@ export async function backfillStructuredShootFields(opts?: {
       equipment: quotes.equipment,
       shootHours: quotes.shootHours,
       shotCount: quotes.shotCount,
+      durationPackage: quotes.durationPackage,
       crewPhotographers: quotes.crewPhotographers,
       crewAssistants: quotes.crewAssistants,
       crewVideographers: quotes.crewVideographers,
@@ -803,6 +997,7 @@ export async function backfillStructuredShootFields(opts?: {
         or(
           isNull(quotes.shootHours),
           isNull(quotes.shotCount),
+          isNull(quotes.durationPackage),
           and(
             eq(quotes.crewPhotographers, 0),
             eq(quotes.crewAssistants, 0),
@@ -881,11 +1076,12 @@ export async function backfillStructuredShootFields(opts?: {
       (q.crewVideographers ?? 0) +
       (q.crewOthers ?? 0);
     const needCrew = existingCrew <= 0;
+    const needDuration = !(q.durationPackage ?? "").trim();
 
     const alreadyComplete =
       mode === "shot_count"
         ? !needShots
-        : !needHours && !needCrew;
+        : !needHours && !needCrew && !needDuration;
     if (alreadyComplete) {
       skippedAlreadyComplete += 1;
       continue;
@@ -894,6 +1090,7 @@ export async function backfillStructuredShootFields(opts?: {
     const patch: Partial<{
       shootHours: string;
       shotCount: number;
+      durationPackage: string;
       crewPhotographers: number;
       crewAssistants: number;
       crewVideographers: number;
@@ -946,6 +1143,22 @@ export async function backfillStructuredShootFields(opts?: {
             });
             if (label) patch.team = label.slice(0, 128);
           }
+        }
+      }
+      if (needDuration) {
+        const hoursForPkg =
+          patch.shootHours != null
+            ? Number(patch.shootHours)
+            : q.shootHours != null
+              ? Number(q.shootHours)
+              : null;
+        const pkg = resolveDurationPackage({
+          durationPackage: null,
+          shootHours: hoursForPkg,
+        });
+        if (pkg !== "unknown") {
+          patch.durationPackage = pkg;
+          fields.push("durationPackage");
         }
       }
     }

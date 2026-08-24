@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
+import { QUOTE_REJECT_REASONS } from "@shared/quoteRejectReasons";
+import { durationPackageLabel, resolveDurationPackage } from "@shared/quoteDurationPackage";
 
 const DEFAULT_EMAIL_BODY = `Hello,
 
@@ -326,15 +328,10 @@ export default function QuoteDetail() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [customRejectReason, setCustomRejectReason] = useState("");
+  const [rejectBudgetMax, setRejectBudgetMax] = useState("");
+  const [rejectCompetitorPrice, setRejectCompetitorPrice] = useState("");
 
-  const REJECT_REASONS = [
-    "價格太高",
-    "時間不配合",
-    "找到其他攝影師",
-    "項目取消",
-    "客戶無回覆",
-    "其他原因",
-  ];
+  const selectedRejectDef = QUOTE_REJECT_REASONS.find((r) => r.label === rejectReason);
 
   const updateStatusMutation = trpc.quotes.update.useMutation({
     onSuccess: () => {
@@ -348,6 +345,8 @@ export default function QuoteDetail() {
     if (key === "rejected") {
       setRejectReason("");
       setCustomRejectReason("");
+      setRejectBudgetMax("");
+      setRejectCompetitorPrice("");
       setShowRejectDialog(true);
     } else {
       updateStatusMutation.mutate({ id: quoteId, status: key as any });
@@ -355,8 +354,23 @@ export default function QuoteDetail() {
   };
 
   const confirmReject = () => {
-    const finalReason = rejectReason === "其他原因" ? customRejectReason : rejectReason;
-    updateStatusMutation.mutate({ id: quoteId, status: "rejected", rejectedReason: finalReason || undefined });
+    const finalReason =
+      rejectReason === "其他原因" ? customRejectReason.trim() : rejectReason;
+    const budget = rejectBudgetMax.trim() ? Number(rejectBudgetMax) : null;
+    const competitor = rejectCompetitorPrice.trim()
+      ? Number(rejectCompetitorPrice)
+      : null;
+    updateStatusMutation.mutate({
+      id: quoteId,
+      status: "rejected",
+      rejectedReason: finalReason || undefined,
+      rejectedBudgetMax:
+        budget != null && Number.isFinite(budget) && budget >= 0 ? budget : null,
+      rejectedCompetitorPrice:
+        competitor != null && Number.isFinite(competitor) && competitor >= 0
+          ? competitor
+          : null,
+    });
     setShowRejectDialog(false);
   };
 
@@ -611,11 +625,43 @@ export default function QuoteDetail() {
                   </span>
                 </div>
               )}
-              {quote.status === "rejected" && (quote as any).rejectedReason && (
+              {quote.status === "rejected" &&
+                ((quote as any).rejectedReason ||
+                  (quote as any).rejectedBudgetMax != null ||
+                  (quote as any).rejectedCompetitorPrice != null) && (
+                <div className="mt-2 space-y-1">
+                  {(quote as any).rejectedReason && (
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(229,57,53,0.7)", textTransform: "uppercase" }}>拒絕原因</span>
+                      <span className="inline-block px-2 py-0.5 text-xs" style={{ background: "rgba(229,57,53,0.1)", color: "#e53935", border: "1px solid rgba(229,57,53,0.25)", borderRadius: "2px" }}>
+                        {(quote as any).rejectedReason}
+                      </span>
+                    </div>
+                  )}
+                  {(quote as any).rejectedBudgetMax != null && (
+                    <div className="text-xs text-muted-foreground">
+                      客人預算上限約 HK${" "}
+                      {Number((quote as any).rejectedBudgetMax).toLocaleString("en-HK")}
+                    </div>
+                  )}
+                  {(quote as any).rejectedCompetitorPrice != null && (
+                    <div className="text-xs text-muted-foreground">
+                      對手報價約 HK${" "}
+                      {Number((quote as any).rejectedCompetitorPrice).toLocaleString("en-HK")}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(quote as any).durationPackage && (
                 <div className="flex items-center gap-2 mt-2">
-                  <span style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(229,57,53,0.7)", textTransform: "uppercase" }}>拒絕原因</span>
-                  <span className="inline-block px-2 py-0.5 text-xs" style={{ background: "rgba(229,57,53,0.1)", color: "#e53935", border: "1px solid rgba(229,57,53,0.25)", borderRadius: "2px" }}>
-                    {(quote as any).rejectedReason}
+                  <span style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(212,168,67,0.6)", textTransform: "uppercase" }}>時長套餐</span>
+                  <span className="inline-block px-2 py-0.5 text-xs" style={{ background: "rgba(212,168,67,0.1)", color: "#d4a843", border: "1px solid rgba(212,168,67,0.25)", borderRadius: "2px" }}>
+                    {durationPackageLabel(
+                      resolveDurationPackage({
+                        durationPackage: (quote as any).durationPackage,
+                        shootHours: (quote as any).shootHours,
+                      })
+                    )}
                   </span>
                 </div>
               )}
@@ -1198,7 +1244,7 @@ export default function QuoteDetail() {
       {/* Reject Reason Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent
-          className="max-w-sm"
+          className="max-w-md"
           style={{ background: "#111111", border: "1px solid rgba(229,57,53,0.3)", borderRadius: "4px" }}
         >
           <DialogHeader>
@@ -1207,20 +1253,22 @@ export default function QuoteDetail() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p style={{ fontSize: "0.75rem", color: "#888" }}>請選擇拒絕原因（可不選）</p>
-            <div className="grid grid-cols-2 gap-2">
-              {REJECT_REASONS.map(reason => (
+            <p style={{ fontSize: "0.75rem", color: "#888" }}>
+              請揀細啲嘅原因（方便之後學習勝率；可不選）
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              {QUOTE_REJECT_REASONS.map((reason) => (
                 <button
-                  key={reason}
-                  onClick={() => setRejectReason(reason)}
+                  key={reason.id}
+                  onClick={() => setRejectReason(reason.label)}
                   className="px-3 py-2 text-xs rounded text-left transition-all"
                   style={{
-                    border: `1px solid ${rejectReason === reason ? "#e53935" : "rgba(255,255,255,0.1)"}`,
-                    background: rejectReason === reason ? "rgba(229,57,53,0.15)" : "transparent",
-                    color: rejectReason === reason ? "#e53935" : "#aaa",
+                    border: `1px solid ${rejectReason === reason.label ? "#e53935" : "rgba(255,255,255,0.1)"}`,
+                    background: rejectReason === reason.label ? "rgba(229,57,53,0.15)" : "transparent",
+                    color: rejectReason === reason.label ? "#e53935" : "#aaa",
                   }}
                 >
-                  {reason}
+                  {reason.label}
                 </button>
               ))}
             </div>
@@ -1229,10 +1277,42 @@ export default function QuoteDetail() {
                 type="text"
                 placeholder="請輸入原因..."
                 value={customRejectReason}
-                onChange={e => setCustomRejectReason(e.target.value)}
+                onChange={(e) => setCustomRejectReason(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded"
                 style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}
               />
+            )}
+            {selectedRejectDef?.needsBudget && (
+              <div>
+                <Label style={{ fontSize: "0.65rem", letterSpacing: "0.1em", color: "#888" }}>
+                  客人預算上限（約，HKD）— 建議填
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={rejectBudgetMax}
+                  onChange={(e) => setRejectBudgetMax(e.target.value)}
+                  placeholder="例如 5000"
+                  className="mt-1"
+                  style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}
+                />
+              </div>
+            )}
+            {selectedRejectDef?.needsCompetitor && (
+              <div>
+                <Label style={{ fontSize: "0.65rem", letterSpacing: "0.1em", color: "#888" }}>
+                  對手報價（約，HKD）— 建議填
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={rejectCompetitorPrice}
+                  onChange={(e) => setRejectCompetitorPrice(e.target.value)}
+                  placeholder="例如 4500"
+                  className="mt-1"
+                  style={{ background: "#1a1a1a", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}
+                />
+              </div>
             )}
           </div>
           <DialogFooter className="gap-2">

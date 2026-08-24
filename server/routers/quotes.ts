@@ -318,6 +318,10 @@ export const quotesRouter = router({
         team: z.string().optional(),
         shootHours: z.number().min(0.5).max(72).nullable().optional(),
         shotCount: z.number().int().min(1).max(5000).nullable().optional(),
+        durationPackage: z
+          .enum(["hours", "half_day", "full_day", "multi_day"])
+          .nullable()
+          .optional(),
         crewPhotographers: z.number().int().min(0).max(20).optional(),
         crewAssistants: z.number().int().min(0).max(20).optional(),
         crewVideographers: z.number().int().min(0).max(20).optional(),
@@ -330,7 +334,7 @@ export const quotesRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, ...quoteDataRest } = input;
+      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, durationPackage, ...quoteDataRest } = input;
       const enriched = enrichShootFundamentals({
         shootHours,
         shotCount,
@@ -346,6 +350,9 @@ export const quotesRouter = router({
       const quoteData = {
         ...quoteDataRest,
         ...enriched,
+        ...(durationPackage !== undefined && {
+          durationPackage: durationPackage ?? null,
+        }),
         depositPercent: input.depositPercent ?? 50,
         depositMode: input.depositMode ?? "percent",
         depositFixedAmount: input.depositFixedAmount,
@@ -420,6 +427,10 @@ export const quotesRouter = router({
         team: z.string().optional(),
         shootHours: z.number().min(0.5).max(72).nullable().optional(),
         shotCount: z.number().int().min(1).max(5000).nullable().optional(),
+        durationPackage: z
+          .enum(["hours", "half_day", "full_day", "multi_day"])
+          .nullable()
+          .optional(),
         crewPhotographers: z.number().int().min(0).max(20).optional(),
         crewAssistants: z.number().int().min(0).max(20).optional(),
         crewVideographers: z.number().int().min(0).max(20).optional(),
@@ -427,16 +438,40 @@ export const quotesRouter = router({
         deliveryMethod: z.string().optional(),
         leadSource: z.string().optional(),
         rejectedReason: z.string().optional(),
+        rejectedBudgetMax: z.number().int().min(0).max(10_000_000).nullable().optional(),
+        rejectedCompetitorPrice: z
+          .number()
+          .int()
+          .min(0)
+          .max(10_000_000)
+          .nullable()
+          .optional(),
         items: z.array(quoteItemSchema).optional(),
         emailInquiryId: z.number().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {
       console.log('[Quotes.update] Input received:', JSON.stringify(input, null, 2));
-      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, shootHours, shotCount, ...rest } = input;
+      const {
+        id,
+        items,
+        subtotal,
+        discountPercent,
+        discountAmount,
+        total,
+        depositPercent,
+        depositMode,
+        depositFixedAmount,
+        shootHours,
+        shotCount,
+        durationPackage,
+        rejectedBudgetMax,
+        rejectedCompetitorPrice,
+        ...rest
+      } = input;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
-      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
+      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
 
       const shouldEnrich =
@@ -489,6 +524,15 @@ export const quotesRouter = router({
           !("shotCount" in enrichedPatch) && {
             shotCount: shotCount != null ? shotCount : null,
           }),
+        ...(durationPackage !== undefined && {
+          durationPackage: durationPackage ?? null,
+        }),
+        ...(rejectedBudgetMax !== undefined && {
+          rejectedBudgetMax: rejectedBudgetMax ?? null,
+        }),
+        ...(rejectedCompetitorPrice !== undefined && {
+          rejectedCompetitorPrice: rejectedCompetitorPrice ?? null,
+        }),
         ...(subtotal !== undefined && { subtotal: String(subtotal) }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),
         ...(discountAmount !== undefined && { discountAmount: String(discountAmount) }),
