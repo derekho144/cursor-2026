@@ -325,6 +325,9 @@ export default function QuotePrintPage() {
             {quote.clientEmail && <div style={S.clientDetail}>{quote.clientEmail}</div>}
             {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
             {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
+            {(quote as any).shotCount != null && Number((quote as any).shotCount) > 0 && (
+              <div style={S.clientDetail}>Shots: {Number((quote as any).shotCount)}</div>
+            )}
             {(quote as any).shootHours != null && Number((quote as any).shootHours) > 0 && (
               <div style={S.clientDetail}>Hours: {Number((quote as any).shootHours)}</div>
             )}

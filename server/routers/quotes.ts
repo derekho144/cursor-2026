@@ -74,6 +74,7 @@ async function generateQuotePdfMatchingDownload(
  */
 function enrichShootFundamentals(input: {
   shootHours?: number | string | null;
+  shotCount?: number | string | null;
   crewPhotographers?: number | null;
   crewAssistants?: number | null;
   crewVideographers?: number | null;
@@ -85,6 +86,7 @@ function enrichShootFundamentals(input: {
 }) {
   const features = extractQuoteShootFeatures({
     shootHours: input.shootHours,
+    shotCount: input.shotCount,
     crewPhotographers: input.crewPhotographers,
     crewAssistants: input.crewAssistants,
     crewVideographers: input.crewVideographers,
@@ -100,6 +102,13 @@ function enrichShootFundamentals(input: {
       ? String(input.shootHours)
       : features.hours != null
         ? String(features.hours)
+        : null;
+
+  const shotCount =
+    input.shotCount != null && Number(input.shotCount) > 0
+      ? Math.floor(Number(input.shotCount))
+      : features.shotCount != null
+        ? features.shotCount
         : null;
 
   let crewPhotographers = Math.max(0, Math.floor(Number(input.crewPhotographers) || 0));
@@ -138,6 +147,7 @@ function enrichShootFundamentals(input: {
 
   return {
     shootHours,
+    shotCount,
     crewPhotographers,
     crewAssistants,
     crewVideographers,
@@ -307,6 +317,7 @@ export const quotesRouter = router({
         equipment: z.string().optional(),
         team: z.string().optional(),
         shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        shotCount: z.number().int().min(1).max(5000).nullable().optional(),
         crewPhotographers: z.number().int().min(0).max(20).optional(),
         crewAssistants: z.number().int().min(0).max(20).optional(),
         crewVideographers: z.number().int().min(0).max(20).optional(),
@@ -319,9 +330,10 @@ export const quotesRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, ...quoteDataRest } = input;
+      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, ...quoteDataRest } = input;
       const enriched = enrichShootFundamentals({
         shootHours,
+        shotCount,
         crewPhotographers: input.crewPhotographers,
         crewAssistants: input.crewAssistants,
         crewVideographers: input.crewVideographers,
@@ -407,6 +419,7 @@ export const quotesRouter = router({
         equipment: z.string().optional(),
         team: z.string().optional(),
         shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        shotCount: z.number().int().min(1).max(5000).nullable().optional(),
         crewPhotographers: z.number().int().min(0).max(20).optional(),
         crewAssistants: z.number().int().min(0).max(20).optional(),
         crewVideographers: z.number().int().min(0).max(20).optional(),
@@ -420,14 +433,15 @@ export const quotesRouter = router({
     )
     .mutation(async ({ input }) => {
       console.log('[Quotes.update] Input received:', JSON.stringify(input, null, 2));
-      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, shootHours, ...rest } = input;
+      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, shootHours, shotCount, ...rest } = input;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
-      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
+      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
 
       const shouldEnrich =
         shootHours !== undefined ||
+        shotCount !== undefined ||
         input.crewPhotographers !== undefined ||
         input.crewAssistants !== undefined ||
         input.crewVideographers !== undefined ||
@@ -445,6 +459,10 @@ export const quotesRouter = router({
             shootHours !== undefined
               ? shootHours
               : (existing as any)?.shootHours,
+          shotCount:
+            shotCount !== undefined
+              ? shotCount
+              : (existing as any)?.shotCount,
           crewPhotographers:
             input.crewPhotographers ?? (existing as any)?.crewPhotographers,
           crewAssistants:
@@ -466,6 +484,10 @@ export const quotesRouter = router({
         ...(shootHours !== undefined &&
           !("shootHours" in enrichedPatch) && {
             shootHours: shootHours != null ? String(shootHours) : null,
+          }),
+        ...(shotCount !== undefined &&
+          !("shotCount" in enrichedPatch) && {
+            shotCount: shotCount != null ? shotCount : null,
           }),
         ...(subtotal !== undefined && { subtotal: String(subtotal) }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),

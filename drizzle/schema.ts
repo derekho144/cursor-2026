@@ -85,6 +85,8 @@ export const quotes = mysqlTable("quotes", {
   team: varchar("team", { length: 128 }),
   /** Structured shoot hours for pricing learning (preferred over free-text extract) */
   shootHours: decimal("shootHours", { precision: 6, scale: 2 }),
+  /** Delivered photo/shot count for product-style pricing (張數) */
+  shotCount: int("shotCount"),
   crewPhotographers: int("crewPhotographers").notNull().default(0),
   crewAssistants: int("crewAssistants").notNull().default(0),
   crewVideographers: int("crewVideographers").notNull().default(0),

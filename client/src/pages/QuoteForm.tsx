@@ -23,6 +23,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { quotePricingMode } from "@shared/quotePricingMode";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -123,8 +124,10 @@ type FormData = {
   validUntil: string;
   equipment: string;
   team: string;
-  /** Structured hours for pricing learning (preferred) */
+  /** Structured hours for event/time-based pricing */
   shootHours: string;
+  /** Delivered shot count for product-style pricing (張數) */
+  shotCount: string;
   crewPhotographers: number;
   crewAssistants: number;
   crewVideographers: number;
@@ -157,6 +160,7 @@ const emptyForm: FormData = {
   equipment: "",
   team: "",
   shootHours: "",
+  shotCount: "",
   crewPhotographers: 0,
   crewAssistants: 0,
   crewVideographers: 0,
@@ -604,6 +608,11 @@ export default function QuoteForm() {
           Number((existingQuote as any).shootHours) > 0
             ? String(Number((existingQuote as any).shootHours))
             : "",
+        shotCount:
+          (existingQuote as any).shotCount != null &&
+          Number((existingQuote as any).shotCount) > 0
+            ? String(Number((existingQuote as any).shotCount))
+            : "",
         crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
         crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
         crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
@@ -715,11 +724,17 @@ export default function QuoteForm() {
     if (!form.leadSource) { toast.error("請選擇詢價來源"); return; }
     if (form.items.some((i) => !i.description.trim())) { toast.error("請填寫所有服務項目說明"); return; }
 
-    const needsShootFundamentals = !DESIGN_SERVICE_TYPES.has(form.serviceType);
+    const pricingMode = quotePricingMode(form.serviceType);
     const hoursNum = form.shootHours.trim() ? Number(form.shootHours) : null;
     let shootHours =
       hoursNum != null && Number.isFinite(hoursNum) && hoursNum > 0
         ? hoursNum
+        : null;
+
+    const shotNum = form.shotCount.trim() ? Number(form.shotCount) : null;
+    const shotCount =
+      shotNum != null && Number.isFinite(shotNum) && shotNum > 0
+        ? Math.floor(shotNum)
         : null;
 
     let crew = {
@@ -735,13 +750,18 @@ export default function QuoteForm() {
       if (crewHeadcount(fromItems) > 0) crew = fromItems;
     }
 
-    if (needsShootFundamentals) {
+    if (pricingMode === "time_crew") {
       if (shootHours == null) {
         toast.error("請填寫拍攝時數（服務資料）");
         return;
       }
       if (crewHeadcount(crew) <= 0) {
         toast.error("請填寫人手人數（至少一位攝影師／錄影／助理）");
+        return;
+      }
+    } else if (pricingMode === "shot_count") {
+      if (shotCount == null) {
+        toast.error("請填寫交付張數（產品／靜物報價以張數計）");
         return;
       }
     }
@@ -795,6 +815,7 @@ export default function QuoteForm() {
       clientId: resolvedClientId,
       items,
       shootHours,
+      shotCount,
       ...crew,
       team,
       // For new quotes: use backend syncToClients to upsert client automatically
@@ -884,6 +905,11 @@ export default function QuoteForm() {
                         (existingQuote as any).shootHours != null &&
                         Number((existingQuote as any).shootHours) > 0
                           ? String(Number((existingQuote as any).shootHours))
+                          : "",
+                      shotCount:
+                        (existingQuote as any).shotCount != null &&
+                        Number((existingQuote as any).shotCount) > 0
+                          ? String(Number((existingQuote as any).shotCount))
                           : "",
                       crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
                       crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
@@ -1131,7 +1157,7 @@ export default function QuoteForm() {
                 />
               </FormField>
             )}
-            {!DESIGN_SERVICE_TYPES.has(form.serviceType) && (
+            {quotePricingMode(form.serviceType) === "time_crew" && (
               <FormField label={<span>拍攝時數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
                 <Input
                   type="number"
@@ -1148,6 +1174,28 @@ export default function QuoteForm() {
                       : undefined,
                   }}
                 />
+              </FormField>
+            )}
+            {quotePricingMode(form.serviceType) === "shot_count" && (
+              <FormField label={<span>交付張數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  step={1}
+                  value={form.shotCount}
+                  onChange={(e) => setForm((p) => ({ ...p, shotCount: e.target.value }))}
+                  placeholder="例如 20"
+                  style={{
+                    ...inputStyle,
+                    borderColor: !form.shotCount.trim()
+                      ? "rgba(239,68,68,0.55)"
+                      : undefined,
+                  }}
+                />
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  產品／靜物報價以張數計價（唔強制時數／人手）
+                </div>
               </FormField>
             )}
             <FormField label={<span>詢價來源 <span style={{color:'#ef4444',fontWeight:'bold'}}>*</span></span>}>
@@ -1171,7 +1219,7 @@ export default function QuoteForm() {
               </Select>
             </FormField>
 
-            {!DESIGN_SERVICE_TYPES.has(form.serviceType) && (
+            {quotePricingMode(form.serviceType) === "time_crew" && (
               <div className="md:col-span-2">
                 <div
                   className="text-xs mb-2"

@@ -44,6 +44,7 @@ export const pricingLearningRouter = router({
         serviceType: serviceTypeSchema,
         hours: z.number().min(0.5).max(72).optional().nullable(),
         crewSize: z.number().int().min(1).max(20).optional().nullable(),
+        shotCount: z.number().int().min(1).max(5000).optional().nullable(),
       })
     )
     .query(async ({ input }) => {
@@ -51,6 +52,7 @@ export const pricingLearningRouter = router({
         serviceType: input.serviceType,
         hours: input.hours,
         crewSize: input.crewSize,
+        shotCount: input.shotCount,
       });
     }),
 

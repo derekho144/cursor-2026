@@ -16,7 +16,13 @@ import {
   type CrewBucket,
   type HoursBucket,
   type QuoteShootFeatures,
+  type ShotCountBucket,
 } from "./pricingLearningExtract";
+import {
+  quotePricingMode,
+  shotCountBucketLabel,
+  SHOT_COUNT_SERVICE_TYPES,
+} from "../shared/quotePricingMode";
 
 const MIN_BUCKET_SAMPLES = 2;
 
@@ -35,6 +41,7 @@ export interface PricingLearningQuoteRow {
   estimatedTotal: number | null;
   accuracyPct: number | null;
   hasStructuredHours: boolean;
+  hasStructuredShotCount: boolean;
   hasStructuredCrew: boolean;
 }
 
@@ -85,6 +92,7 @@ async function loadAcceptedQuotesWithItems(opts?: {
       equipment: quotes.equipment,
       emailInquiryId: quotes.emailInquiryId,
       shootHours: quotes.shootHours,
+      shotCount: quotes.shotCount,
       crewPhotographers: quotes.crewPhotographers,
       crewAssistants: quotes.crewAssistants,
       crewVideographers: quotes.crewVideographers,
@@ -139,6 +147,7 @@ async function loadAcceptedQuotesWithItems(opts?: {
     const total = Number(q.total);
     const features = extractQuoteShootFeatures({
       shootHours: q.shootHours,
+      shotCount: q.shotCount,
       crewPhotographers: q.crewPhotographers,
       crewAssistants: q.crewAssistants,
       crewVideographers: q.crewVideographers,
@@ -160,6 +169,8 @@ async function loadAcceptedQuotesWithItems(opts?: {
 
     const hasStructuredHours =
       q.shootHours != null && Number(q.shootHours) > 0;
+    const hasStructuredShotCount =
+      q.shotCount != null && Number(q.shotCount) > 0;
     const hasStructuredCrew =
       (q.crewPhotographers ?? 0) +
         (q.crewAssistants ?? 0) +
@@ -187,6 +198,7 @@ async function loadAcceptedQuotesWithItems(opts?: {
       estimatedTotal,
       accuracyPct,
       hasStructuredHours,
+      hasStructuredShotCount,
       hasStructuredCrew,
     } satisfies PricingLearningQuoteRow;
   });
@@ -211,8 +223,14 @@ export async function getPricingLearningOverview() {
           .length,
         withCrew: typeRows.filter((r) => r.features.crewBucket !== "unknown")
           .length,
+        withShots: typeRows.filter(
+          (r) => r.features.shotCountBucket !== "unknown"
+        ).length,
         withStructuredHours: typeRows.filter((r) => r.hasStructuredHours).length,
         withStructuredCrew: typeRows.filter((r) => r.hasStructuredCrew).length,
+        withStructuredShots: typeRows.filter((r) => r.hasStructuredShotCount)
+          .length,
+        pricingMode: quotePricingMode(serviceType),
         recentWeightedMid: timeWeightedMedian(
           typeRows.map((r) => ({
             value: r.total,
@@ -225,6 +243,13 @@ export async function getPricingLearningOverview() {
 
   const hoursOrder: HoursBucket[] = ["lte_2", "h2_4", "h4_8", "gt_8", "unknown"];
   const crewOrder: CrewBucket[] = ["solo", "pair", "team", "unknown"];
+  const shotOrder: ShotCountBucket[] = [
+    "lte_10",
+    "n11_20",
+    "n21_50",
+    "gt_50",
+    "unknown",
+  ];
 
   const hoursBuckets = bucketStats(
     rows.map((r) => ({ total: r.total, key: r.features.hoursBucket })),
@@ -236,11 +261,26 @@ export async function getPricingLearningOverview() {
     crewOrder,
     crewBucketLabel
   );
+  const shotBuckets = bucketStats(
+    rows
+      .filter((r) => SHOT_COUNT_SERVICE_TYPES.has(r.serviceType))
+      .map((r) => ({ total: r.total, key: r.features.shotCountBucket })),
+    shotOrder,
+    shotCountBucketLabel
+  );
 
   const withHoursRows = rows.filter((r) => r.features.hours != null && r.features.hours > 0);
   const pricePerHourStats = summarizeTotals(
     withHoursRows
       .map((r) => r.features.pricePerHour)
+      .filter((n): n is number => n != null && n > 0)
+  );
+  const withShotRows = rows.filter(
+    (r) => r.features.shotCount != null && r.features.shotCount > 0
+  );
+  const pricePerShotStats = summarizeTotals(
+    withShotRows
+      .map((r) => r.features.pricePerShot)
       .filter((n): n is number => n != null && n > 0)
   );
 
@@ -259,11 +299,17 @@ export async function getPricingLearningOverview() {
         };
 
   const incomplete = rows
-    .filter(
-      (r) =>
-        r.features.hoursBucket === "unknown" ||
-        r.features.crewBucket === "unknown"
-    )
+    .filter((r) => {
+      const mode = quotePricingMode(r.serviceType);
+      if (mode === "shot_count") return r.features.shotCountBucket === "unknown";
+      if (mode === "time_crew") {
+        return (
+          r.features.hoursBucket === "unknown" ||
+          r.features.crewBucket === "unknown"
+        );
+      }
+      return false;
+    })
     .slice(0, 25)
     .map((r) => ({
       id: r.id,
@@ -271,15 +317,26 @@ export async function getPricingLearningOverview() {
       clientName: r.clientCompany || r.clientName,
       serviceType: r.serviceType,
       total: r.total,
-      missingHours: r.features.hoursBucket === "unknown",
-      missingCrew: r.features.crewBucket === "unknown",
+      missingHours:
+        quotePricingMode(r.serviceType) === "time_crew" &&
+        r.features.hoursBucket === "unknown",
+      missingCrew:
+        quotePricingMode(r.serviceType) === "time_crew" &&
+        r.features.crewBucket === "unknown",
+      missingShots:
+        quotePricingMode(r.serviceType) === "shot_count" &&
+        r.features.shotCountBucket === "unknown",
       hoursSource: r.features.hoursSource,
       crewSource: r.features.crewSource,
+      shotCountSource: r.features.shotCountSource,
     }));
 
-  const structuredBoth = rows.filter(
-    (r) => r.hasStructuredHours && r.hasStructuredCrew
-  ).length;
+  const structuredBoth = rows.filter((r) => {
+    const mode = quotePricingMode(r.serviceType);
+    if (mode === "shot_count") return r.hasStructuredShotCount;
+    if (mode === "time_crew") return r.hasStructuredHours && r.hasStructuredCrew;
+    return false;
+  }).length;
   const textOnlyHours = rows.filter(
     (r) =>
       !r.hasStructuredHours &&
@@ -299,46 +356,56 @@ export async function getPricingLearningOverview() {
     coverage: {
       withHours: rows.filter((r) => r.features.hoursBucket !== "unknown").length,
       withCrew: rows.filter((r) => r.features.crewBucket !== "unknown").length,
-      withBothFundamentals: rows.filter(
-        (r) =>
-          r.features.hoursBucket !== "unknown" &&
-          r.features.crewBucket !== "unknown"
-      ).length,
+      withShots: rows.filter((r) => r.features.shotCountBucket !== "unknown")
+        .length,
+      withBothFundamentals: rows.filter((r) => {
+        const mode = quotePricingMode(r.serviceType);
+        if (mode === "shot_count") return r.features.shotCountBucket !== "unknown";
+        if (mode === "time_crew") {
+          return (
+            r.features.hoursBucket !== "unknown" &&
+            r.features.crewBucket !== "unknown"
+          );
+        }
+        return true;
+      }).length,
       withStructuredHours: rows.filter((r) => r.hasStructuredHours).length,
       withStructuredCrew: rows.filter((r) => r.hasStructuredCrew).length,
+      withStructuredShots: rows.filter((r) => r.hasStructuredShotCount).length,
       withStructuredBoth: structuredBoth,
       textOnlyHours,
       textOnlyCrew,
       withAiPair: paired.length,
-      incompleteCount: rows.filter(
-        (r) =>
-          r.features.hoursBucket === "unknown" ||
-          r.features.crewBucket === "unknown"
-      ).length,
+      incompleteCount: incomplete.length,
     },
     dataQuality: {
       score:
         rows.length === 0
           ? 0
           : Math.round(
-              ((structuredBoth * 1.0 +
-                (rows.filter(
-                  (r) =>
-                    (r.hasStructuredHours || r.features.hoursBucket !== "unknown") &&
-                    (r.hasStructuredCrew || r.features.crewBucket !== "unknown")
-                ).length -
-                  structuredBoth) *
-                  0.55) /
+              (rows.filter((r) => {
+                const mode = quotePricingMode(r.serviceType);
+                if (mode === "shot_count") {
+                  return r.features.shotCountBucket !== "unknown";
+                }
+                if (mode === "time_crew") {
+                  return (
+                    r.features.hoursBucket !== "unknown" &&
+                    r.features.crewBucket !== "unknown"
+                  );
+                }
+                return true;
+              }).length /
                 rows.length) *
                 100
             ),
       tips: [
-        "報價單請填「拍攝時數」同人手人數（攝影師／助理等），學習會優先用結構化欄位。",
-        "自由文字「Team」仍可作後備，但準確度低過結構化欄位。",
+        "產品／食物／珠寶等：填「交付張數」；活動／錄影：填時數同人手。",
+        "學習會按服務類型用對應基礎維度，避免產品單被時數要求拉低準確率。",
         "統計已自動剔除極端離群成交價（IQR），近半年成交權重較高。",
         incomplete.length > 0
-          ? `尚有 ${incomplete.length}+ 筆已接受報價缺時數或人手，補齊可提升準確率。`
-          : "時數／人手覆蓋良好。",
+          ? `尚有 ${incomplete.length}+ 筆已接受報價缺對應基礎資料，補齊可提升準確率。`
+          : "基礎資料覆蓋良好。",
       ],
       incomplete,
     },
@@ -347,9 +414,11 @@ export async function getPricingLearningOverview() {
       rows.map((r) => ({ value: r.total, at: r.shootingDate || r.createdAt }))
     ),
     pricePerHour: pricePerHourStats.count > 0 ? pricePerHourStats : null,
+    pricePerShot: pricePerShotStats.count > 0 ? pricePerShotStats : null,
     byServiceType,
     hoursBuckets,
     crewBuckets,
+    shotBuckets,
     aiAccuracy,
   };
 }
@@ -371,10 +440,31 @@ export async function getPricingLearningByServiceType(serviceType: string) {
     crewBucketLabel
   );
 
+  const shotOrder: ShotCountBucket[] = [
+    "lte_10",
+    "n11_20",
+    "n21_50",
+    "gt_50",
+    "unknown",
+  ];
+  const shotBuckets = bucketStats(
+    rows.map((r) => ({ total: r.total, key: r.features.shotCountBucket })),
+    shotOrder,
+    shotCountBucketLabel
+  );
+
   const withHours = rows.filter((r) => r.features.hours != null && r.features.hours > 0);
   const pricePerHour = summarizeTotals(
     withHours
       .map((r) => r.features.pricePerHour)
+      .filter((n): n is number => n != null && n > 0)
+  );
+  const withShots = rows.filter(
+    (r) => r.features.shotCount != null && r.features.shotCount > 0
+  );
+  const pricePerShot = summarizeTotals(
+    withShots
+      .map((r) => r.features.pricePerShot)
       .filter((n): n is number => n != null && n > 0)
   );
 
@@ -415,6 +505,7 @@ export async function getPricingLearningByServiceType(serviceType: string) {
 
   return {
     serviceType,
+    pricingMode: quotePricingMode(serviceType),
     summary: summarizeTotals(rows.map((r) => r.total)),
     recentWeightedMid: timeWeightedMedian(
       rows.map((r) => ({ value: r.total, at: r.shootingDate || r.createdAt }))
@@ -422,12 +513,17 @@ export async function getPricingLearningByServiceType(serviceType: string) {
     coverage: {
       withHours: rows.filter((r) => r.features.hoursBucket !== "unknown").length,
       withCrew: rows.filter((r) => r.features.crewBucket !== "unknown").length,
+      withShots: rows.filter((r) => r.features.shotCountBucket !== "unknown")
+        .length,
       withStructuredHours: rows.filter((r) => r.hasStructuredHours).length,
       withStructuredCrew: rows.filter((r) => r.hasStructuredCrew).length,
+      withStructuredShots: rows.filter((r) => r.hasStructuredShotCount).length,
     },
     pricePerHour: pricePerHour.count > 0 ? pricePerHour : null,
+    pricePerShot: pricePerShot.count > 0 ? pricePerShot : null,
     hoursBuckets,
     crewBuckets,
+    shotBuckets,
     cross,
     recent: rows.slice(0, 30).map((r) => ({
       id: r.id,
@@ -438,11 +534,18 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       hours: r.features.hours,
       hoursLabel: hoursBucketLabel(r.features.hoursBucket),
       hoursSource: r.features.hoursSource,
+      shotCount: r.features.shotCount,
+      shotCountLabel: shotCountBucketLabel(r.features.shotCountBucket),
+      shotCountSource: r.features.shotCountSource,
       crewLabel: r.features.crewLabel,
       crewBucket: r.features.crewBucket,
       crewSource: r.features.crewSource,
       pricePerHour: r.features.pricePerHour,
-      structured: r.hasStructuredHours || r.hasStructuredCrew,
+      pricePerShot: r.features.pricePerShot,
+      structured:
+        r.hasStructuredHours ||
+        r.hasStructuredCrew ||
+        r.hasStructuredShotCount,
       items: r.itemSummaries,
       estimatedTotal: r.estimatedTotal,
       accuracyPct: r.accuracyPct,
@@ -458,11 +561,13 @@ export async function suggestPriceFromLearning(input: {
   serviceType: string;
   hours?: number | null;
   crewSize?: number | null;
+  shotCount?: number | null;
 }) {
   const rows = await loadAcceptedQuotesWithItems({
     serviceType: input.serviceType,
     limit: 1000,
   });
+  const mode = quotePricingMode(input.serviceType);
 
   const targetHours =
     input.hours != null && input.hours > 0
@@ -478,23 +583,45 @@ export async function suggestPriceFromLearning(input: {
             ? "pair"
             : "team") as CrewBucket)
       : null;
+  const targetShots =
+    input.shotCount != null && input.shotCount > 0
+      ? extractQuoteShootFeatures({
+          shotCount: input.shotCount,
+        }).shotCountBucket
+      : null;
 
   let matched = rows;
-  if (targetHours && targetHours !== "unknown") {
-    const filtered = matched.filter((r) => r.features.hoursBucket === targetHours);
-    if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
-  }
-  if (targetCrew && targetCrew !== "unknown") {
-    const filtered = matched.filter((r) => r.features.crewBucket === targetCrew);
-    if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
+  if (mode === "shot_count") {
+    if (targetShots && targetShots !== "unknown") {
+      const filtered = matched.filter(
+        (r) => r.features.shotCountBucket === targetShots
+      );
+      if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
+    }
+  } else {
+    if (targetHours && targetHours !== "unknown") {
+      const filtered = matched.filter(
+        (r) => r.features.hoursBucket === targetHours
+      );
+      if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
+    }
+    if (targetCrew && targetCrew !== "unknown") {
+      const filtered = matched.filter(
+        (r) => r.features.crewBucket === targetCrew
+      );
+      if (filtered.length >= MIN_BUCKET_SAMPLES) matched = filtered;
+    }
   }
 
-  // Prefer structured-field rows when enough samples
-  const structuredMatched = matched.filter(
-    (r) =>
-      (targetHours == null || targetHours === "unknown" || r.hasStructuredHours) &&
+  const structuredMatched = matched.filter((r) => {
+    if (mode === "shot_count") return r.hasStructuredShotCount;
+    return (
+      (targetHours == null ||
+        targetHours === "unknown" ||
+        r.hasStructuredHours) &&
       (targetCrew == null || targetCrew === "unknown" || r.hasStructuredCrew)
-  );
+    );
+  });
   const useRows =
     structuredMatched.length >= MIN_BUCKET_SAMPLES ? structuredMatched : matched;
 
@@ -512,13 +639,27 @@ export async function suggestPriceFromLearning(input: {
       ? Math.round(perHour.p50 * input.hours)
       : null;
 
+  const perShotVals = useRows
+    .map((r) => r.features.pricePerShot)
+    .filter((n): n is number => n != null && n > 0);
+  const perShot = summarizeTotals(perShotVals);
+  const shotsHint =
+    input.shotCount != null &&
+    input.shotCount > 0 &&
+    perShot.count >= MIN_BUCKET_SAMPLES
+      ? Math.round(perShot.p50 * input.shotCount)
+      : null;
+
   return {
     serviceType: input.serviceType,
+    pricingMode: mode,
     filters: {
       hours: input.hours ?? null,
       hoursBucket: targetHours,
       crewSize: input.crewSize ?? null,
       crewBucket: targetCrew,
+      shotCount: input.shotCount ?? null,
+      shotCountBucket: targetShots,
     },
     sampleCount: summary.count,
     preferredStructured: structuredMatched.length >= MIN_BUCKET_SAMPLES,
@@ -530,22 +671,29 @@ export async function suggestPriceFromLearning(input: {
             high: summary.p75,
             avg: summary.avg,
             fromPerHour: hoursHint,
+            fromPerShot: shotsHint,
           }
         : null,
     note:
       summary.count < MIN_BUCKET_SAMPLES
-        ? "同類已接受報價樣本不足，建議先用市場價參考，並補齊時數／人手欄位。"
+        ? mode === "shot_count"
+          ? "同類已接受報價樣本不足，建議先用市場價參考，並補齊交付張數。"
+          : "同類已接受報價樣本不足，建議先用市場價參考，並補齊時數／人手欄位。"
         : useRows.length < rows.length
-          ? `已按時數／人手篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
+          ? `已按${mode === "shot_count" ? "張數" : "時數／人手"}篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
           : `基於 ${summary.count} 筆「${input.serviceType}」已接受報價（已剔除離群值）。`,
     comparables: useRows.slice(0, 8).map((r) => ({
       id: r.id,
       quoteNumber: r.quoteNumber,
       total: r.total,
       hours: r.features.hours,
+      shotCount: r.features.shotCount,
       crewLabel: r.features.crewLabel,
       clientName: r.clientCompany || r.clientName,
-      structured: r.hasStructuredHours || r.hasStructuredCrew,
+      structured:
+        r.hasStructuredHours ||
+        r.hasStructuredCrew ||
+        r.hasStructuredShotCount,
     })),
   };
 }
@@ -571,6 +719,7 @@ export async function backfillStructuredShootFields(opts?: {
       notes: quotes.notes,
       equipment: quotes.equipment,
       shootHours: quotes.shootHours,
+      shotCount: quotes.shotCount,
       crewPhotographers: quotes.crewPhotographers,
       crewAssistants: quotes.crewAssistants,
       crewVideographers: quotes.crewVideographers,
@@ -580,6 +729,7 @@ export async function backfillStructuredShootFields(opts?: {
     .where(
       or(
         isNull(quotes.shootHours),
+        isNull(quotes.shotCount),
         and(
           eq(quotes.crewPhotographers, 0),
           eq(quotes.crewAssistants, 0),
@@ -623,6 +773,7 @@ export async function backfillStructuredShootFields(opts?: {
 
     const patch: Partial<{
       shootHours: string;
+      shotCount: number;
       crewPhotographers: number;
       crewAssistants: number;
       crewVideographers: number;
@@ -633,6 +784,11 @@ export async function backfillStructuredShootFields(opts?: {
     const needHours = q.shootHours == null || Number(q.shootHours) <= 0;
     if (needHours && features.hours != null && features.hours > 0) {
       patch.shootHours = String(features.hours);
+    }
+
+    const needShots = q.shotCount == null || Number(q.shotCount) <= 0;
+    if (needShots && features.shotCount != null && features.shotCount > 0) {
+      patch.shotCount = features.shotCount;
     }
 
     const existingCrew =

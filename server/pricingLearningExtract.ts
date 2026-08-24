@@ -3,8 +3,14 @@
  * Foundations for pricing learning: hours · shoot type · crew.
  */
 
+import {
+  shotCountBucket,
+  type ShotCountBucket,
+} from "../shared/quotePricingMode";
+
 export type HoursBucket = "unknown" | "lte_2" | "h2_4" | "h4_8" | "gt_8";
 export type CrewBucket = "unknown" | "solo" | "pair" | "team";
+export type { ShotCountBucket };
 
 export interface CrewBreakdown {
   photographers: number;
@@ -23,8 +29,14 @@ export interface QuoteShootFeatures {
   crewBucket: CrewBucket;
   crewLabel: string;
   crewSource: "structured" | "team" | "items" | "notes" | null;
+  /** Delivered photo count (張數) for product-style quotes */
+  shotCount: number | null;
+  shotCountBucket: ShotCountBucket;
+  shotCountSource: "structured" | "items" | "notes" | null;
   /** Price-per-hour when hours known; caller may attach total later */
   pricePerHour: number | null;
+  /** Price per delivered shot when shotCount known */
+  pricePerShot: number | null;
 }
 
 function hoursBucket(h: number | null): HoursBucket {
@@ -241,11 +253,43 @@ function parseStructuredHours(v: number | string | null | undefined): number | n
   return Math.round(n * 10) / 10;
 }
 
+function parseStructuredShotCount(v: number | string | null | undefined): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0 || n > 5000) return null;
+  return Math.floor(n);
+}
+
+/** Pull delivered photo/shot count from free text (張數). */
+export function extractShotCountFromText(text: string): number | null {
+  if (!text?.trim()) return null;
+  const matches: number[] = [];
+  const re =
+    /(\d+)\s*(?:張|款|件|pcs?|pieces?|photos?|images?|shots?|pictures?)(?![a-zA-Z])/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 5000) matches.push(n);
+  }
+  // "x20 final images" / "20 final"
+  const en = text.match(
+    /(\d+)\s*(?:final\s+)?(?:edited\s+)?(?:images?|photos?|shots?)/i
+  );
+  if (en) {
+    const n = Number(en[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 5000) matches.push(n);
+  }
+  if (matches.length === 0) return null;
+  // Prefer the largest mentioned count (usually the delivered package size)
+  return Math.max(...matches);
+}
+
 /**
  * Derive shoot fundamentals from structured columns first, then free-text fallback.
  */
 export function extractQuoteShootFeatures(input: {
   shootHours?: number | string | null;
+  shotCount?: number | string | null;
   crewPhotographers?: number | null;
   crewAssistants?: number | null;
   crewVideographers?: number | null;
@@ -278,6 +322,19 @@ export function extractQuoteShootFeatures(input: {
   if (hours == null) {
     hours = extractHoursFromText(team);
     if (hours != null) hoursSource = "team";
+  }
+
+  // Shot count (張數)
+  let shotCount = parseStructuredShotCount(input.shotCount);
+  let shotCountSource: QuoteShootFeatures["shotCountSource"] =
+    shotCount != null ? "structured" : null;
+  if (shotCount == null) {
+    shotCount = extractShotCountFromText(itemText);
+    if (shotCount != null) shotCountSource = "items";
+  }
+  if (shotCount == null) {
+    shotCount = extractShotCountFromText(notes);
+    if (shotCount != null) shotCountSource = "notes";
   }
 
   // Crew: prefer structured counts
@@ -313,6 +370,10 @@ export function extractQuoteShootFeatures(input: {
     hours != null && hours > 0 && total != null && total > 0
       ? Math.round(total / hours)
       : null;
+  const pricePerShot =
+    shotCount != null && shotCount > 0 && total != null && total > 0
+      ? Math.round(total / shotCount)
+      : null;
 
   return {
     hours,
@@ -322,7 +383,11 @@ export function extractQuoteShootFeatures(input: {
     crewBucket: crewBucketFromHeadcount(crew.headcount),
     crewLabel: formatCrewLabel(crew),
     crewSource,
+    shotCount,
+    shotCountBucket: shotCountBucket(shotCount),
+    shotCountSource,
     pricePerHour,
+    pricePerShot,
   };
 }
 

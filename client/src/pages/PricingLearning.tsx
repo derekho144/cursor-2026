@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { quotePricingMode } from "@shared/quotePricingMode";
 
 function money(n: number) {
   return `HK$ ${n.toLocaleString("en-HK")}`;
@@ -162,6 +163,9 @@ export default function PricingLearning() {
   const [serviceType, setServiceType] = useState<string>("product");
   const [hours, setHours] = useState<string>("");
   const [crewSize, setCrewSize] = useState<string>("");
+  const [shotCount, setShotCount] = useState<string>("");
+
+  const pricingMode = quotePricingMode(serviceType);
 
   const { data: overview, isLoading } = trpc.pricingLearning.overview.useQuery(
     undefined,
@@ -173,7 +177,7 @@ export default function PricingLearning() {
       toast.success(
         r.dryRun
           ? `預覽：可回填 ${r.updated} / ${r.scanned} 筆`
-          : `已回填 ${r.updated} / ${r.scanned} 筆結構化時數／人手`
+          : `已回填 ${r.updated} / ${r.scanned} 筆結構化基礎資料`
       );
       utils.pricingLearning.overview.invalidate();
       utils.pricingLearning.byServiceType.invalidate();
@@ -188,11 +192,13 @@ export default function PricingLearning() {
 
   const hoursNum = hours.trim() ? Number(hours) : null;
   const crewNum = crewSize.trim() ? Number(crewSize) : null;
+  const shotNum = shotCount.trim() ? Number(shotCount) : null;
   const { data: suggestion } = trpc.pricingLearning.suggest.useQuery(
     {
       serviceType: serviceType as any,
       hours: hoursNum && Number.isFinite(hoursNum) ? hoursNum : null,
       crewSize: crewNum && Number.isFinite(crewNum) ? crewNum : null,
+      shotCount: shotNum && Number.isFinite(shotNum) ? shotNum : null,
     },
     { enabled: !!serviceType, refetchOnWindowFocus: false }
   );
@@ -377,7 +383,11 @@ export default function PricingLearning() {
                         {money(r.total)}
                       </td>
                       <td className="py-1.5 text-muted-foreground">
-                        {[r.missingHours ? "時數" : null, r.missingCrew ? "人手" : null]
+                        {[
+                          r.missingHours ? "時數" : null,
+                          r.missingCrew ? "人手" : null,
+                          (r as any).missingShots ? "張數" : null,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </td>
@@ -489,26 +499,53 @@ export default function PricingLearning() {
               </Select>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1.5">時數（可選）</div>
-              <Input
-                type="number"
-                min={0.5}
-                step={0.5}
-                placeholder="例如 4"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-              />
+              {pricingMode === "shot_count" ? (
+                <>
+                  <div className="text-xs text-muted-foreground mb-1.5">張數（可選）</div>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="例如 20"
+                    value={shotCount}
+                    onChange={(e) => setShotCount(e.target.value)}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="text-xs text-muted-foreground mb-1.5">時數（可選）</div>
+                  <Input
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    placeholder="例如 4"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                  />
+                </>
+              )}
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1.5">人手人數（可選）</div>
-              <Input
-                type="number"
-                min={1}
-                step={1}
-                placeholder="例如 2"
-                value={crewSize}
-                onChange={(e) => setCrewSize(e.target.value)}
-              />
+              {pricingMode === "shot_count" ? (
+                <div className="text-xs text-muted-foreground pt-6">
+                  產品類以張數計價
+                  {overview?.pricePerShot
+                    ? ` · 歷史每張中位 ${money(overview.pricePerShot.p50)}`
+                    : ""}
+                </div>
+              ) : (
+                <>
+                  <div className="text-xs text-muted-foreground mb-1.5">人手人數（可選）</div>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    placeholder="例如 2"
+                    value={crewSize}
+                    onChange={(e) => setCrewSize(e.target.value)}
+                  />
+                </>
+              )}
             </div>
             <div className="flex flex-col justify-end">
               {suggestion?.suggestion ? (
@@ -537,7 +574,8 @@ export default function PricingLearning() {
         {/* Detail for selected type */}
         <div className="space-y-4">
           <h2 className="text-sm" style={{ color: "#e8e0d0" }}>
-            {SERVICE_LABELS[serviceType] ?? serviceType} · 時數 × 人手分析
+            {SERVICE_LABELS[serviceType] ?? serviceType} ·{" "}
+            {pricingMode === "shot_count" ? "張數分析" : "時數 × 人手分析"}
             {detailLoading && (
               <Loader2 className="inline h-3.5 w-3.5 ml-2 animate-spin text-muted-foreground" />
             )}
@@ -569,14 +607,23 @@ export default function PricingLearning() {
           )}
 
           <div className="grid md:grid-cols-2 gap-4">
-            <BucketTable
-              title="按時數"
-              rows={detail?.hoursBuckets ?? []}
-            />
-            <BucketTable
-              title="按人手安排"
-              rows={detail?.crewBuckets ?? []}
-            />
+            {pricingMode === "shot_count" ? (
+              <BucketTable
+                title="按張數"
+                rows={(detail as any)?.shotBuckets ?? []}
+              />
+            ) : (
+              <>
+                <BucketTable
+                  title="按時數"
+                  rows={detail?.hoursBuckets ?? []}
+                />
+                <BucketTable
+                  title="按人手安排"
+                  rows={detail?.crewBuckets ?? []}
+                />
+              </>
+            )}
           </div>
 
           {(detail?.cross?.length ?? 0) > 0 && (

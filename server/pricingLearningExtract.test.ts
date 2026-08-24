@@ -3,6 +3,7 @@ import {
   extractCrewFromText,
   extractHoursFromText,
   extractQuoteShootFeatures,
+  extractShotCountFromText,
   summarizeTotals,
   timeWeightedMedian,
   trimOutliers,
@@ -51,7 +52,31 @@ describe("extractCrewFromText", () => {
   });
 });
 
+describe("extractShotCountFromText", () => {
+  it("parses Chinese 張數", () => {
+    expect(extractShotCountFromText("產品精修 20張")).toBe(20);
+    expect(extractShotCountFromText("交付 15 款圖")).toBe(15);
+  });
+
+  it("parses English photo counts", () => {
+    expect(extractShotCountFromText("30 final images")).toBe(30);
+    expect(extractShotCountFromText("12 photos delivered")).toBe(12);
+  });
+});
+
 describe("extractQuoteShootFeatures", () => {
+  it("prefers structured shot count", () => {
+    const f = extractQuoteShootFeatures({
+      shotCount: 24,
+      items: [{ description: "10張", quantity: 1 }],
+      total: 4800,
+    });
+    expect(f.shotCount).toBe(24);
+    expect(f.shotCountSource).toBe("structured");
+    expect(f.shotCountBucket).toBe("n21_50");
+    expect(f.pricePerShot).toBe(200);
+  });
+
   it("prefers item hours and team crew", () => {
     const f = extractQuoteShootFeatures({
       team: "攝影師×1 + 助理×1",
