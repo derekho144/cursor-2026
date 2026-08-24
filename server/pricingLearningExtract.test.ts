@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractCrewFromText,
+  extractCrewHighConfidence,
   extractHoursFromText,
   extractQuoteShootFeatures,
   extractShotCountFromText,
@@ -8,6 +9,21 @@ import {
   timeWeightedMedian,
   trimOutliers,
 } from "./pricingLearningExtract";
+
+describe("extractCrewHighConfidence", () => {
+  it("accepts Team XP and numeric roles", () => {
+    expect(extractCrewHighConfidence("Team 1P")?.headcount).toBe(1);
+    expect(extractCrewHighConfidence("Team 1P")?.photographers).toBe(1);
+    const c = extractCrewHighConfidence("1攝影師 + 1助理");
+    expect(c?.photographers).toBe(1);
+    expect(c?.assistants).toBe(1);
+  });
+
+  it("rejects bare role words without numbers", () => {
+    expect(extractCrewHighConfidence("攝影師到場")).toBeNull();
+    expect(extractCrewHighConfidence("需要 assistant")).toBeNull();
+  });
+});
 
 describe("extractHoursFromText", () => {
   it("parses Chinese hours and sums multiple blocks", () => {

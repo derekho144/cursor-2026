@@ -56,19 +56,19 @@ export const pricingLearningRouter = router({
       });
     }),
 
-  /** One-shot: fill structured hours/crew from historical free text when empty. */
+  /** High-confidence backfill of structured hours/crew/shots from historical text. */
   backfillStructured: protectedProcedure
     .input(
       z
         .object({
-          limit: z.number().int().min(1).max(2000).default(500),
+          limit: z.number().int().min(1).max(3000).default(2000),
           dryRun: z.boolean().default(false),
         })
         .optional()
     )
     .mutation(async ({ input }) => {
       return backfillStructuredShootFields({
-        limit: input?.limit ?? 500,
+        limit: input?.limit ?? 2000,
         dryRun: input?.dryRun ?? false,
       });
     }),

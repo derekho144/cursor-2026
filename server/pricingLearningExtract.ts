@@ -200,6 +200,72 @@ export function extractCrewFromText(text: string): CrewBreakdown {
   };
 }
 
+/**
+ * High-confidence crew parse for backfill — requires numeric / Team XP signals.
+ * Skips bare role words (e.g. lone「攝影師」→1) that are too ambiguous to write.
+ */
+export function extractCrewHighConfidence(text: string): CrewBreakdown | null {
+  if (!text?.trim()) return null;
+
+  const photographers = countRole(text, [
+    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師|摄影师|photographers?|photogs?)/gi,
+    /(?:攝影師|摄影师|photographers?|photogs?)\s*[x×*]?\s*(\d+)/gi,
+  ]);
+  const assistants = countRole(text, [
+    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:助理|助手|assistants?)/gi,
+    /(?:助理|助手|assistants?)\s*[x×*]?\s*(\d+)/gi,
+  ]);
+  const videographers = countRole(text, [
+    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師兼錄影|錄影師|摄像师|videographers?|cinematographers?|cameramen?)/gi,
+    /(?:錄影師|摄像师|videographers?)\s*[x×*]?\s*(\d+)/gi,
+  ]);
+  const others = countRole(text, [
+    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:化妝|妆|makeup|造型|stylist|燈光|灯光|gaffer|製作|制作|producer)/gi,
+  ]);
+
+  let pax = 0;
+  const paxMatch = text.match(/(\d+)\s*(?:人|位|pax|persons?|people)(?![a-zA-Z])/i);
+  if (paxMatch) pax = Number(paxMatch[1]) || 0;
+  const plusMatch = text.match(/(\d+)\s*\+\s*(\d+)/);
+  if (plusMatch) {
+    const a = Number(plusMatch[1]);
+    const b = Number(plusMatch[2]);
+    if (Number.isFinite(a) && Number.isFinite(b)) pax = Math.max(pax, a + b);
+  }
+  const pShorthand = text.match(/(?:team\s*)?(\d+)\s*[Pp]\b/);
+  if (pShorthand) {
+    const n = Number(pShorthand[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 20) pax = Math.max(pax, n);
+  }
+
+  const roleSum = photographers + assistants + videographers + others;
+  const hasNumericSignal = roleSum > 0 || pax > 0;
+  if (!hasNumericSignal) return null;
+
+  const headcount = Math.max(roleSum, pax > 0 && pax <= 20 ? pax : 0);
+  if (headcount <= 0) return null;
+
+  // Team XP with no role breakdown → photographers = headcount (studio convention)
+  const photogs = roleSum > 0 ? photographers : headcount;
+  return {
+    photographers: photogs,
+    assistants,
+    videographers,
+    others,
+    headcount,
+  };
+}
+
+/** True when text has an explicit hours / half-day / full-day signal. */
+export function hasHighConfidenceHoursSignal(text: string): boolean {
+  return extractHoursFromText(text) != null;
+}
+
+/** True when text has an explicit shot-count signal (張 / photos / pcs). */
+export function hasHighConfidenceShotCountSignal(text: string): boolean {
+  return extractShotCountFromText(text) != null;
+}
+
 export function formatCrewLabel(crew: CrewBreakdown): string {
   if (crew.headcount <= 0) return "人手未標明";
   const parts: string[] = [];

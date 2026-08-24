@@ -1,6 +1,6 @@
 /**
- * Pricing learning analytics over accepted quotations.
- * Dimensions: shoot type (serviceType) · hours · crew arrangement.
+ * Pricing learning analytics over accepted (+ rejected for coverage/backfill).
+ * Price mids / suggestions use accepted only; rejected are backfilled for learning features.
  * Accuracy focus: prefer structured fields, trim outliers, time-weight, coverage quality.
  */
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -8,7 +8,10 @@ import { getDb } from "./db";
 import { emailInquiries, quoteItems, quotes } from "../drizzle/schema";
 import {
   crewBucketLabel,
+  extractCrewHighConfidence,
+  extractHoursFromText,
   extractQuoteShootFeatures,
+  extractShotCountFromText,
   formatTeamFromStructured,
   hoursBucketLabel,
   summarizeTotals,
@@ -32,6 +35,7 @@ export interface PricingLearningQuoteRow {
   clientName: string;
   clientCompany: string | null;
   serviceType: string;
+  status: "accepted" | "rejected";
   total: number;
   shootingDate: string | null;
   createdAt: Date | null;
@@ -62,15 +66,18 @@ function bucketStats<T extends string>(
   });
 }
 
-async function loadAcceptedQuotesWithItems(opts?: {
+async function loadLearningQuotesWithItems(opts?: {
   serviceType?: string;
   limit?: number;
+  /** Default: accepted + rejected (both useful for price learning). */
+  statuses?: Array<"accepted" | "rejected">;
 }) {
   const db = await getDb();
   if (!db) return [];
 
+  const statuses = opts?.statuses ?? (["accepted", "rejected"] as const);
   const conditions = [
-    eq(quotes.status, "accepted"),
+    inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
   ];
   if (opts?.serviceType) {
@@ -84,6 +91,7 @@ async function loadAcceptedQuotesWithItems(opts?: {
       clientName: quotes.clientName,
       clientCompany: quotes.clientCompany,
       serviceType: quotes.serviceType,
+      status: quotes.status,
       total: quotes.total,
       shootingDate: quotes.shootingDate,
       createdAt: quotes.createdAt,
@@ -101,7 +109,7 @@ async function loadAcceptedQuotesWithItems(opts?: {
     .from(quotes)
     .where(and(...conditions))
     .orderBy(desc(quotes.createdAt))
-    .limit(opts?.limit ?? 2000);
+    .limit(opts?.limit ?? 3000);
 
   if (qRows.length === 0) return [];
 
@@ -178,12 +186,16 @@ async function loadAcceptedQuotesWithItems(opts?: {
         (q.crewOthers ?? 0) >
       0;
 
+    const status =
+      q.status === "rejected" ? ("rejected" as const) : ("accepted" as const);
+
     return {
       id: q.id,
       quoteNumber: q.quoteNumber,
       clientName: q.clientName,
       clientCompany: q.clientCompany,
       serviceType: q.serviceType,
+      status,
       total,
       shootingDate: q.shootingDate,
       createdAt: q.createdAt,
@@ -205,7 +217,13 @@ async function loadAcceptedQuotesWithItems(opts?: {
 }
 
 export async function getPricingLearningOverview() {
-  const rows = await loadAcceptedQuotesWithItems({ limit: 3000 });
+  const allRows = await loadLearningQuotesWithItems({
+    limit: 3000,
+    statuses: ["accepted", "rejected"],
+  });
+  /** Winning prices only — rejected totals must not skew mid/avg. */
+  const rows = allRows.filter((r) => r.status === "accepted");
+  const rejectedCount = allRows.filter((r) => r.status === "rejected").length;
   const byTypeMap = new Map<string, number[]>();
   for (const r of rows) {
     const list = byTypeMap.get(r.serviceType) ?? [];
@@ -298,7 +316,7 @@ export async function getPricingLearningOverview() {
           within30Pct: paired.filter((r) => Math.abs(r.accuracyPct!) <= 30).length,
         };
 
-  const incomplete = rows
+  const incomplete = allRows
     .filter((r) => {
       const mode = quotePricingMode(r.serviceType);
       if (mode === "shot_count") return r.features.shotCountBucket === "unknown";
@@ -310,12 +328,13 @@ export async function getPricingLearningOverview() {
       }
       return false;
     })
-    .slice(0, 25)
+    .slice(0, 40)
     .map((r) => ({
       id: r.id,
       quoteNumber: r.quoteNumber,
       clientName: r.clientCompany || r.clientName,
       serviceType: r.serviceType,
+      status: r.status,
       total: r.total,
       missingHours:
         quotePricingMode(r.serviceType) === "time_crew" &&
@@ -350,9 +369,15 @@ export async function getPricingLearningOverview() {
       r.features.crewSource !== "structured"
   ).length;
 
+  const incompleteAccepted = incomplete.filter((r) => r.status === "accepted")
+    .length;
+  const incompleteRejected = incomplete.filter((r) => r.status === "rejected")
+    .length;
+
   return {
     generatedAt: new Date().toISOString(),
     acceptedCount: rows.length,
+    rejectedCount,
     coverage: {
       withHours: rows.filter((r) => r.features.hoursBucket !== "unknown").length,
       withCrew: rows.filter((r) => r.features.crewBucket !== "unknown").length,
@@ -377,6 +402,8 @@ export async function getPricingLearningOverview() {
       textOnlyCrew,
       withAiPair: paired.length,
       incompleteCount: incomplete.length,
+      incompleteAccepted,
+      incompleteRejected,
     },
     dataQuality: {
       score:
@@ -400,11 +427,12 @@ export async function getPricingLearningOverview() {
                 100
             ),
       tips: [
+        "無法保證 100% 自動回填：只會寫入文字／項目裏已有明確訊號嘅欄位（例如「4小時」「Team 1P」「20張」）。",
+        "已接受＋已拒絕都會回填結構化欄位；成交中位／建議價仍然只用已接受，避免拒單價拉歪。",
         "產品／食物／珠寶等：填「交付張數」；活動／錄影：填時數同人手。",
-        "學習會按服務類型用對應基礎維度，避免產品單被時數要求拉低準確率。",
         "統計已自動剔除極端離群成交價（IQR），近半年成交權重較高。",
         incomplete.length > 0
-          ? `尚有 ${incomplete.length}+ 筆已接受報價缺對應基礎資料，補齊可提升準確率。`
+          ? `尚有約 ${incompleteAccepted} 筆已接受、${incompleteRejected} 筆已拒絕缺對應基礎資料（見下表）；無訊號嘅要人手補。`
           : "基礎資料覆蓋良好。",
       ],
       incomplete,
@@ -424,7 +452,13 @@ export async function getPricingLearningOverview() {
 }
 
 export async function getPricingLearningByServiceType(serviceType: string) {
-  const rows = await loadAcceptedQuotesWithItems({ serviceType, limit: 1000 });
+  const allRows = await loadLearningQuotesWithItems({
+    serviceType,
+    limit: 1000,
+    statuses: ["accepted", "rejected"],
+  });
+  const rows = allRows.filter((r) => r.status === "accepted");
+  const rejectedCount = allRows.filter((r) => r.status === "rejected").length;
 
   const hoursOrder: HoursBucket[] = ["lte_2", "h2_4", "h4_8", "gt_8", "unknown"];
   const crewOrder: CrewBucket[] = ["solo", "pair", "team", "unknown"];
@@ -506,6 +540,8 @@ export async function getPricingLearningByServiceType(serviceType: string) {
   return {
     serviceType,
     pricingMode: quotePricingMode(serviceType),
+    acceptedCount: rows.length,
+    rejectedCount,
     summary: summarizeTotals(rows.map((r) => r.total)),
     recentWeightedMid: timeWeightedMedian(
       rows.map((r) => ({ value: r.total, at: r.shootingDate || r.createdAt }))
@@ -525,10 +561,11 @@ export async function getPricingLearningByServiceType(serviceType: string) {
     crewBuckets,
     shotBuckets,
     cross,
-    recent: rows.slice(0, 30).map((r) => ({
+    recent: allRows.slice(0, 40).map((r) => ({
       id: r.id,
       quoteNumber: r.quoteNumber,
       clientName: r.clientCompany || r.clientName,
+      status: r.status,
       total: r.total,
       shootingDate: r.shootingDate,
       hours: r.features.hours,
@@ -563,9 +600,10 @@ export async function suggestPriceFromLearning(input: {
   crewSize?: number | null;
   shotCount?: number | null;
 }) {
-  const rows = await loadAcceptedQuotesWithItems({
+  const rows = await loadLearningQuotesWithItems({
     serviceType: input.serviceType,
     limit: 1000,
+    statuses: ["accepted"],
   });
   const mode = quotePricingMode(input.serviceType);
 
@@ -699,22 +737,54 @@ export async function suggestPriceFromLearning(input: {
 }
 
 /**
- * Backfill structured shootHours / crew counts from free-text extraction
- * when structured columns are empty. Improves future learning accuracy.
+ * Backfill structured fields from high-confidence free-text signals.
+ * Targets accepted + rejected quotes. Mode-aware:
+ * - shot_count → shotCount only
+ * - time_crew → shootHours + crew
+ * - design → skip
+ *
+ * Cannot reach 100% when quotes lack explicit signals in text/items.
  */
 export async function backfillStructuredShootFields(opts?: {
   limit?: number;
   dryRun?: boolean;
 }) {
   const db = await getDb();
-  if (!db) return { updated: 0, scanned: 0, dryRun: !!opts?.dryRun };
+  const emptyReport = {
+    updated: 0,
+    scanned: 0,
+    dryRun: !!opts?.dryRun,
+    filled: [] as Array<{
+      id: number;
+      quoteNumber: string;
+      status: string;
+      fields: string[];
+    }>,
+    skippedNoSignal: 0,
+    skippedAlreadyComplete: 0,
+    skippedDesign: 0,
+    skippedDraftOrOther: 0,
+    unfillableSample: [] as Array<{
+      id: number;
+      quoteNumber: string;
+      status: string;
+      serviceType: string;
+      reason: string;
+    }>,
+    accuracyNote:
+      "自動回填只寫入文字／項目裏有明確訊號嘅欄位，無法保證 100% 覆蓋；無訊號嘅報價需人手補齊。",
+  };
+  if (!db) return emptyReport;
 
-  const limit = opts?.limit ?? 500;
+  const limit = opts?.limit ?? 2000;
   const dryRun = !!opts?.dryRun;
 
   const candidates = await db
     .select({
       id: quotes.id,
+      quoteNumber: quotes.quoteNumber,
+      status: quotes.status,
+      serviceType: quotes.serviceType,
       team: quotes.team,
       notes: quotes.notes,
       equipment: quotes.equipment,
@@ -727,14 +797,18 @@ export async function backfillStructuredShootFields(opts?: {
     })
     .from(quotes)
     .where(
-      or(
-        isNull(quotes.shootHours),
-        isNull(quotes.shotCount),
-        and(
-          eq(quotes.crewPhotographers, 0),
-          eq(quotes.crewAssistants, 0),
-          eq(quotes.crewVideographers, 0),
-          eq(quotes.crewOthers, 0)
+      and(
+        inArray(quotes.status, ["accepted", "rejected"]),
+        sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
+        or(
+          isNull(quotes.shootHours),
+          isNull(quotes.shotCount),
+          and(
+            eq(quotes.crewPhotographers, 0),
+            eq(quotes.crewAssistants, 0),
+            eq(quotes.crewVideographers, 0),
+            eq(quotes.crewOthers, 0)
+          )
         )
       )
     )
@@ -742,7 +816,7 @@ export async function backfillStructuredShootFields(opts?: {
     .limit(limit);
 
   if (candidates.length === 0) {
-    return { updated: 0, scanned: 0, dryRun };
+    return { ...emptyReport, dryRun };
   }
 
   const ids = candidates.map((c) => c.id);
@@ -763,13 +837,59 @@ export async function backfillStructuredShootFields(opts?: {
   }
 
   let updated = 0;
-  for (const q of candidates) {
-    const features = extractQuoteShootFeatures({
-      team: q.team,
-      notes: q.notes,
-      equipment: q.equipment,
-      items: itemsByQuote.get(q.id) ?? [],
+  let skippedNoSignal = 0;
+  let skippedAlreadyComplete = 0;
+  let skippedDesign = 0;
+  const filled: typeof emptyReport.filled = [];
+  const unfillableSample: typeof emptyReport.unfillableSample = [];
+
+  const pushUnfillable = (
+    q: (typeof candidates)[0],
+    reason: string
+  ) => {
+    if (unfillableSample.length >= 30) return;
+    unfillableSample.push({
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      status: q.status,
+      serviceType: q.serviceType,
+      reason,
     });
+  };
+
+  for (const q of candidates) {
+    const mode = quotePricingMode(q.serviceType);
+    if (mode === "design") {
+      skippedDesign += 1;
+      continue;
+    }
+
+    const qItems = itemsByQuote.get(q.id) ?? [];
+    const itemText = qItems
+      .map((i) => i.description ?? "")
+      .filter(Boolean)
+      .join("\n");
+    const blob = [q.team ?? "", q.notes ?? "", q.equipment ?? "", itemText]
+      .filter(Boolean)
+      .join("\n");
+
+    const needHours = q.shootHours == null || Number(q.shootHours) <= 0;
+    const needShots = q.shotCount == null || Number(q.shotCount) <= 0;
+    const existingCrew =
+      (q.crewPhotographers ?? 0) +
+      (q.crewAssistants ?? 0) +
+      (q.crewVideographers ?? 0) +
+      (q.crewOthers ?? 0);
+    const needCrew = existingCrew <= 0;
+
+    const alreadyComplete =
+      mode === "shot_count"
+        ? !needShots
+        : !needHours && !needCrew;
+    if (alreadyComplete) {
+      skippedAlreadyComplete += 1;
+      continue;
+    }
 
     const patch: Partial<{
       shootHours: string;
@@ -780,55 +900,89 @@ export async function backfillStructuredShootFields(opts?: {
       crewOthers: number;
       team: string;
     }> = {};
+    const fields: string[] = [];
 
-    const needHours = q.shootHours == null || Number(q.shootHours) <= 0;
-    if (needHours && features.hours != null && features.hours > 0) {
-      patch.shootHours = String(features.hours);
-    }
-
-    const needShots = q.shotCount == null || Number(q.shotCount) <= 0;
-    if (needShots && features.shotCount != null && features.shotCount > 0) {
-      patch.shotCount = features.shotCount;
-    }
-
-    const existingCrew =
-      (q.crewPhotographers ?? 0) +
-      (q.crewAssistants ?? 0) +
-      (q.crewVideographers ?? 0) +
-      (q.crewOthers ?? 0);
-    if (existingCrew <= 0 && features.crew.headcount > 0) {
-      // If roles unknown but headcount known, put into photographers as best-effort solo/pair
-      if (
-        features.crew.photographers +
-          features.crew.assistants +
-          features.crew.videographers +
-          features.crew.others >
-        0
-      ) {
-        patch.crewPhotographers = features.crew.photographers;
-        patch.crewAssistants = features.crew.assistants;
-        patch.crewVideographers = features.crew.videographers;
-        patch.crewOthers = features.crew.others;
-      } else {
-        patch.crewPhotographers = features.crew.headcount;
+    if (mode === "shot_count") {
+      if (needShots) {
+        const shots =
+          extractShotCountFromText(itemText) ??
+          extractShotCountFromText(q.notes ?? "") ??
+          extractShotCountFromText(blob);
+        if (shots != null && shots > 0) {
+          patch.shotCount = shots;
+          fields.push("shotCount");
+        }
       }
-      if (!q.team?.trim()) {
-        const label = formatTeamFromStructured({
-          photographers: patch.crewPhotographers ?? 0,
-          assistants: patch.crewAssistants ?? 0,
-          videographers: patch.crewVideographers ?? 0,
-          others: patch.crewOthers ?? 0,
-        });
-        if (label) patch.team = label.slice(0, 128);
+    } else {
+      // time_crew
+      if (needHours) {
+        const hours =
+          extractHoursFromText(itemText) ??
+          extractHoursFromText(q.notes ?? "") ??
+          extractHoursFromText(q.team ?? "") ??
+          extractHoursFromText(blob);
+        if (hours != null && hours > 0) {
+          patch.shootHours = String(hours);
+          fields.push("shootHours");
+        }
+      }
+      if (needCrew) {
+        const crew =
+          extractCrewHighConfidence(q.team ?? "") ??
+          extractCrewHighConfidence(itemText) ??
+          extractCrewHighConfidence(`${q.notes ?? ""}\n${q.equipment ?? ""}`);
+        if (crew && crew.headcount > 0) {
+          patch.crewPhotographers = crew.photographers;
+          patch.crewAssistants = crew.assistants;
+          patch.crewVideographers = crew.videographers;
+          patch.crewOthers = crew.others;
+          fields.push("crew");
+          if (!q.team?.trim()) {
+            const label = formatTeamFromStructured({
+              photographers: patch.crewPhotographers ?? 0,
+              assistants: patch.crewAssistants ?? 0,
+              videographers: patch.crewVideographers ?? 0,
+              others: patch.crewOthers ?? 0,
+            });
+            if (label) patch.team = label.slice(0, 128);
+          }
+        }
       }
     }
 
-    if (Object.keys(patch).length === 0) continue;
+    if (fields.length === 0) {
+      skippedNoSignal += 1;
+      pushUnfillable(
+        q,
+        mode === "shot_count"
+          ? "文字／項目無明確張數訊號"
+          : "文字／項目無明確時數或人手訊號"
+      );
+      continue;
+    }
+
     updated += 1;
+    filled.push({
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      status: q.status,
+      fields,
+    });
     if (!dryRun) {
       await db.update(quotes).set(patch).where(eq(quotes.id, q.id));
     }
   }
 
-  return { updated, scanned: candidates.length, dryRun };
+  return {
+    updated,
+    scanned: candidates.length,
+    dryRun,
+    filled: filled.slice(0, 50),
+    skippedNoSignal,
+    skippedAlreadyComplete,
+    skippedDesign,
+    skippedDraftOrOther: 0,
+    unfillableSample,
+    accuracyNote: emptyReport.accuracyNote,
+  };
 }

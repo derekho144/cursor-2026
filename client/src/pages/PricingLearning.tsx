@@ -174,10 +174,11 @@ export default function PricingLearning() {
   const utils = trpc.useUtils();
   const backfillMutation = trpc.pricingLearning.backfillStructured.useMutation({
     onSuccess: (r) => {
+      const unfillable = r.skippedNoSignal ?? 0;
       toast.success(
         r.dryRun
-          ? `預覽：可回填 ${r.updated} / ${r.scanned} 筆`
-          : `已回填 ${r.updated} / ${r.scanned} 筆結構化基礎資料`
+          ? `預覽：可高信心回填 ${r.updated} / ${r.scanned}（無訊號 ${unfillable}）`
+          : `已回填 ${r.updated} / ${r.scanned} 筆（已接受＋已拒絕；無明確訊號 ${unfillable} 筆需人手）`
       );
       utils.pricingLearning.overview.invalidate();
       utils.pricingLearning.byServiceType.invalidate();
@@ -238,8 +239,9 @@ export default function PricingLearning() {
             </h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            從已接受報價學習出價區間。優先用報價單嘅結構化「拍攝時數／人手」欄位；
-            未填寫時先後備從項目文字抽取。先提升資料準確率，之後先做報價單建議價。
+            從已接受報價學習出價區間；已拒絕單亦會回填結構化欄位方便學習特徵。
+            自動回填只寫入文字裏已有明確訊號嘅欄位，無法保證 100%——無訊號要人手補。
+            成交中位／建議價仍然只用已接受，避免拒單價拉歪。
           </p>
         </div>
 
@@ -249,7 +251,7 @@ export default function PricingLearning() {
             icon={Camera}
             label="已接受報價"
             value={String(overview?.acceptedCount ?? 0)}
-            sub={`整體中位 ${money(overview?.overall.p50 ?? 0)}${
+            sub={`已拒絕 ${overview?.rejectedCount ?? 0} · 中位 ${money(overview?.overall.p50 ?? 0)}${
               overview?.overallRecentMid
                 ? ` · 近況加權 ${money(overview.overallRecentMid)}`
                 : ""
@@ -310,7 +312,9 @@ export default function PricingLearning() {
             <button
               type="button"
               disabled={backfillMutation.isPending}
-              onClick={() => backfillMutation.mutate({ limit: 800, dryRun: false })}
+              onClick={() =>
+                backfillMutation.mutate({ limit: 2000, dryRun: false })
+              }
               className="text-xs px-3 py-1.5 rounded transition-opacity disabled:opacity-40"
               style={{
                 border: "1px solid rgba(212,168,67,0.35)",
@@ -318,7 +322,9 @@ export default function PricingLearning() {
                 background: "rgba(212,168,67,0.08)",
               }}
             >
-              {backfillMutation.isPending ? "回填中…" : "從舊報價文字回填時數／人手"}
+              {backfillMutation.isPending
+                ? "回填中…"
+                : "高信心回填（已接受＋已拒絕）"}
             </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
@@ -361,13 +367,14 @@ export default function PricingLearning() {
                 <thead>
                   <tr style={{ color: "#777" }}>
                     <th className="text-left py-1 font-normal">缺資料報價</th>
+                    <th className="text-left py-1 font-normal">狀態</th>
                     <th className="text-left py-1 font-normal">客戶</th>
-                    <th className="text-right py-1 font-normal">成交</th>
+                    <th className="text-right py-1 font-normal">金額</th>
                     <th className="text-left py-1 font-normal">缺</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {overview!.dataQuality.incomplete.slice(0, 12).map((r) => (
+                  {overview!.dataQuality.incomplete.slice(0, 16).map((r) => (
                     <tr
                       key={r.id}
                       className="cursor-pointer hover:bg-white/[0.03]"
@@ -375,6 +382,11 @@ export default function PricingLearning() {
                     >
                       <td className="py-1.5" style={{ color: "#d4a843" }}>
                         {r.quoteNumber}
+                      </td>
+                      <td className="py-1.5 text-muted-foreground">
+                        {(r as { status?: string }).status === "rejected"
+                          ? "已拒絕"
+                          : "已接受"}
                       </td>
                       <td className="py-1.5" style={{ color: "#e8e0d0" }}>
                         {r.clientName}
@@ -386,7 +398,9 @@ export default function PricingLearning() {
                         {[
                           r.missingHours ? "時數" : null,
                           r.missingCrew ? "人手" : null,
-                          (r as any).missingShots ? "張數" : null,
+                          (r as { missingShots?: boolean }).missingShots
+                            ? "張數"
+                            : null,
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -698,15 +712,16 @@ export default function PricingLearning() {
                 textTransform: "uppercase",
               }}
             >
-              近期同類成交（最多 30 筆）
+              近期同類（已接受＋已拒絕，最多 40 筆）
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ color: "#777", fontSize: "0.7rem" }}>
                     <th className="text-left px-4 py-2 font-normal">報價</th>
+                    <th className="text-left px-4 py-2 font-normal">狀態</th>
                     <th className="text-left px-4 py-2 font-normal">客戶</th>
-                    <th className="text-right px-4 py-2 font-normal">成交價</th>
+                    <th className="text-right px-4 py-2 font-normal">金額</th>
                     <th className="text-left px-4 py-2 font-normal">時數</th>
                     <th className="text-left px-4 py-2 font-normal">人手</th>
                     <th className="text-right px-4 py-2 font-normal">AI 偏差</th>
@@ -716,10 +731,10 @@ export default function PricingLearning() {
                   {(detail?.recent ?? []).length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-4 py-6 text-center text-muted-foreground text-xs"
                       >
-                        此類型暫無已接受報價
+                        此類型暫無已接受／已拒絕報價
                       </td>
                     </tr>
                   ) : (
@@ -732,6 +747,11 @@ export default function PricingLearning() {
                       >
                         <td className="px-4 py-2.5" style={{ color: "#d4a843" }}>
                           {r.quoteNumber}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                          {(r as { status?: string }).status === "rejected"
+                            ? "已拒絕"
+                            : "已接受"}
                         </td>
                         <td className="px-4 py-2.5" style={{ color: "#e8e0d0" }}>
                           {r.clientName}
