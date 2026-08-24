@@ -29,6 +29,7 @@ import {
 } from "../shared/quotePricingMode";
 import {
   durationPackageLabel,
+  inferDurationPackageFromHours,
   resolveDurationPackage,
   type DurationPackage,
 } from "../shared/quoteDurationPackage";
@@ -1204,5 +1205,160 @@ export async function backfillStructuredShootFields(opts?: {
     skippedDraftOrOther: 0,
     unfillableSample,
     accuracyNote: emptyReport.accuracyNote,
+  };
+}
+
+/**
+ * Re-infer durationPackage after rule changes.
+ * Runs structured backfill for remaining gaps when `alsoBackfill` is true.
+ */
+export async function refreshDurationPackageBackfill(opts?: {
+  limit?: number;
+  dryRun?: boolean;
+  alsoBackfill?: boolean;
+}) {
+  const db = await getDb();
+  const dryRun = !!opts?.dryRun;
+  const limit = opts?.limit ?? 3000;
+  const alsoBackfill = opts?.alsoBackfill !== false;
+
+  const empty = {
+    dryRun,
+    scanned: 0,
+    durationUpdated: 0,
+    hoursUpdated: 0,
+    changes: [] as Array<{
+      id: number;
+      quoteNumber: string;
+      fields: string[];
+      before: { shootHours: string | null; durationPackage: string | null };
+      after: { shootHours: string | null; durationPackage: string | null };
+    }>,
+    backfill: null as Awaited<
+      ReturnType<typeof backfillStructuredShootFields>
+    > | null,
+  };
+  if (!db) return empty;
+
+  const rows = await db
+    .select({
+      id: quotes.id,
+      quoteNumber: quotes.quoteNumber,
+      status: quotes.status,
+      serviceType: quotes.serviceType,
+      team: quotes.team,
+      notes: quotes.notes,
+      equipment: quotes.equipment,
+      shootHours: quotes.shootHours,
+      durationPackage: quotes.durationPackage,
+    })
+    .from(quotes)
+    .where(
+      and(
+        inArray(quotes.status, ["accepted", "rejected"]),
+        sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`
+      )
+    )
+    .orderBy(desc(quotes.updatedAt))
+    .limit(limit);
+
+  if (rows.length === 0) return empty;
+
+  const ids = rows.map((r) => r.id);
+  const items = await db
+    .select({
+      quoteId: quoteItems.quoteId,
+      description: quoteItems.description,
+    })
+    .from(quoteItems)
+    .where(inArray(quoteItems.quoteId, ids));
+
+  const itemsByQuote = new Map<number, string[]>();
+  for (const it of items) {
+    const list = itemsByQuote.get(it.quoteId) ?? [];
+    if (it.description?.trim()) list.push(it.description);
+    itemsByQuote.set(it.quoteId, list);
+  }
+
+  let durationUpdated = 0;
+  let hoursUpdated = 0;
+  const changes: typeof empty.changes = [];
+
+  for (const q of rows) {
+    const mode = quotePricingMode(q.serviceType);
+    if (mode !== "time_crew" || !isPricingLearningServiceType(q.serviceType)) {
+      continue;
+    }
+
+    const itemText = (itemsByQuote.get(q.id) ?? []).join("\n");
+    const blob = [q.team ?? "", q.notes ?? "", q.equipment ?? "", itemText]
+      .filter(Boolean)
+      .join("\n");
+
+    const beforeHours =
+      q.shootHours != null && Number(q.shootHours) > 0
+        ? Number(q.shootHours)
+        : null;
+    const beforePkg = (q.durationPackage ?? "").trim() || null;
+
+    let hours = beforeHours;
+    const fields: string[] = [];
+
+    const nextPkg =
+      hours != null ? inferDurationPackageFromHours(hours) : ("unknown" as const);
+    const nextPkgStr = nextPkg === "unknown" ? null : nextPkg;
+
+    const patch: {
+      shootHours?: string;
+      durationPackage?: string | null;
+    } = {};
+
+    if (fields.includes("shootHours") && hours != null) {
+      patch.shootHours = String(hours);
+      hoursUpdated += 1;
+    }
+
+    if (
+      nextPkgStr &&
+      nextPkgStr !== beforePkg &&
+      (hours != null || !beforePkg)
+    ) {
+      patch.durationPackage = nextPkgStr;
+      fields.push("durationPackage");
+      durationUpdated += 1;
+    }
+
+    if (fields.length === 0) continue;
+
+    changes.push({
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      fields,
+      before: {
+        shootHours: q.shootHours ?? null,
+        durationPackage: beforePkg,
+      },
+      after: {
+        shootHours: patch.shootHours ?? q.shootHours ?? null,
+        durationPackage: patch.durationPackage ?? beforePkg,
+      },
+    });
+
+    if (!dryRun) {
+      await db.update(quotes).set(patch).where(eq(quotes.id, q.id));
+    }
+  }
+
+  const backfill = alsoBackfill
+    ? await backfillStructuredShootFields({ limit, dryRun })
+    : null;
+
+  return {
+    dryRun,
+    scanned: rows.length,
+    durationUpdated,
+    hoursUpdated,
+    changes: changes.slice(0, 80),
+    backfill,
   };
 }

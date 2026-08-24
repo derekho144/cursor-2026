@@ -16,7 +16,7 @@ export const DURATION_PACKAGE_OPTIONS: Array<{
   hint: string;
 }> = [
   { value: "hours", label: "按小時", hint: "短活動／不足半日" },
-  { value: "half_day", label: "半日", hint: "約 3–5 小時" },
+  { value: "half_day", label: "半日", hint: "約 5 小時" },
   { value: "full_day", label: "全日", hint: "約 6–10 小時" },
   { value: "multi_day", label: "多日／N 日", hint: "跨日或連續多日" },
 ];
@@ -41,8 +41,8 @@ export function inferDurationPackageFromHours(
   hours: number | null | undefined
 ): DurationPackage {
   if (hours == null || !Number.isFinite(hours) || hours <= 0) return "unknown";
-  if (hours <= 2.5) return "hours";
-  if (hours <= 5) return "half_day";
+  if (hours < 5) return "hours";
+  if (hours < 8) return "half_day";
   if (hours <= 10) return "full_day";
   return "multi_day";
 }

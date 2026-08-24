@@ -32,7 +32,7 @@ describe("extractHoursFromText", () => {
   });
 
   it("parses half/full day", () => {
-    expect(extractHoursFromText("半日拍攝")).toBe(4);
+    expect(extractHoursFromText("半日拍攝")).toBe(5);
     expect(extractHoursFromText("Full day coverage")).toBe(8);
   });
 

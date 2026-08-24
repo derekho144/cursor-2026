@@ -101,7 +101,7 @@ export function extractHoursFromText(text: string): number | null {
   }
 
   // Half / full day shorthand
-  if (/半(?:天|日)|half\s*[- ]?day/.test(t)) return 4;
+  if (/半(?:天|日)|half\s*[- ]?day/.test(t)) return 5;
   if (/全(?:天|日)|full\s*[- ]?day/.test(t)) return 8;
 
   // "X-hour" compound
