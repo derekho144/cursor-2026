@@ -23,7 +23,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { quotePricingMode } from "@shared/quotePricingMode";
+import { quotePricingMode, isPricingLearningServiceType } from "@shared/quotePricingMode";
 import {
   DURATION_PACKAGE_OPTIONS,
   inferDurationPackageFromHours,
@@ -471,7 +471,10 @@ export default function QuoteForm() {
           : null,
       durationPackage: form.durationPackage || null,
     },
-    { enabled: !!form.serviceType, refetchOnWindowFocus: false }
+    {
+      enabled: !!form.serviceType && isPricingLearningServiceType(form.serviceType),
+      refetchOnWindowFocus: false,
+    }
   );
 
   // Phone auto-lookup state

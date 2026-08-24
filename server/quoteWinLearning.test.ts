@@ -34,3 +34,13 @@ describe("reject reasons", () => {
     expect(rejectReasonByLabel("項目取消")?.priceRelated).toBe(false);
   });
 });
+
+import { isPricingLearningServiceType } from "../shared/quotePricingMode";
+
+describe("pricing learning exclusions", () => {
+  it("excludes other service type", () => {
+    expect(isPricingLearningServiceType("other")).toBe(false);
+    expect(isPricingLearningServiceType("corporate_event")).toBe(true);
+    expect(isPricingLearningServiceType("product")).toBe(true);
+  });
+});

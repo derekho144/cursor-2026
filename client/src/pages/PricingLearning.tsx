@@ -33,7 +33,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { quotePricingMode } from "@shared/quotePricingMode";
+import {
+  isPricingLearningServiceType,
+  quotePricingMode,
+} from "@shared/quotePricingMode";
 import { DURATION_PACKAGE_OPTIONS } from "@shared/quoteDurationPackage";
 
 function money(n: number) {
@@ -215,7 +218,7 @@ export default function PricingLearning() {
 
   const typeOptions =
     overview?.byServiceType?.map((t) => t.serviceType) ??
-    Object.keys(SERVICE_LABELS);
+    Object.keys(SERVICE_LABELS).filter((t) => isPricingLearningServiceType(t));
 
   const hoursChart =
     detail?.hoursBuckets
@@ -249,6 +252,7 @@ export default function PricingLearning() {
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
             從已接受報價學習出價區間；已拒絕單亦會回填結構化欄位方便學習特徵。
+            「其他」服務類型不計入學習（內容太雜）。
             自動回填只寫入文字裏已有明確訊號嘅欄位，無法保證 100%——無訊號要人手補。
             成交中位／建議價仍然只用已接受，避免拒單價拉歪。
           </p>

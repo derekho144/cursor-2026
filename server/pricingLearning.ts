@@ -3,7 +3,7 @@
  * Price mids / suggestions use accepted only; rejected are backfilled for learning features.
  * Accuracy focus: prefer structured fields, trim outliers, time-weight, coverage quality.
  */
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { emailInquiries, quoteItems, quotes } from "../drizzle/schema";
 import {
@@ -22,6 +22,7 @@ import {
   type ShotCountBucket,
 } from "./pricingLearningExtract";
 import {
+  isPricingLearningServiceType,
   quotePricingMode,
   shotCountBucketLabel,
   SHOT_COUNT_SERVICE_TYPES,
@@ -90,10 +91,16 @@ async function loadLearningQuotesWithItems(opts?: {
   const db = await getDb();
   if (!db) return [];
 
+  // "其他" and other excluded types are too mixed — never learn from them.
+  if (opts?.serviceType && !isPricingLearningServiceType(opts.serviceType)) {
+    return [];
+  }
+
   const statuses = opts?.statuses ?? (["accepted", "rejected"] as const);
   const conditions = [
     inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
+    ne(quotes.serviceType, "other"),
   ];
   if (opts?.serviceType) {
     conditions.push(eq(quotes.serviceType, opts.serviceType as any));
@@ -1054,7 +1061,7 @@ export async function backfillStructuredShootFields(opts?: {
 
   for (const q of candidates) {
     const mode = quotePricingMode(q.serviceType);
-    if (mode === "design") {
+    if (mode === "design" || !isPricingLearningServiceType(q.serviceType)) {
       skippedDesign += 1;
       continue;
     }

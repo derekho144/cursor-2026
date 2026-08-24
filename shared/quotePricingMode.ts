@@ -20,6 +20,16 @@ export const SHOT_COUNT_SERVICE_TYPES = new Set([
   "ai_photography",
 ]);
 
+/**
+ * Excluded from pricing learning / win-rate / suggest.
+ * "other" is too mixed to learn from.
+ */
+export const PRICING_LEARNING_EXCLUDED_TYPES = new Set(["other"]);
+
+export function isPricingLearningServiceType(serviceType: string): boolean {
+  return !PRICING_LEARNING_EXCLUDED_TYPES.has(serviceType);
+}
+
 export type QuotePricingMode = "design" | "shot_count" | "time_crew";
 
 export function quotePricingMode(serviceType: string): QuotePricingMode {
