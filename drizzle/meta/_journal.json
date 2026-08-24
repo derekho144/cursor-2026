@@ -407,6 +407,13 @@
       "when": 1787527800000,
       "tag": "0057_expense_quote_cost_id",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "5",
+      "when": 1787529000000,
+      "tag": "0058_user_page_permissions",
+      "breakpoints": true
     }
   ]
 }

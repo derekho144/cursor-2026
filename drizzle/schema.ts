@@ -20,6 +20,10 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  /** When false, employee cannot use the admin system. */
+  isActive: boolean("is_active").notNull().default(true),
+  /** JSON array of page ids the employee may open (ignored for admin). */
+  allowedPages: json("allowed_pages").$type<string[]>().default([]),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

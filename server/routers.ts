@@ -18,22 +18,33 @@ import { followUpRouter } from "./routers/followUp";
 import { pitchOutreachRouter } from "./routers/pitchOutreach";
 import { linkedinOpsRouter } from "./routers/linkedinOps";
 import { linkedinContentRouter } from "./routers/linkedinContent";
+import { employeesRouter } from "./routers/employees";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
 import { getWatchdogStatus } from "./watchdog";
 import { lastFreehunterScrapeAt, lastFreehunterScrapeResult } from "./scheduler";
+import { parseAllowedPages } from "@shared/pagePermissions";
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => {
+      const u = ctx.user;
+      if (!u) return null;
+      return {
+        ...u,
+        isActive: u.isActive !== false,
+        allowedPages: parseAllowedPages(u.allowedPages),
+      };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
   }),
+  employees: employeesRouter,
   dashboard: router({
     quick: protectedProcedure
       .input(z.object({ year: z.number().optional(), month: z.number().min(1).max(12).optional() }).optional())
