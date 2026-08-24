@@ -1264,24 +1264,7 @@ export async function refreshDurationPackageBackfill(opts?: {
 
   if (rows.length === 0) return empty;
 
-  const ids = rows.map((r) => r.id);
-  const items = await db
-    .select({
-      quoteId: quoteItems.quoteId,
-      description: quoteItems.description,
-    })
-    .from(quoteItems)
-    .where(inArray(quoteItems.quoteId, ids));
-
-  const itemsByQuote = new Map<number, string[]>();
-  for (const it of items) {
-    const list = itemsByQuote.get(it.quoteId) ?? [];
-    if (it.description?.trim()) list.push(it.description);
-    itemsByQuote.set(it.quoteId, list);
-  }
-
   let durationUpdated = 0;
-  let hoursUpdated = 0;
   const changes: typeof empty.changes = [];
 
   for (const q of rows) {
@@ -1290,62 +1273,46 @@ export async function refreshDurationPackageBackfill(opts?: {
       continue;
     }
 
-    const itemText = (itemsByQuote.get(q.id) ?? []).join("\n");
-    const blob = [q.team ?? "", q.notes ?? "", q.equipment ?? "", itemText]
-      .filter(Boolean)
-      .join("\n");
-
     const beforeHours =
       q.shootHours != null && Number(q.shootHours) > 0
         ? Number(q.shootHours)
         : null;
     const beforePkg = (q.durationPackage ?? "").trim() || null;
 
-    let hours = beforeHours;
-    const fields: string[] = [];
-
     const nextPkg =
-      hours != null ? inferDurationPackageFromHours(hours) : ("unknown" as const);
+      beforeHours != null
+        ? inferDurationPackageFromHours(beforeHours)
+        : ("unknown" as const);
     const nextPkgStr = nextPkg === "unknown" ? null : nextPkg;
 
-    const patch: {
-      shootHours?: string;
-      durationPackage?: string | null;
-    } = {};
-
-    if (fields.includes("shootHours") && hours != null) {
-      patch.shootHours = String(hours);
-      hoursUpdated += 1;
-    }
-
     if (
-      nextPkgStr &&
-      nextPkgStr !== beforePkg &&
-      (hours != null || !beforePkg)
+      !nextPkgStr ||
+      nextPkgStr === beforePkg ||
+      (beforeHours == null && beforePkg)
     ) {
-      patch.durationPackage = nextPkgStr;
-      fields.push("durationPackage");
-      durationUpdated += 1;
+      continue;
     }
 
-    if (fields.length === 0) continue;
-
+    durationUpdated += 1;
     changes.push({
       id: q.id,
       quoteNumber: q.quoteNumber,
-      fields,
+      fields: ["durationPackage"],
       before: {
         shootHours: q.shootHours ?? null,
         durationPackage: beforePkg,
       },
       after: {
-        shootHours: patch.shootHours ?? q.shootHours ?? null,
-        durationPackage: patch.durationPackage ?? beforePkg,
+        shootHours: q.shootHours ?? null,
+        durationPackage: nextPkgStr,
       },
     });
 
     if (!dryRun) {
-      await db.update(quotes).set(patch).where(eq(quotes.id, q.id));
+      await db
+        .update(quotes)
+        .set({ durationPackage: nextPkgStr })
+        .where(eq(quotes.id, q.id));
     }
   }
 
@@ -1357,7 +1324,7 @@ export async function refreshDurationPackageBackfill(opts?: {
     dryRun,
     scanned: rows.length,
     durationUpdated,
-    hoursUpdated,
+    hoursUpdated: 0,
     changes: changes.slice(0, 80),
     backfill,
   };
