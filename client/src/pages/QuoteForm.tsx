@@ -174,6 +174,39 @@ const emptyForm: FormData = {
   emailInquiryId: undefined,
 };
 
+/** Merge saved drafts / partial payloads onto emptyForm so new fields never crash .trim(). */
+function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData {
+  const base = { ...emptyForm, items: emptyForm.items.map((i) => ({ ...i, id: crypto.randomUUID() })) };
+  if (!raw || typeof raw !== "object") return base;
+  const items = Array.isArray(raw.items)
+    ? raw.items.map((item) => ({
+        id: item?.id || crypto.randomUUID(),
+        description: item?.description ?? "",
+        quantity: Number(item?.quantity) || 0,
+        unitPrice: Number(item?.unitPrice) || 0,
+        amount: Number(item?.amount) || 0,
+        isIncluded: !!(item as any)?.isIncluded,
+      }))
+    : base.items;
+  return {
+    ...base,
+    ...raw,
+    shootHours: raw.shootHours != null ? String(raw.shootHours) : "",
+    shotCount: raw.shotCount != null ? String(raw.shotCount) : "",
+    equipment: raw.equipment ?? "",
+    team: raw.team ?? "",
+    deliveryMethod: raw.deliveryMethod ?? "",
+    leadSource: raw.leadSource ?? "",
+    notes: raw.notes ?? "",
+    crewPhotographers: Number(raw.crewPhotographers) || 0,
+    crewAssistants: Number(raw.crewAssistants) || 0,
+    crewVideographers: Number(raw.crewVideographers) || 0,
+    crewOthers: Number(raw.crewOthers) || 0,
+    depositMode: raw.depositMode === "fixed" ? "fixed" : "percent",
+    items: items.length > 0 ? items : base.items,
+  };
+}
+
 function buildTeamLabel(crew: {
   crewPhotographers: number;
   crewAssistants: number;
@@ -355,17 +388,19 @@ export default function QuoteForm() {
       const saved = safeLSGet('quote_draft_new');
       if (saved) {
         try {
-          const parsed = JSON.parse(saved) as FormData;
-          // Ensure items have valid ids
-          if (parsed.items && Array.isArray(parsed.items)) {
-            parsed.items = parsed.items.map(item => ({ ...item, id: item.id || crypto.randomUUID() }));
-          }
-          return parsed;
+          return normalizeFormData(JSON.parse(saved) as FormData);
         } catch { /* ignore */ }
       }
     }
-    return emptyForm;
+    return normalizeFormData(emptyForm);
   });
+
+  // Heal incomplete drafts (e.g. missing shotCount after schema upgrade)
+  useEffect(() => {
+    if (form.shotCount == null || form.shootHours == null) {
+      setForm((p) => normalizeFormData(p));
+    }
+  }, [form.shotCount, form.shootHours]);
   const [hasDraft, setHasDraft] = useState(() => !isEdit && !!safeLSGet('quote_draft_new'));
   // For edit mode: per-quote draft key
   const editDraftKey = isEdit && quoteId ? `quote_draft_edit_${quoteId}` : null;
@@ -570,11 +605,8 @@ export default function QuoteForm() {
       const savedEditDraft = editDraftKey ? safeLSGet(editDraftKey) : null;
       if (savedEditDraft) {
         try {
+          setForm(normalizeFormData(JSON.parse(savedEditDraft) as FormData));
           const parsed = JSON.parse(savedEditDraft) as FormData;
-          if (parsed.items && Array.isArray(parsed.items)) {
-            parsed.items = parsed.items.map(item => ({ ...item, id: item.id || crypto.randomUUID() }));
-          }
-          setForm(parsed);
           if ((parsed as any).clientId && parsed.clientName) {
             setSelectedClientName(parsed.clientName);
           }
@@ -583,7 +615,7 @@ export default function QuoteForm() {
         } catch { /* fall through to server data */ }
       }
       // Load from server
-      setForm({
+      setForm(normalizeFormData({
         clientName: existingQuote.clientName,
         clientEmail: existingQuote.clientEmail ?? "",
         clientPhone: existingQuote.clientPhone ?? "",
@@ -626,7 +658,7 @@ export default function QuoteForm() {
           unitPrice: Number(item.unitPrice),
           amount: Number(item.amount),
         })),
-      });
+      }));
       // Hydrate structured crew from Team XP line if DB crew empty
       setForm((p) => {
         if (crewHeadcount(p) > 0) return p;
@@ -725,13 +757,15 @@ export default function QuoteForm() {
     if (form.items.some((i) => !i.description.trim())) { toast.error("請填寫所有服務項目說明"); return; }
 
     const pricingMode = quotePricingMode(form.serviceType);
-    const hoursNum = form.shootHours.trim() ? Number(form.shootHours) : null;
+    const shootHoursStr = form.shootHours ?? "";
+    const shotCountStr = form.shotCount ?? "";
+    const hoursNum = shootHoursStr.trim() ? Number(shootHoursStr) : null;
     let shootHours =
       hoursNum != null && Number.isFinite(hoursNum) && hoursNum > 0
         ? hoursNum
         : null;
 
-    const shotNum = form.shotCount.trim() ? Number(form.shotCount) : null;
+    const shotNum = shotCountStr.trim() ? Number(shotCountStr) : null;
     const shotCount =
       shotNum != null && Number.isFinite(shotNum) && shotNum > 0
         ? Math.floor(shotNum)
@@ -865,7 +899,7 @@ export default function QuoteForm() {
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs" style={{ color: "rgba(212,168,67,0.7)" }}>草稿已自動儲存</span>
               <button
-                onClick={() => { setForm(emptyForm); clearDraft(); setSelectedClientName(""); }}
+                onClick={() => { setForm(normalizeFormData(emptyForm)); clearDraft(); setSelectedClientName(""); }}
                 className="text-xs px-2 py-0.5 rounded hover:opacity-70 transition-opacity"
                 style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#888" }}
               >
@@ -881,7 +915,7 @@ export default function QuoteForm() {
                   if (editDraftKey) { safeLSRemove(editDraftKey); setHasEditDraft(false); }
                   if (existingQuote) {
                     editFormLoadedRef.current = false;
-                    setForm({
+                    setForm(normalizeFormData({
                       clientName: existingQuote.clientName,
                       clientEmail: existingQuote.clientEmail ?? "",
                       clientPhone: existingQuote.clientPhone ?? "",
@@ -924,7 +958,7 @@ export default function QuoteForm() {
                         unitPrice: Number(item.unitPrice),
                         amount: Number(item.amount),
                       })),
-                    });
+                    }));
                     if ((existingQuote as any).clientId) setSelectedClientName(existingQuote.clientName);
                     editFormLoadedRef.current = true;
                   }
@@ -1164,12 +1198,12 @@ export default function QuoteForm() {
                   min={0.5}
                   max={72}
                   step={0.5}
-                  value={form.shootHours}
+                  value={form.shootHours ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, shootHours: e.target.value }))}
                   placeholder="例如 4"
                   style={{
                     ...inputStyle,
-                    borderColor: !form.shootHours.trim()
+                    borderColor: !(form.shootHours ?? "").trim()
                       ? "rgba(239,68,68,0.55)"
                       : undefined,
                   }}
@@ -1183,12 +1217,12 @@ export default function QuoteForm() {
                   min={1}
                   max={5000}
                   step={1}
-                  value={form.shotCount}
+                  value={form.shotCount ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, shotCount: e.target.value }))}
                   placeholder="例如 20"
                   style={{
                     ...inputStyle,
-                    borderColor: !form.shotCount.trim()
+                    borderColor: !(form.shotCount ?? "").trim()
                       ? "rgba(239,68,68,0.55)"
                       : undefined,
                   }}
