@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
 import {
   DndContext,
   DragEndEvent,
@@ -61,6 +62,7 @@ import {
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import {
@@ -213,6 +215,146 @@ function SortableNavItem({
   );
 }
 
+function LoginScreen() {
+  const utils = trpc.useUtils();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: async (data) => {
+      utils.auth.me.setData(undefined, data as any);
+      await utils.auth.me.invalidate();
+      toast.success("登入成功");
+    },
+    onError: (e) => toast.error(e.message || "登入失敗"),
+  });
+
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen"
+      style={{ background: "#0a0a0a" }}
+    >
+      <div className="flex flex-col items-center gap-6 p-8 max-w-sm w-full text-center">
+        <div>
+          <div
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: "2rem",
+              color: "#d4a843",
+              letterSpacing: "0.3em",
+              marginBottom: "4px",
+            }}
+          >
+            JD STUDIO
+          </div>
+          <div
+            style={{
+              fontSize: "0.65rem",
+              color: "#666",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+            }}
+          >
+            Admin Management System
+          </div>
+        </div>
+        <div
+          style={{
+            width: "40px",
+            height: "1px",
+            background: "linear-gradient(to right, transparent, #d4a843, transparent)",
+          }}
+        />
+        <div>
+          <h2 className="text-lg font-light text-foreground mb-2">請先登入</h2>
+          <p className="text-sm text-muted-foreground">員工用帳號密碼；管理員可用 Manus</p>
+        </div>
+
+        <form
+          className="w-full space-y-3 text-left"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!username.trim() || !password) {
+              toast.error("請輸入帳號及密碼");
+              return;
+            }
+            loginMutation.mutate({ username: username.trim(), password });
+          }}
+        >
+          <div>
+            <label className="text-xs text-muted-foreground">帳號</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              className="mt-1 w-full px-3 py-2 rounded text-sm"
+              style={{
+                background: "#111",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "#fff",
+              }}
+              placeholder="username"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">密碼</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              className="mt-1 w-full px-3 py-2 rounded text-sm"
+              style={{
+                background: "#111",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "#fff",
+              }}
+              placeholder="••••••••"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loginMutation.isPending}
+            style={{
+              background: "#d4a843",
+              color: "#0a0a0a",
+              fontWeight: 600,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontSize: "0.75rem",
+            }}
+          >
+            {loginMutation.isPending ? "登入中…" : "帳號密碼登入"}
+          </Button>
+        </form>
+
+        <div className="w-full flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex-1 h-px bg-white/10" />
+          或
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        <a href={getLoginUrl()} target="_top" style={{ width: "100%", display: "block" }}>
+          <Button
+            className="w-full"
+            variant="outline"
+            style={{
+              borderColor: "rgba(212,168,67,0.4)",
+              color: "#d4a843",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              fontSize: "0.75rem",
+            }}
+          >
+            <Camera className="mr-2 h-4 w-4" />
+            Manus 登入（管理員）
+          </Button>
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = safeLocalStorageGet(SIDEBAR_WIDTH_KEY);
@@ -227,69 +369,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (loading) return <DashboardLayoutSkeleton />;
 
   if (!user) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-screen"
-        style={{ background: "#0a0a0a" }}
-      >
-        <div className="flex flex-col items-center gap-8 p-8 max-w-sm w-full text-center">
-          <div>
-            <div
-              style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: "2rem",
-                color: "#d4a843",
-                letterSpacing: "0.3em",
-                marginBottom: "4px",
-              }}
-            >
-              JD STUDIO
-            </div>
-            <div
-              style={{
-                fontSize: "0.65rem",
-                color: "#666",
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-              }}
-            >
-              Admin Management System
-            </div>
-          </div>
-          <div
-            style={{
-              width: "40px",
-              height: "1px",
-              background: "linear-gradient(to right, transparent, #d4a843, transparent)",
-            }}
-          />
-          <div>
-            <h2 className="text-lg font-light text-foreground mb-2">請先登入</h2>
-            <p className="text-sm text-muted-foreground">此管理系統需要身份驗證才能存取</p>
-          </div>
-          <a
-            href={getLoginUrl()}
-            target="_top"
-            style={{ width: '100%', display: 'block' }}
-          >
-            <Button
-              className="w-full"
-              style={{
-                background: "#d4a843",
-                color: "#0a0a0a",
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                fontSize: "0.75rem",
-              }}
-            >
-              <Camera className="mr-2 h-4 w-4" />
-              登入系統
-            </Button>
-          </a>
-        </div>
-      </div>
-    );
+    return <LoginScreen />;
   }
 
   if (user.role !== "admin" && user.isActive === false) {

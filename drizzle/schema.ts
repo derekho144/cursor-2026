@@ -24,6 +24,10 @@ export const users = mysqlTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   /** JSON array of page ids the employee may open (ignored for admin). */
   allowedPages: json("allowed_pages").$type<string[]>().default([]),
+  /** Local login username (employees created by admin). */
+  username: varchar("username", { length: 64 }),
+  /** scrypt hash for local password login. */
+  passwordHash: varchar("password_hash", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

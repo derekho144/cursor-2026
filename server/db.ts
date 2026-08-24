@@ -145,6 +145,66 @@ export async function getUserById(id: number) {
   return row;
 }
 
+export async function getUserByUsername(username: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, normalized))
+    .limit(1);
+  return row;
+}
+
+export async function createLocalEmployee(params: {
+  username: string;
+  passwordHash: string;
+  openId: string;
+  name?: string | null;
+  email?: string | null;
+  isActive?: boolean;
+  allowedPages?: string[];
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const username = params.username.trim().toLowerCase();
+  await db.insert(users).values({
+    openId: params.openId,
+    username,
+    passwordHash: params.passwordHash,
+    name: params.name ?? username,
+    email: params.email ?? null,
+    loginMethod: "password",
+    role: params.role ?? "user",
+    isActive: params.isActive !== false,
+    allowedPages: params.allowedPages ?? [],
+    lastSignedIn: new Date(),
+  });
+  return getUserByUsername(username);
+}
+
+export async function updateUserPassword(params: {
+  id: number;
+  passwordHash: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db
+    .update(users)
+    .set({ passwordHash: params.passwordHash })
+    .where(eq(users.id, params.id));
+  return getUserById(params.id);
+}
+
+export async function deleteUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.delete(users).where(eq(users.id, id));
+}
+
 export async function updateUserAccess(params: {
   id: number;
   isActive?: boolean;

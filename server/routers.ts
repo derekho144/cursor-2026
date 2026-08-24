@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
@@ -11,7 +11,7 @@ import { emailInquiriesRouter } from "./routers/emailInquiries";
 import { freehunterBoardRouter } from "./routers/freehunterBoard";
 import { expensesRouter } from "./routers/expenses";
 import { loyaltyRouter } from "./routers/loyalty";
-import { getDashboardStats, getDashboardStatsQuick, getAvgResponseTimeHours, getWhatsappClickStats, getMonthlyQuoteCosts, getDb } from "./db";
+import { getDashboardStats, getDashboardStatsQuick, getAvgResponseTimeHours, getWhatsappClickStats, getMonthlyQuoteCosts, getDb, getUserByUsername } from "./db";
 import { getReceivablesSummary, getRecentActivity } from "./opsInsights";
 import { quoteCostsRouter } from "./routers/quoteCosts";
 import { followUpRouter } from "./routers/followUp";
@@ -25,6 +25,9 @@ import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
 import { getWatchdogStatus } from "./watchdog";
 import { lastFreehunterScrapeAt, lastFreehunterScrapeResult } from "./scheduler";
 import { parseAllowedPages } from "@shared/pagePermissions";
+import { verifyPassword } from "./passwordAuth";
+import { sdk } from "./_core/sdk";
+import { TRPCError } from "@trpc/server";
 
 export const appRouter = router({
   system: systemRouter,
@@ -32,12 +35,65 @@ export const appRouter = router({
     me: publicProcedure.query(({ ctx }) => {
       const u = ctx.user;
       if (!u) return null;
+      const { passwordHash: _ph, ...safe } = u as typeof u & { passwordHash?: string | null };
       return {
-        ...u,
+        ...safe,
         isActive: u.isActive !== false,
         allowedPages: parseAllowedPages(u.allowedPages),
+        username: (u as { username?: string | null }).username ?? null,
+        hasPassword: Boolean(_ph),
       };
     }),
+    login: publicProcedure
+      .input(
+        z.object({
+          username: z.string().trim().min(1).max(64),
+          password: z.string().min(1).max(128),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserByUsername(input.username);
+        if (!user?.passwordHash || !user.username) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "帳號或密碼錯誤",
+          });
+        }
+        if (!verifyPassword(input.password, user.passwordHash)) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "帳號或密碼錯誤",
+          });
+        }
+        if (user.role !== "admin" && user.isActive === false) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "帳戶已停用，請聯絡管理員",
+          });
+        }
+
+        const sessionName =
+          (user.name && String(user.name).trim()) ||
+          user.username ||
+          "User";
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: sessionName,
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+
+        const { passwordHash: _ph, ...safe } = user;
+        return {
+          ...safe,
+          isActive: user.isActive !== false,
+          allowedPages: parseAllowedPages(user.allowedPages),
+          hasPassword: true,
+        };
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

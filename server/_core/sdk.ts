@@ -40,6 +40,10 @@ function buildCronUser(userInfo: GetUserInfoWithJwtResponse): AuthenticatedUser 
     email: null,
     loginMethod: null,
     role: "user",
+    isActive: true,
+    allowedPages: [],
+    username: null,
+    passwordHash: null,
     createdAt: now,
     updatedAt: now,
     lastSignedIn: now,
@@ -316,6 +320,11 @@ class SDKServer {
     const sessionUserId = session.openId;
     const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
+
+    // Local password accounts are never synced from Manus OAuth
+    if (!user && sessionUserId.startsWith("local_")) {
+      throw ForbiddenError("User not found");
+    }
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
