@@ -58,6 +58,7 @@ describe("pagePermissions", () => {
     expect(resolvePageIdForPath("/")).toBe("dashboard");
     expect(resolvePageIdForPath("/quotes/12/edit")).toBe("quotes");
     expect(resolvePageIdForPath("/employees")).toBe("employees");
+    expect(resolvePageIdForPath("/pricing-learning")).toBe("pricing-learning");
     expect(resolvePageIdForPath("/delivery/abc")).toBe(null);
   });
 });

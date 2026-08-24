@@ -19,7 +19,8 @@ export type PageId =
   | "follow-up"
   | "pitch-outreach"
   | "linkedin-ops"
-  | "employees";
+  | "employees"
+  | "pricing-learning";
 
 export interface PageDef {
   id: PageId;
@@ -46,6 +47,7 @@ export const PAGE_CATALOG: PageDef[] = [
   { id: "follow-up", label: "報價跟進", pathPrefixes: ["/follow-up"] },
   { id: "pitch-outreach", label: "開拓客戶", pathPrefixes: ["/pitch-outreach"] },
   { id: "linkedin-ops", label: "LinkedIn 內容", pathPrefixes: ["/linkedin-ops"] },
+  { id: "pricing-learning", label: "定價學習", pathPrefixes: ["/pricing-learning"] },
   { id: "employees", label: "員工管理", pathPrefixes: ["/employees"], adminOnly: true },
 ];
 

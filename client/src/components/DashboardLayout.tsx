@@ -59,6 +59,7 @@ import {
   Target,
   Linkedin,
   UserCog,
+  GraduationCap,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -74,6 +75,7 @@ import {
 const DEFAULT_MENU_ITEMS = [
   { id: "dashboard", icon: LayoutDashboard, label: "儀表板", path: "/" },
   { id: "quotes", icon: FileText, label: "報價單", path: "/quotes" },
+  { id: "pricing-learning", icon: GraduationCap, label: "定價學習", path: "/pricing-learning" },
   { id: "email-inquiries", icon: Mail, label: "詢價郵件", path: "/email-inquiries" },
   { id: "clients", icon: Users, label: "客戶管理", path: "/clients" },
   { id: "loyalty", icon: Crown, label: "會員方案", path: "/loyalty" },
@@ -100,6 +102,7 @@ const MAX_WIDTH = 320;
 const ICON_MAP: Record<string, React.ElementType> = {
   dashboard: LayoutDashboard,
   quotes: FileText,
+  "pricing-learning": GraduationCap,
   clients: Users,
   deliveries: Package,
   "ad-expenses": BarChart3,

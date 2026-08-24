@@ -19,6 +19,7 @@ import { pitchOutreachRouter } from "./routers/pitchOutreach";
 import { linkedinOpsRouter } from "./routers/linkedinOps";
 import { linkedinContentRouter } from "./routers/linkedinContent";
 import { employeesRouter } from "./routers/employees";
+import { pricingLearningRouter } from "./routers/pricingLearning";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
@@ -225,6 +226,7 @@ export const appRouter = router({
   pitchOutreach: pitchOutreachRouter,
   linkedinOps: linkedinOpsRouter,
   linkedinContent: linkedinContentRouter,
+  pricingLearning: pricingLearningRouter,
 });
 
 export type AppRouter = typeof appRouter;
