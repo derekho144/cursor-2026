@@ -4,6 +4,8 @@ import {
   extractHoursFromText,
   extractQuoteShootFeatures,
   summarizeTotals,
+  timeWeightedMedian,
+  trimOutliers,
 } from "./pricingLearningExtract";
 
 describe("extractHoursFromText", () => {
@@ -42,6 +44,11 @@ describe("extractCrewFromText", () => {
     const c = extractCrewFromText("現場 3人");
     expect(c.headcount).toBe(3);
   });
+
+  it("parses 1P / 2P shorthand", () => {
+    expect(extractCrewFromText("1P").headcount).toBe(1);
+    expect(extractCrewFromText("2P").headcount).toBe(2);
+  });
 });
 
 describe("extractQuoteShootFeatures", () => {
@@ -57,14 +64,52 @@ describe("extractQuoteShootFeatures", () => {
     expect(f.crew.photographers).toBe(1);
     expect(f.crew.assistants).toBe(1);
   });
+
+  it("prefers structured hours and crew over free text", () => {
+    const f = extractQuoteShootFeatures({
+      shootHours: 6,
+      crewPhotographers: 1,
+      crewAssistants: 1,
+      team: "wrong text 2小時 5人",
+      items: [{ description: "2小時 產品", quantity: 1 }],
+      total: 12000,
+    });
+    expect(f.hours).toBe(6);
+    expect(f.hoursSource).toBe("structured");
+    expect(f.crew.headcount).toBe(2);
+    expect(f.crewSource).toBe("structured");
+    expect(f.pricePerHour).toBe(2000);
+  });
 });
 
 describe("summarizeTotals", () => {
   it("computes percentiles", () => {
-    const s = summarizeTotals([1000, 2000, 3000, 4000, 5000]);
+    const s = summarizeTotals([1000, 2000, 3000, 4000, 5000], { trim: false });
     expect(s.count).toBe(5);
     expect(s.p50).toBe(3000);
     expect(s.min).toBe(1000);
     expect(s.max).toBe(5000);
+  });
+
+  it("trims extreme outliers", () => {
+    const trimmed = trimOutliers([1000, 1100, 1200, 1300, 1400, 50000]);
+    expect(trimmed).not.toContain(50000);
+    const s = summarizeTotals([1000, 1100, 1200, 1300, 1400, 50000]);
+    expect(s.max).toBeLessThan(50000);
+    expect(s.trimmed).toBeGreaterThan(0);
+  });
+});
+
+describe("timeWeightedMedian", () => {
+  it("returns null for empty", () => {
+    expect(timeWeightedMedian([])).toBeNull();
+  });
+
+  it("weights recent values", () => {
+    const mid = timeWeightedMedian([
+      { value: 1000, at: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000) },
+      { value: 5000, at: new Date() },
+    ]);
+    expect(mid).toBeGreaterThan(1000);
   });
 });

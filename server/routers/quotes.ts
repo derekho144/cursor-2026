@@ -224,6 +224,11 @@ export const quotesRouter = router({
         validUntil: z.string().optional(),
         equipment: z.string().optional(),
         team: z.string().optional(),
+        shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        crewPhotographers: z.number().int().min(0).max(20).optional(),
+        crewAssistants: z.number().int().min(0).max(20).optional(),
+        crewVideographers: z.number().int().min(0).max(20).optional(),
+        crewOthers: z.number().int().min(0).max(20).optional(),
         deliveryMethod: z.string().optional(),
         leadSource: z.string().optional(),
         items: z.array(quoteItemSchema),
@@ -232,8 +237,14 @@ export const quotesRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, ...quoteDataRest } = input;
-      const quoteData = { ...quoteDataRest, depositPercent: input.depositPercent ?? 50, depositMode: input.depositMode ?? "percent", depositFixedAmount: input.depositFixedAmount };
+      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, ...quoteDataRest } = input;
+      const quoteData = {
+        ...quoteDataRest,
+        shootHours: shootHours != null ? String(shootHours) : null,
+        depositPercent: input.depositPercent ?? 50,
+        depositMode: input.depositMode ?? "percent",
+        depositFixedAmount: input.depositFixedAmount,
+      };
 
       let clientId: number | undefined;
       if (syncToClients) {
@@ -302,6 +313,11 @@ export const quotesRouter = router({
         validUntil: z.string().optional(),
         equipment: z.string().optional(),
         team: z.string().optional(),
+        shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        crewPhotographers: z.number().int().min(0).max(20).optional(),
+        crewAssistants: z.number().int().min(0).max(20).optional(),
+        crewVideographers: z.number().int().min(0).max(20).optional(),
+        crewOthers: z.number().int().min(0).max(20).optional(),
         deliveryMethod: z.string().optional(),
         leadSource: z.string().optional(),
         rejectedReason: z.string().optional(),
@@ -311,13 +327,14 @@ export const quotesRouter = router({
     )
     .mutation(async ({ input }) => {
       console.log('[Quotes.update] Input received:', JSON.stringify(input, null, 2));
-      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, ...rest } = input;
+      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, shootHours, ...rest } = input;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
-      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "deliveryMethod", "validUntil", "notes"];
+      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
       const result = await updateQuote(id, {
         ...rest,
+        ...(shootHours !== undefined && { shootHours: shootHours != null ? String(shootHours) : null }),
         ...(subtotal !== undefined && { subtotal: String(subtotal) }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),
         ...(discountAmount !== undefined && { discountAmount: String(discountAmount) }),

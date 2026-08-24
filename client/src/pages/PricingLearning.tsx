@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 function money(n: number) {
   return `HK$ ${n.toLocaleString("en-HK")}`;
@@ -166,6 +167,19 @@ export default function PricingLearning() {
     undefined,
     { refetchOnWindowFocus: false }
   );
+  const utils = trpc.useUtils();
+  const backfillMutation = trpc.pricingLearning.backfillStructured.useMutation({
+    onSuccess: (r) => {
+      toast.success(
+        r.dryRun
+          ? `預覽：可回填 ${r.updated} / ${r.scanned} 筆`
+          : `已回填 ${r.updated} / ${r.scanned} 筆結構化時數／人手`
+      );
+      utils.pricingLearning.overview.invalidate();
+      utils.pricingLearning.byServiceType.invalidate();
+    },
+    onError: (e) => toast.error(`回填失敗：${e.message}`),
+  });
   const { data: detail, isLoading: detailLoading } =
     trpc.pricingLearning.byServiceType.useQuery(
       { serviceType: serviceType as any },
@@ -218,8 +232,8 @@ export default function PricingLearning() {
             </h1>
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            從已接受報價學習出價區間。以拍攝類型、時數、人手安排三個基礎維度拆解成交價，
-            作為下次報價參考。（由報價項目／人手欄位自動抽取，未填寫者歸入「未標明」。）
+            從已接受報價學習出價區間。優先用報價單嘅結構化「拍攝時數／人手」欄位；
+            未填寫時先後備從項目文字抽取。先提升資料準確率，之後先做報價單建議價。
           </p>
         </div>
 
@@ -229,13 +243,17 @@ export default function PricingLearning() {
             icon={Camera}
             label="已接受報價"
             value={String(overview?.acceptedCount ?? 0)}
-            sub={`整體中位 ${money(overview?.overall.p50 ?? 0)}`}
+            sub={`整體中位 ${money(overview?.overall.p50 ?? 0)}${
+              overview?.overallRecentMid
+                ? ` · 近況加權 ${money(overview.overallRecentMid)}`
+                : ""
+            }`}
           />
           <StatCard
             icon={Clock}
             label="有時數資料"
             value={`${overview?.coverage.withHours ?? 0}`}
-            sub={`覆蓋率 ${
+            sub={`覆蓋 ${
               overview?.acceptedCount
                 ? Math.round(
                     ((overview.coverage.withHours ?? 0) /
@@ -243,13 +261,13 @@ export default function PricingLearning() {
                       100
                   )
                 : 0
-            }%`}
+            }% · 結構化 ${overview?.coverage.withStructuredHours ?? 0}`}
           />
           <StatCard
             icon={Users}
             label="有人手資料"
             value={`${overview?.coverage.withCrew ?? 0}`}
-            sub={`覆蓋率 ${
+            sub={`覆蓋 ${
               overview?.acceptedCount
                 ? Math.round(
                     ((overview.coverage.withCrew ?? 0) /
@@ -257,22 +275,118 @@ export default function PricingLearning() {
                       100
                   )
                 : 0
-            }%`}
+            }% · 結構化 ${overview?.coverage.withStructuredCrew ?? 0}`}
           />
           <StatCard
             icon={Target}
-            label="AI 估價對照"
-            value={
-              overview?.aiAccuracy
-                ? `±${overview.aiAccuracy.avgAbsErrorPct}%`
-                : "—"
-            }
+            label="資料質素分"
+            value={`${overview?.dataQuality?.score ?? 0}`}
             sub={
               overview?.aiAccuracy
-                ? `${overview.aiAccuracy.pairedCount} 筆配對 · ${overview.aiAccuracy.within30Pct} 筆誤差 ≤30%`
-                : "需關聯詢價郵件"
+                ? `AI 對照 ±${overview.aiAccuracy.avgAbsErrorPct}% · ${overview.aiAccuracy.pairedCount} 筆`
+                : "結構化時數+人手愈高愈準"
             }
           />
+        </div>
+
+        {/* Data quality */}
+        <div
+          className="p-4 rounded space-y-3"
+          style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.18)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div
+              className="text-xs"
+              style={{ color: "#d4a843", letterSpacing: "0.12em", textTransform: "uppercase" }}
+            >
+              準確率 · 資料質素
+            </div>
+            <button
+              type="button"
+              disabled={backfillMutation.isPending}
+              onClick={() => backfillMutation.mutate({ limit: 800, dryRun: false })}
+              className="text-xs px-3 py-1.5 rounded transition-opacity disabled:opacity-40"
+              style={{
+                border: "1px solid rgba(212,168,67,0.35)",
+                color: "#d4a843",
+                background: "rgba(212,168,67,0.08)",
+              }}
+            >
+              {backfillMutation.isPending ? "回填中…" : "從舊報價文字回填時數／人手"}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
+            <div>
+              雙基礎齊全{" "}
+              <span style={{ color: "#e8e0d0" }}>
+                {overview?.coverage.withBothFundamentals ?? 0}
+              </span>
+            </div>
+            <div>
+              結構化雙齊{" "}
+              <span style={{ color: "#e8e0d0" }}>
+                {overview?.coverage.withStructuredBoth ?? 0}
+              </span>
+            </div>
+            <div>
+              缺資料{" "}
+              <span style={{ color: "#e8e0d0" }}>
+                {overview?.coverage.incompleteCount ?? 0}
+              </span>
+            </div>
+            <div>
+              時薪中位{" "}
+              <span style={{ color: "#e8e0d0" }}>
+                {overview?.pricePerHour
+                  ? money(overview.pricePerHour.p50)
+                  : "—"}
+              </span>
+              {overview?.pricePerHour ? "/h" : ""}
+            </div>
+          </div>
+          <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+            {(overview?.dataQuality?.tips ?? []).map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          {(overview?.dataQuality?.incomplete?.length ?? 0) > 0 && (
+            <div className="overflow-x-auto pt-1">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ color: "#777" }}>
+                    <th className="text-left py-1 font-normal">缺資料報價</th>
+                    <th className="text-left py-1 font-normal">客戶</th>
+                    <th className="text-right py-1 font-normal">成交</th>
+                    <th className="text-left py-1 font-normal">缺</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview!.dataQuality.incomplete.slice(0, 12).map((r) => (
+                    <tr
+                      key={r.id}
+                      className="cursor-pointer hover:bg-white/[0.03]"
+                      onClick={() => setLocation(`/quotes/${r.id}`)}
+                    >
+                      <td className="py-1.5" style={{ color: "#d4a843" }}>
+                        {r.quoteNumber}
+                      </td>
+                      <td className="py-1.5" style={{ color: "#e8e0d0" }}>
+                        {r.clientName}
+                      </td>
+                      <td className="py-1.5 text-right text-muted-foreground">
+                        {money(r.total)}
+                      </td>
+                      <td className="py-1.5 text-muted-foreground">
+                        {[r.missingHours ? "時數" : null, r.missingCrew ? "人手" : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Service type ranking */}
@@ -580,9 +694,11 @@ export default function PricingLearning() {
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
                           {r.hours != null ? `${r.hours}h` : r.hoursLabel}
+                          {r.hoursSource === "structured" ? " ★" : ""}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
                           {r.crewLabel}
+                          {r.crewSource === "structured" ? " ★" : ""}
                         </td>
                         <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
                           {r.accuracyPct == null
@@ -602,8 +718,8 @@ export default function PricingLearning() {
           className="text-xs text-muted-foreground p-3 rounded"
           style={{ background: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.12)" }}
         >
-          提升學習質素：報價單請在項目描述寫明時數（例如「4小時」），並在「人手」欄填寫
-          「1攝影師 + 1助理」。由詢價郵件產生嘅報價會自動關聯，方便追蹤 AI 估價準確度。
+          提升準確率：開／改報價時請填「拍攝時數」同人手人數。可用上方「回填」把舊報價文字轉成結構化欄位。
+          報價單內建「建議價」會等學習質素夠高先加。
         </div>
       </div>
     </DashboardLayout>

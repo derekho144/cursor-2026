@@ -123,6 +123,12 @@ type FormData = {
   validUntil: string;
   equipment: string;
   team: string;
+  /** Structured hours for pricing learning (preferred) */
+  shootHours: string;
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
   deliveryMethod: string;
   leadSource: string;
   items: QuoteItem[];
@@ -150,6 +156,11 @@ const emptyForm: FormData = {
   validUntil: "",
   equipment: "",
   team: "",
+  shootHours: "",
+  crewPhotographers: 0,
+  crewAssistants: 0,
+  crewVideographers: 0,
+  crewOthers: 0,
   deliveryMethod: "",
   leadSource: "",
   items: [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0 }],
@@ -158,6 +169,20 @@ const emptyForm: FormData = {
   syncToClients: true,
   emailInquiryId: undefined,
 };
+
+function buildTeamLabel(crew: {
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
+}): string {
+  const parts: string[] = [];
+  if (crew.crewPhotographers > 0) parts.push(`攝影師×${crew.crewPhotographers}`);
+  if (crew.crewVideographers > 0) parts.push(`錄影×${crew.crewVideographers}`);
+  if (crew.crewAssistants > 0) parts.push(`助理×${crew.crewAssistants}`);
+  if (crew.crewOthers > 0) parts.push(`其他×${crew.crewOthers}`);
+  return parts.join(" + ");
+}
 
 // Sortable row component for drag-and-drop reordering
 function SortableQuoteItem({
@@ -502,6 +527,15 @@ export default function QuoteForm() {
         saveAsNewClient: false,
         equipment: (existingQuote as any).equipment ?? "",
         team: (existingQuote as any).team ?? "",
+        shootHours:
+          (existingQuote as any).shootHours != null &&
+          Number((existingQuote as any).shootHours) > 0
+            ? String(Number((existingQuote as any).shootHours))
+            : "",
+        crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
+        crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
+        crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
+        crewOthers: Number((existingQuote as any).crewOthers ?? 0),
         deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
         leadSource: (existingQuote as any).leadSource ?? "",
         items: existingQuote.items.map((item) => ({
@@ -626,6 +660,24 @@ export default function QuoteForm() {
     const finalDepositPercent = form.depositMode === "fixed" ? 0 : form.depositPercent;
     const finalDepositFixedAmount = form.depositMode === "fixed" ? form.depositFixedAmount : undefined;
 
+    const hoursNum = form.shootHours.trim() ? Number(form.shootHours) : null;
+    const shootHours =
+      hoursNum != null && Number.isFinite(hoursNum) && hoursNum > 0
+        ? hoursNum
+        : null;
+
+    const crew = {
+      crewPhotographers: Math.max(0, Math.floor(form.crewPhotographers) || 0),
+      crewAssistants: Math.max(0, Math.floor(form.crewAssistants) || 0),
+      crewVideographers: Math.max(0, Math.floor(form.crewVideographers) || 0),
+      crewOthers: Math.max(0, Math.floor(form.crewOthers) || 0),
+    };
+    const autoTeam = buildTeamLabel(crew);
+    const team =
+      form.team.trim() ||
+      autoTeam ||
+      "";
+
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
@@ -638,6 +690,9 @@ export default function QuoteForm() {
       depositMode: form.depositMode,
       clientId: resolvedClientId,
       items: form.items,
+      shootHours,
+      ...crew,
+      team,
       // For new quotes: use backend syncToClients to upsert client automatically
       syncToClients: !isEdit ? (form.syncToClients ?? true) : undefined,
       // Ensure null is not passed (use undefined to omit)
@@ -721,6 +776,15 @@ export default function QuoteForm() {
                       saveAsNewClient: false,
                       equipment: (existingQuote as any).equipment ?? "",
                       team: (existingQuote as any).team ?? "",
+                      shootHours:
+                        (existingQuote as any).shootHours != null &&
+                        Number((existingQuote as any).shootHours) > 0
+                          ? String(Number((existingQuote as any).shootHours))
+                          : "",
+                      crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
+                      crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
+                      crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
+                      crewOthers: Number((existingQuote as any).crewOthers ?? 0),
                       deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
                       leadSource: (existingQuote as any).leadSource ?? "",
                       items: existingQuote.items.map((item) => ({
@@ -1236,6 +1300,64 @@ export default function QuoteForm() {
         {/* Extra Info */}
         <Section title="額外資訊" subtitle="Additional Details">
           <div className="space-y-4">
+            <FormField label="拍攝時數（定價學習）">
+              <Input
+                type="number"
+                min={0.5}
+                max={72}
+                step={0.5}
+                value={form.shootHours}
+                onChange={(e) => setForm((p) => ({ ...p, shootHours: e.target.value }))}
+                placeholder="例如 4（小時）"
+                style={inputStyle}
+              />
+              <div className="text-[11px] text-muted-foreground mt-1">
+                請填實際拍攝時數；學習系統會優先用此欄，比從文字抽取更準。
+              </div>
+            </FormField>
+            <div>
+              <div
+                className="text-xs mb-2"
+                style={{ color: "rgba(212,168,67,0.75)", letterSpacing: "0.08em" }}
+              >
+                人手安排（定價學習）
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {(
+                  [
+                    ["crewPhotographers", "攝影師"],
+                    ["crewAssistants", "助理"],
+                    ["crewVideographers", "錄影"],
+                    ["crewOthers", "其他"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <FormField key={key} label={label}>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={20}
+                      step={1}
+                      value={form[key]}
+                      onChange={(e) => {
+                        const n = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
+                        setForm((p) => {
+                          const next = { ...p, [key]: n };
+                          const auto = buildTeamLabel(next);
+                          // Keep free-text team in sync when it was empty or previously auto-generated
+                          const prevAuto = buildTeamLabel(p);
+                          const team =
+                            !p.team.trim() || p.team.trim() === prevAuto
+                              ? auto
+                              : p.team;
+                          return { ...next, team };
+                        });
+                      }}
+                      style={inputStyle}
+                    />
+                  </FormField>
+                ))}
+              </div>
+            </div>
             <FormField label="Lighting &amp; Equipment">
               <Input
                 value={form.equipment}
@@ -1244,11 +1366,11 @@ export default function QuoteForm() {
                 style={inputStyle}
               />
             </FormField>
-            <FormField label="Team">
+            <FormField label="Team（顯示用／後備）">
               <Input
                 value={form.team}
                 onChange={(e) => setForm((p) => ({ ...p, team: e.target.value }))}
-                placeholder="e.g. 1P / 2P"
+                placeholder="人手數字會自動帶入；亦可手動改寫"
                 style={inputStyle}
               />
             </FormField>

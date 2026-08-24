@@ -1,5 +1,5 @@
 /**
- * Extract shoot fundamentals from free-text quote fields.
+ * Extract shoot fundamentals from structured fields + free-text quote fields.
  * Foundations for pricing learning: hours · shoot type · crew.
  */
 
@@ -18,11 +18,13 @@ export interface CrewBreakdown {
 export interface QuoteShootFeatures {
   hours: number | null;
   hoursBucket: HoursBucket;
-  hoursSource: "items" | "notes" | "team" | "inferred" | null;
+  hoursSource: "structured" | "items" | "notes" | "team" | "inferred" | null;
   crew: CrewBreakdown;
   crewBucket: CrewBucket;
   crewLabel: string;
-  crewSource: "team" | "items" | "notes" | null;
+  crewSource: "structured" | "team" | "items" | "notes" | null;
+  /** Price-per-hour when hours known; caller may attach total later */
+  pricePerHour: number | null;
 }
 
 function hoursBucket(h: number | null): HoursBucket {
@@ -167,6 +169,13 @@ export function extractCrewFromText(text: string): CrewBreakdown {
     if (Number.isFinite(a) && Number.isFinite(b)) pax = Math.max(pax, a + b);
   }
 
+  // Shorthand "1P" / "2P" common in team field
+  const pShorthand = text.match(/(\d+)\s*[Pp]\b/);
+  if (pShorthand) {
+    const n = Number(pShorthand[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 20) pax = Math.max(pax, n);
+  }
+
   const roleSum = photogs + asst + video + others;
   const headcount = Math.max(roleSum, pax > 0 && pax <= 20 ? pax : 0);
 
@@ -179,7 +188,7 @@ export function extractCrewFromText(text: string): CrewBreakdown {
   };
 }
 
-function formatCrewLabel(crew: CrewBreakdown): string {
+export function formatCrewLabel(crew: CrewBreakdown): string {
   if (crew.headcount <= 0) return "人手未標明";
   const parts: string[] = [];
   if (crew.photographers > 0) parts.push(`攝影師×${crew.photographers}`);
@@ -190,14 +199,62 @@ function formatCrewLabel(crew: CrewBreakdown): string {
   return parts.join(" + ");
 }
 
+/** Build display team string from structured crew counts. */
+export function formatTeamFromStructured(crew: {
+  photographers?: number;
+  assistants?: number;
+  videographers?: number;
+  others?: number;
+}): string {
+  const photographers = Math.max(0, Math.floor(Number(crew.photographers) || 0));
+  const assistants = Math.max(0, Math.floor(Number(crew.assistants) || 0));
+  const videographers = Math.max(0, Math.floor(Number(crew.videographers) || 0));
+  const others = Math.max(0, Math.floor(Number(crew.others) || 0));
+  return formatCrewLabel({
+    photographers,
+    assistants,
+    videographers,
+    others,
+    headcount: photographers + assistants + videographers + others,
+  }).replace("人手未標明", "");
+}
+
+function crewFromStructured(input: {
+  crewPhotographers?: number | null;
+  crewAssistants?: number | null;
+  crewVideographers?: number | null;
+  crewOthers?: number | null;
+}): CrewBreakdown | null {
+  const photographers = Math.max(0, Math.floor(Number(input.crewPhotographers) || 0));
+  const assistants = Math.max(0, Math.floor(Number(input.crewAssistants) || 0));
+  const videographers = Math.max(0, Math.floor(Number(input.crewVideographers) || 0));
+  const others = Math.max(0, Math.floor(Number(input.crewOthers) || 0));
+  const headcount = photographers + assistants + videographers + others;
+  if (headcount <= 0) return null;
+  return { photographers, assistants, videographers, others, headcount };
+}
+
+function parseStructuredHours(v: number | string | null | undefined): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0 || n > 72) return null;
+  return Math.round(n * 10) / 10;
+}
+
 /**
- * Derive shoot fundamentals from a quote's free-text fields + line items.
+ * Derive shoot fundamentals from structured columns first, then free-text fallback.
  */
 export function extractQuoteShootFeatures(input: {
+  shootHours?: number | string | null;
+  crewPhotographers?: number | null;
+  crewAssistants?: number | null;
+  crewVideographers?: number | null;
+  crewOthers?: number | null;
   team?: string | null;
   notes?: string | null;
   equipment?: string | null;
   items?: Array<{ description?: string | null; quantity?: number | string | null }>;
+  total?: number | null;
 }): QuoteShootFeatures {
   const itemText = (input.items ?? [])
     .map((i) => i.description ?? "")
@@ -207,9 +264,13 @@ export function extractQuoteShootFeatures(input: {
   const notes = input.notes ?? "";
   const equipment = input.equipment ?? "";
 
-  // Hours: prefer item lines, then notes, then team
-  let hours = extractHoursFromText(itemText);
-  let hoursSource: QuoteShootFeatures["hoursSource"] = hours != null ? "items" : null;
+  // Hours: prefer structured column
+  let hours = parseStructuredHours(input.shootHours);
+  let hoursSource: QuoteShootFeatures["hoursSource"] = hours != null ? "structured" : null;
+  if (hours == null) {
+    hours = extractHoursFromText(itemText);
+    if (hours != null) hoursSource = "items";
+  }
   if (hours == null) {
     hours = extractHoursFromText(notes);
     if (hours != null) hoursSource = "notes";
@@ -218,19 +279,40 @@ export function extractQuoteShootFeatures(input: {
     hours = extractHoursFromText(team);
     if (hours != null) hoursSource = "team";
   }
-  // Infer: quantity on "小時" unit-like lines already covered; if still null leave unknown
 
-  // Crew: prefer dedicated team field
-  let crew = extractCrewFromText(team);
-  let crewSource: QuoteShootFeatures["crewSource"] = crew.headcount > 0 ? "team" : null;
-  if (crew.headcount <= 0) {
+  // Crew: prefer structured counts
+  let crew = crewFromStructured(input);
+  let crewSource: QuoteShootFeatures["crewSource"] = crew ? "structured" : null;
+  if (!crew) {
+    crew = extractCrewFromText(team);
+    if (crew.headcount > 0) crewSource = "team";
+  }
+  if (!crew || crew.headcount <= 0) {
     crew = extractCrewFromText(itemText);
     if (crew.headcount > 0) crewSource = "items";
   }
-  if (crew.headcount <= 0) {
+  if (!crew || crew.headcount <= 0) {
     crew = extractCrewFromText(`${notes}\n${equipment}`);
     if (crew.headcount > 0) crewSource = "notes";
   }
+  if (!crew) {
+    crew = {
+      photographers: 0,
+      assistants: 0,
+      videographers: 0,
+      others: 0,
+      headcount: 0,
+    };
+  }
+
+  const total =
+    input.total != null && Number.isFinite(Number(input.total))
+      ? Number(input.total)
+      : null;
+  const pricePerHour =
+    hours != null && hours > 0 && total != null && total > 0
+      ? Math.round(total / hours)
+      : null;
 
   return {
     hours,
@@ -240,6 +322,7 @@ export function extractQuoteShootFeatures(input: {
     crewBucket: crewBucketFromHeadcount(crew.headcount),
     crewLabel: formatCrewLabel(crew),
     crewSource,
+    pricePerHour,
   };
 }
 
@@ -254,19 +337,79 @@ export function percentile(sorted: number[], p: number): number {
   return sorted[lo] * (1 - w) + sorted[hi] * w;
 }
 
-export function summarizeTotals(totals: number[]) {
-  const sorted = [...totals].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+/** Drop extreme outliers via IQR fence when sample is large enough. */
+export function trimOutliers(values: number[], minForTrim = 5): number[] {
+  const sorted = [...values].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+  if (sorted.length < minForTrim) return sorted;
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  if (iqr <= 0) return sorted;
+  const lo = q1 - 1.5 * iqr;
+  const hi = q3 + 1.5 * iqr;
+  const trimmed = sorted.filter((n) => n >= lo && n <= hi);
+  return trimmed.length >= 3 ? trimmed : sorted;
+}
+
+export function summarizeTotals(totals: number[], opts?: { trim?: boolean }) {
+  const raw = [...totals].filter((n) => Number.isFinite(n) && n > 0);
+  const sorted = opts?.trim === false ? raw.sort((a, b) => a - b) : trimOutliers(raw);
   if (sorted.length === 0) {
-    return { count: 0, avg: 0, min: 0, max: 0, p25: 0, p50: 0, p75: 0 };
+    return {
+      count: 0,
+      rawCount: raw.length,
+      avg: 0,
+      min: 0,
+      max: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      trimmed: 0,
+    };
   }
   const sum = sorted.reduce((a, b) => a + b, 0);
   return {
     count: sorted.length,
+    rawCount: raw.length,
     avg: Math.round(sum / sorted.length),
     min: Math.round(sorted[0]),
     max: Math.round(sorted[sorted.length - 1]),
     p25: Math.round(percentile(sorted, 0.25)),
     p50: Math.round(percentile(sorted, 0.5)),
     p75: Math.round(percentile(sorted, 0.75)),
+    trimmed: Math.max(0, raw.length - sorted.length),
   };
+}
+
+/**
+ * Time-weighted median: recent quotes weigh more (half-life ~180 days).
+ */
+export function timeWeightedMedian(
+  points: Array<{ value: number; at: Date | string | null | undefined }>
+): number | null {
+  const now = Date.now();
+  const halfLifeMs = 180 * 24 * 60 * 60 * 1000;
+  const rows = points
+    .map((p) => {
+      const v = Number(p.value);
+      if (!Number.isFinite(v) || v <= 0) return null;
+      const t = p.at ? new Date(p.at).getTime() : now;
+      const age = Number.isFinite(t) ? Math.max(0, now - t) : 0;
+      const weight = Math.pow(0.5, age / halfLifeMs);
+      return { value: v, weight };
+    })
+    .filter((x): x is { value: number; weight: number } => x != null)
+    .sort((a, b) => a.value - b.value);
+
+  if (rows.length === 0) return null;
+  const totalW = rows.reduce((s, r) => s + r.weight, 0);
+  if (totalW <= 0) return Math.round(rows[Math.floor(rows.length / 2)].value);
+
+  let acc = 0;
+  const target = totalW / 2;
+  for (const r of rows) {
+    acc += r.weight;
+    if (acc >= target) return Math.round(r.value);
+  }
+  return Math.round(rows[rows.length - 1].value);
 }

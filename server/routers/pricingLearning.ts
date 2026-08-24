@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
+  backfillStructuredShootFields,
   getPricingLearningByServiceType,
   getPricingLearningOverview,
   suggestPriceFromLearning,
@@ -50,6 +51,23 @@ export const pricingLearningRouter = router({
         serviceType: input.serviceType,
         hours: input.hours,
         crewSize: input.crewSize,
+      });
+    }),
+
+  /** One-shot: fill structured hours/crew from historical free text when empty. */
+  backfillStructured: protectedProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(2000).default(500),
+          dryRun: z.boolean().default(false),
+        })
+        .optional()
+    )
+    .mutation(async ({ input }) => {
+      return backfillStructuredShootFields({
+        limit: input?.limit ?? 500,
+        dryRun: input?.dryRun ?? false,
       });
     }),
 });
