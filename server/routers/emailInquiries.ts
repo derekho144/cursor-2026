@@ -124,7 +124,7 @@ async function generatePersonalisedOpening(jobTitle: string, jobDescription: str
       messages: [
         {
           role: "system",
-          content: `You are a professional business development writer for JD STUDIO HK, a Hong Kong photography, videography, and design company.\nJD Studio offers: photography (event, corporate, product, food, portrait, wedding), videography (corporate video, event filming, promotional), and design (graphic design, branding, logo, annual report, poster, print design, namecard).\nWrite 1-2 short, natural English sentences that:\n1. Show you have read the specific job posting (reference a specific detail from the description)\n2. Express genuine interest in the project\n3. Sound warm and professional, NOT generic\n4. Are suitable as an opening paragraph in a cold outreach email\nDo NOT start with "I" or "We noticed". Do NOT mention the company name. Output ONLY the 1-2 sentences, no greeting, no sign-off.`,
+          content: `You are a professional business development writer for JD STUDIO HK, a Hong Kong photography, videography, and design company.\nJD Studio offers: photography (event, corporate, product, food, portrait, wedding), videography (corporate video, event filming, promotional), and design (graphic design, branding, logo, annual report, poster, print design, namecard).\nWrite 1-2 short, natural English sentences that:\n1. Show you have read the specific job posting (reference a specific detail from the description)\n2. Express genuine interest in the project\n3. Sound warm and professional, NOT generic\n4. Are suitable as an opening paragraph in a cold outreach email\nDo NOT start with "I" or "We noticed". Do NOT mention the company name. Do NOT mention any price, budget, estimate, HK$, or dollar amount. Output ONLY the 1-2 sentences, no greeting, no sign-off.`,
         },
         {
           role: "user",
@@ -1158,16 +1158,15 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
 };
 
 export async function generateAIMeetingDraft(params: MeetingDraftParams): Promise<string> {
-  const { clientName, serviceType, shootingDate, shootingLocation, eventName, notes, pricingMid, subject } = params;
+  const { clientName, serviceType, shootingDate, shootingLocation, eventName, notes, subject } = params;
   const serviceLabel = (serviceType && SERVICE_TYPE_LABELS[serviceType]) || serviceType || "photography / videography services";
-  const estimatedBudget = pricingMid ? `HK$${Number(pricingMid).toLocaleString()}` : "";
+  // pricingMid is intentionally NOT passed to the LLM — never mention prices in client emails.
 
   const contextLines: string[] = [];
   if (serviceLabel) contextLines.push(`Service type: ${serviceLabel}`);
   if (shootingDate) contextLines.push(`Requested date: ${shootingDate}`);
   if (shootingLocation) contextLines.push(`Location: ${shootingLocation}`);
   if (eventName) contextLines.push(`Event name: ${eventName}`);
-  if (estimatedBudget) contextLines.push(`Estimated budget: ${estimatedBudget}`);
   if (notes) contextLines.push(`Client notes: ${notes}`);
   if (subject) contextLines.push(`Email subject: ${subject}`);
 
@@ -1191,6 +1190,7 @@ JD STUDIO HK
 Tel No: (852) 9153 1976
 Web: https://jdstudiohk.com/
 
+CRITICAL: Do NOT mention any price, budget, estimate, quote amount, HK$, or dollar figures anywhere in the email. Pricing is discussed only after the meeting.
 Do NOT include a subject line. Start directly with "Dear ${clientName},". Output only the email body text, no markdown formatting.`;
 
   const llmResponse = await invokeLLM({
@@ -1939,7 +1939,6 @@ Web: https://jdstudiohk.com/`;
       const shootingLocation = aiParsed?.shootingLocation || "";
       const eventName = aiParsed?.eventName || "";
       const notes = aiParsed?.notes || "";
-      const estimatedBudget = aiParsed?.pricingMid ? `HK$${Number(aiParsed.pricingMid).toLocaleString()}` : "";
       const subject = inquiry.subject || "";
 
       const serviceTypeLabels: Record<string, string> = {
@@ -1968,7 +1967,6 @@ Web: https://jdstudiohk.com/`;
       if (shootingDate) contextLines.push(`Requested date: ${shootingDate}`);
       if (shootingLocation) contextLines.push(`Location: ${shootingLocation}`);
       if (eventName) contextLines.push(`Event name: ${eventName}`);
-      if (estimatedBudget) contextLines.push(`Estimated budget: ${estimatedBudget}`);
       if (notes) contextLines.push(`Client notes: ${notes}`);
       if (subject) contextLines.push(`Email subject: ${subject}`);
 
@@ -1991,6 +1989,7 @@ JD STUDIO HK
 Tel No: (852) 9153 1976
 Web: https://jdstudiohk.com/
 
+CRITICAL: Do NOT mention any price, budget, estimate, quote amount, HK$, or dollar figures anywhere in the email. Pricing is discussed only after the meeting.
 Do NOT include a subject line. Start directly with "Dear ${clientName},". Output only the email body text, no markdown formatting.`;
 
       const llmResponse = await invokeLLM({
