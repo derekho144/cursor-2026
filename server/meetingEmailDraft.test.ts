@@ -72,7 +72,7 @@ describe("generateAIMeetingDraft", () => {
     ).rejects.toThrow("LLM returned empty response");
   });
 
-  it("includes estimated budget in prompt when pricingMid is provided", async () => {
+  it("does NOT include estimated budget in prompt even when pricingMid is provided", async () => {
     mockInvokeLLM.mockResolvedValueOnce({
       choices: [{ message: { content: "Dear Carol,\n\nThank you.", role: "assistant" } }],
     } as any);
@@ -85,7 +85,9 @@ describe("generateAIMeetingDraft", () => {
 
     const callArgs = mockInvokeLLM.mock.calls[0]?.[0];
     const userMessage = callArgs?.messages?.find((m: any) => m.role === "user")?.content as string;
-    expect(userMessage).toContain("HK$8,000");
+    expect(userMessage).not.toContain("HK$8,000");
+    expect(userMessage).not.toContain("Estimated budget");
+    expect(userMessage).toContain("Do NOT mention any price");
     expect(userMessage).toContain("corporate event photography");
   });
 
