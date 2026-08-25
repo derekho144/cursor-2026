@@ -1,8 +1,10 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
+  evaluateSuggestConfidence,
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
   isQuoteEligibleForPricingLearning,
+  SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
 
 describe("pricingLearningConfig", () => {
@@ -34,5 +36,47 @@ describe("pricingLearningConfig", () => {
     expect(
       isQuoteEligibleForPricingLearning(new Date("2026-09-01T12:00:00+08:00"))
     ).toBe(true);
+  });
+});
+
+describe("evaluateSuggestConfidence", () => {
+  it("hides suggestion below MIN_SHOW", () => {
+    const r = evaluateSuggestConfidence({ acceptedCount: 7, structuredCount: 7 });
+    expect(r.confidence).toBe("none");
+    expect(r.showSuggestion).toBe(false);
+    expect(r.progress.needForShow).toBe(SUGGEST_TRUST.MIN_SHOW_ACCEPTED);
+  });
+
+  it("marks 8–14 as advisory", () => {
+    const r = evaluateSuggestConfidence({
+      acceptedCount: 10,
+      structuredCount: 10,
+    });
+    expect(r.confidence).toBe("advisory");
+    expect(r.showSuggestion).toBe(true);
+  });
+
+  it("marks 15+ with enough structured as usable", () => {
+    const r = evaluateSuggestConfidence({
+      acceptedCount: 15,
+      structuredCount: 8,
+    });
+    expect(r.confidence).toBe("usable");
+  });
+
+  it("keeps 15+ with low structured as advisory", () => {
+    const r = evaluateSuggestConfidence({
+      acceptedCount: 15,
+      structuredCount: 4,
+    });
+    expect(r.confidence).toBe("advisory");
+  });
+
+  it("marks 25+ with high structured as trusted", () => {
+    const r = evaluateSuggestConfidence({
+      acceptedCount: 25,
+      structuredCount: 18,
+    });
+    expect(r.confidence).toBe("trusted");
   });
 });

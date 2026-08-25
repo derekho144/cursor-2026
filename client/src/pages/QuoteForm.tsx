@@ -1419,10 +1419,18 @@ export default function QuoteForm() {
                   style={{ color: "#d4a843", letterSpacing: "0.1em" }}
                 >
                   定價參考（學習）
+                  {priceSuggest.confidenceShortLabel
+                    ? ` · ${priceSuggest.confidenceShortLabel}`
+                    : ""}
                   {priceSuggest.winRate?.winPct != null
                     ? ` · 同類勝率 ${priceSuggest.winRate.winPct}%（${priceSuggest.winRate.accepted}/${priceSuggest.winRate.decided}）`
                     : ""}
                 </div>
+                {priceSuggest.confidence === "advisory" && (
+                  <div className="text-[11px]" style={{ color: "#fbbf24" }}>
+                    僅供參考 — 樣本仍少，唔好直接當開價。
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                   {priceSuggest.packages &&
                     (
@@ -1446,6 +1454,8 @@ export default function QuoteForm() {
                     ))}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
+                  {priceSuggest.note}
+                  {" "}
                   {priceSuggest.costFloorNote}
                   {pricingMode === "time_crew" &&
                   (form.durationPackage === "half_day" ||
@@ -1469,8 +1479,19 @@ export default function QuoteForm() {
                   border: "1px solid rgba(212,168,67,0.15)",
                 }}
               >
-                定價學習由 {priceSuggest.learningStartLabel ?? "指定日期"}（香港時間）起計；
-                舊報價唔作參考。{priceSuggest.note ?? "新成交樣本不足，暫無建議價。"}
+                <div style={{ color: "#d4a843", marginBottom: 4 }}>
+                  {priceSuggest.confidenceLabel ?? "建議價未達門檻"}
+                </div>
+                {priceSuggest.note ??
+                  `定價學習由 ${priceSuggest.learningStartLabel ?? "指定日期"}（香港時間）起計；舊報價唔作參考。`}
+                {priceSuggest.trustProgress ? (
+                  <div className="mt-1">
+                    進度：已接受 {priceSuggest.trustProgress.accepted} /{" "}
+                    {priceSuggest.trustProgress.needForShow} 筆先顯示；
+                    {priceSuggest.trustProgress.needForUsable} 筆先「可參考」；
+                    {priceSuggest.trustProgress.needForTrusted} 筆先「較可信」。
+                  </div>
+                ) : null}
               </div>
             )}
 

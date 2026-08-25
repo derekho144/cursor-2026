@@ -38,9 +38,11 @@ import {
   rejectReasonCategoryLabel,
 } from "../shared/quoteRejectReasons";
 import {
+  evaluateSuggestConfidence,
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
   pricingLearningStartAtIso,
+  SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
 
 const MIN_BUCKET_SAMPLES = 2;
@@ -570,6 +572,7 @@ export async function getPricingLearningOverview() {
             ),
       tips: [
         `只計 ${formatPricingLearningStartAtLabel()}（香港時間）之後建立嘅報價；舊單已排除。`,
+        `建議價門檻：≥${SUGGEST_TRUST.MIN_SHOW_ACCEPTED} 筆先顯示；≥${SUGGEST_TRUST.MIN_USABLE_ACCEPTED} 筆＋結構化≥50% 先「可參考」；≥${SUGGEST_TRUST.MIN_TRUSTED_ACCEPTED} 筆＋結構化≥70% 先「較可信」。`,
         "無法保證 100% 自動回填：只會寫入文字／項目裏已有明確訊號嘅欄位（例如「4小時」「Team 1P」「20張」）。",
         "已接受＋已拒絕都會回填結構化欄位；成交中位／建議價仍然只用已接受，避免拒單價拉歪。",
         "產品／食物／珠寶等：填「交付張數」；活動／錄影：填時數同人手。",
@@ -848,8 +851,18 @@ export async function suggestPriceFromLearning(input: {
       : null;
 
   const mid = weightedMid ?? summary.p50;
+  const structuredInUse = useRows.filter((r) => {
+    if (mode === "shot_count") return r.hasStructuredShotCount;
+    return r.hasStructuredHours && r.hasStructuredCrew;
+  }).length;
+
+  const trust = evaluateSuggestConfidence({
+    acceptedCount: summary.count,
+    structuredCount: structuredInUse,
+  });
+
   const packages =
-    summary.count >= MIN_BUCKET_SAMPLES
+    trust.showSuggestion && summary.count >= SUGGEST_TRUST.MIN_SHOW_ACCEPTED
       ? {
           essential: {
             label: "Essential（減範圍保質素）",
@@ -910,9 +923,15 @@ export async function suggestPriceFromLearning(input: {
       durationPackage: durationPkg,
     },
     sampleCount: summary.count,
+    structuredCount: structuredInUse,
     preferredStructured: structuredMatched.length >= MIN_BUCKET_SAMPLES,
+    confidence: trust.confidence,
+    confidenceLabel: trust.label,
+    confidenceShortLabel: trust.shortLabel,
+    trustProgress: trust.progress,
+    showSuggestion: trust.showSuggestion,
     suggestion:
-      summary.count >= MIN_BUCKET_SAMPLES
+      trust.showSuggestion
         ? {
             low: summary.p25,
             mid,
@@ -928,14 +947,13 @@ export async function suggestPriceFromLearning(input: {
     avgOverBudgetOnPriceRejects: avgOverBudget,
     costFloorNote:
       "唔好為成交砍穿成本底線；客人嫌貴優先出 Essential（減範圍），唔係減質素時薪。",
-    note:
-      summary.count < MIN_BUCKET_SAMPLES
-        ? `自 ${formatPricingLearningStartAtLabel()} 起累積樣本不足（${summary.count} 筆）；請先用市場價，並為新單填齊${
-            mode === "shot_count" ? "交付張數" : "時數／人手／時長套餐"
-          }。`
-        : useRows.length < rows.length
-          ? `已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選（${structuredMatched.length >= MIN_BUCKET_SAMPLES ? "優先結構化" : "含文字抽取"}），剩餘 ${useRows.length} / ${rows.length} 筆同類成交。`
-          : `基於 ${summary.count} 筆「${input.serviceType}」已接受報價（已剔除離群值）。`,
+    note: trust.showSuggestion
+      ? `${trust.note}${
+          useRows.length < rows.length
+            ? ` 已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選至 ${useRows.length} / ${rows.length} 筆。`
+            : ""
+        }`
+      : trust.note,
     comparables: useRows.slice(0, 8).map((r) => ({
       id: r.id,
       quoteNumber: r.quoteNumber,

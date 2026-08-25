@@ -707,6 +707,26 @@ export default function PricingLearning() {
               )}
             </div>
             <div className="flex flex-col justify-end">
+              {suggestion?.confidenceLabel && (
+                <div
+                  className="text-xs mb-1.5"
+                  style={{
+                    color:
+                      suggestion.confidence === "trusted"
+                        ? "#86efac"
+                        : suggestion.confidence === "usable"
+                          ? "#d4a843"
+                          : suggestion.confidence === "advisory"
+                            ? "#fbbf24"
+                            : "#999",
+                  }}
+                >
+                  {suggestion.confidenceLabel}
+                  {suggestion.trustProgress
+                    ? ` · ${suggestion.trustProgress.accepted}/${suggestion.trustProgress.needForTrusted} 筆`
+                    : ""}
+                </div>
+              )}
               {suggestion?.suggestion ? (
                 <div>
                   <div className="text-xs text-muted-foreground">建議中位</div>
@@ -957,6 +977,7 @@ export default function PricingLearning() {
           style={{ background: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.12)" }}
         >
           學習起點：{overview?.learningStartLabel ?? "—"}（香港時間）— 此前舊報價唔計入。
+          建議價門檻：≥8 筆先顯示；≥15 筆＋結構化≥50%「可參考」；≥25 筆＋結構化≥70%「較可信」。
           新單請填齊結構化欄位；回填只處理起點之後嘅報價。
         </div>
       </div>
