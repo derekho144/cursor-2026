@@ -29,6 +29,10 @@ import { eq, like, or, and, desc } from "drizzle-orm";
 import { resolveQuoteLeadSource } from "../_core/leadSource";
 import { appBaseUrl, buildWaTrackUrl, waTrackAnchor } from "../_core/waTracking";
 import { CREW_BILLING_RULES, detectCrewHighValue } from "../inquiryCrewHighValue";
+import {
+  evaluateInquiryDraftReadiness,
+  formatInquiryDraftNotes,
+} from "../../shared/inquiryDraftReadiness";
 
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
@@ -759,8 +763,9 @@ jewelry photography
   - Example: 20 pieces x HKD 300 = HKD 6,000.
 
 corporate_event photography
-  - Main item: "Event Photography" - billed PER HOUR. Extract event duration from email. Default: 4 hours.
+  - Main item: "Event Photography" - billed PER HOUR. Extract event duration from email. Default: 5 hours (half-day) only if duration missing — then quantitySource must be "assumed".
   - Corporate/commercial events: HKD 1,000/hr. Personal events (birthday, wedding, etc.): HKD 700/hr.
+  - Half-day ≈ 4–5 hours; full-day ≈ 6–10 hours. Set durationPackage accordingly.
   - Retouching is INCLUDED. Add "Transportation Fee" HKD 320 (fixed, always include).
   - If videography also requested, add "Event Videography" per hour HKD 1,500-2,500 + "Video Editing" flat HKD 2,000-4,000.
   - Example (corporate, 4 hrs): 4 x HKD 1,000 + transport HKD 320 = HKD 4,320.
@@ -806,11 +811,14 @@ RETOUCHING SUMMARY (CRITICAL):
 
 IMPORTANT RULES FOR ALL SERVICE TYPES:
 1. ALWAYS extract quantity signals from the email: number of items/products/dishes/hours/rooms/pieces mentioned.
-2. If no quantity is mentioned, use the DEFAULT VALUE above and append "(assumed X - please confirm)" to the item description.${CREW_BILLING_RULES}
-3. Transportation Fee is ALWAYS HKD 320 (fixed). Never change this amount.
-4. pricingMid MUST equal the exact sum of (quantity x unitPrice) across all suggestedItems.
-5. pricingLow = pricingMid x 0.7 (rounded to nearest 100). pricingHigh = pricingMid x 1.35 (rounded to nearest 100).
-6. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
+2. If no quantity is mentioned, use the DEFAULT VALUE above, set quantitySource="assumed", list the assumption in assumptions[], and append "(assumed X - please confirm)" to the item description.
+3. If quantity IS clearly stated in the email, set quantitySource="explicit".
+4. Transportation Fee is ALWAYS HKD 320 (fixed). Never change this amount.
+5. pricingMid MUST equal the exact sum of (quantity x unitPrice) across all suggestedItems.
+6. pricingLow = pricingMid x 0.7 (rounded to nearest 100). pricingHigh = pricingMid x 1.35 (rounded to nearest 100).
+7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
+8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
+${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
 These tiers use PSYCHOLOGICAL PRICING principles: each tier boundary is set at a natural decision point where clients feel they are getting meaningful value. Use the EXACT unit prices below — do NOT interpolate.
@@ -904,22 +912,31 @@ Extract and return a JSON object with these fields:
 - clientCompany: string (company name if mentioned, or empty string)
 - serviceType: one of ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"]
   (use "kol_mi" for KOL/influencer marketing, social media content creation, MI promotions)
-- shootingDate: string (date mentioned, YYYY-MM-DD format, or empty string)
+- eventName: string (event / project name if mentioned, else empty string)
+- shootingDate: string (date mentioned, YYYY-MM-DD format, or empty string — do NOT invent)
 - shootingLocation: string (location mentioned, or empty string)
-- notes: string (summary of requirements in Traditional Chinese, max 200 chars; if any quantities were assumed due to missing info, append the assumptions e.g. "假設拍攝 10 件產品，如有不同請告知")
+- shootHours: number (hours clearly stated or 0 if unknown; half-day ≈ 4–5, full-day ≈ 6–10)
+- shotCount: number (delivered image/piece count clearly stated, or 0 if unknown)
+- durationPackage: one of ["hours","half_day","full_day","multi_day","unknown"]
+- crewPhotographers: number (photographers if stated, else 0)
+- crewVideographers: number (videographers if stated, else 0)
+- quantitySource: "explicit" | "assumed" | "unknown"
+  (explicit = email clearly states hours or shot count; assumed = you used a default; unknown = cannot tell)
+- assumptions: string[] (Traditional Chinese list of assumptions you made, empty array if none)
+- missingFields: string[] (field names still unclear, e.g. ["shootHours","shotCount","shootingDate"])
+- notes: string (summary of requirements in Traditional Chinese, max 280 chars; mention key needs first)
 - pricingTier: "low" | "mid" | "high" (which tier was used for suggestedItems)
 - pricingSource: "historical" | "market_reference" (data source used)
 - pricingLow: number (= pricingMid x 0.7, rounded to nearest 100)
 - pricingMid: number (= exact sum of quantity x unitPrice across all suggestedItems)
 - pricingHigh: number (= pricingMid x 1.35, rounded to nearest 100)
 - suggestedItems: array of objects with { description: string, quantity: number, unitPrice: number }
-  - MUST follow the BILLING RULES above for the detected serviceType
-  - Extract quantity from the email; if not mentioned, use the default and note assumption in description e.g. "Product Photography (assumed 10 items - please confirm)"
-  - Base unitPrice on HISTORICAL DATA if available, otherwise use the BILLING RULES ranges
+  - MUST follow the BILLING RULES / TIERED PRICING above for the detected serviceType (tiered rates are source of truth for unit prices)
+  - Extract quantity from the email; if not mentioned, use the default, set quantitySource="assumed", and note in description + assumptions
   - Descriptions in English (professional photography terms)
   - Transportation Fee MUST always be HKD 320 (fixed rate) - never $0, never other amounts
   - unitPrice CAN be 0 ONLY if the service is genuinely bundled/complimentary
-- confidence: "high" | "medium" | "low" (how confident you are this is a genuine photography inquiry)
+- confidence: "high" | "medium" | "low" (how confident you are this is a genuine photography inquiry AND you understood the core need)
 - isInquiry: boolean (true if this is genuinely a photography/design service inquiry)`;
 
 
@@ -942,8 +959,23 @@ Extract and return a JSON object with these fields:
               clientPhone: { type: "string" },
               clientCompany: { type: "string" },
               serviceType: { type: "string" },
+              eventName: { type: "string" },
               shootingDate: { type: "string" },
               shootingLocation: { type: "string" },
+              shootHours: { type: "number" },
+              shotCount: { type: "number" },
+              durationPackage: { type: "string" },
+              crewPhotographers: { type: "number" },
+              crewVideographers: { type: "number" },
+              quantitySource: { type: "string" },
+              assumptions: {
+                type: "array",
+                items: { type: "string" },
+              },
+              missingFields: {
+                type: "array",
+                items: { type: "string" },
+              },
               notes: { type: "string" },
               suggestedItems: {
                 type: "array",
@@ -966,7 +998,33 @@ Extract and return a JSON object with these fields:
               confidence: { type: "string" },
               isInquiry: { type: "boolean" },
             },
-            required: ["clientName", "clientEmail", "clientPhone", "clientCompany", "serviceType", "shootingDate", "shootingLocation", "notes", "pricingTier", "pricingSource", "pricingLow", "pricingMid", "pricingHigh", "suggestedItems", "confidence", "isInquiry"],
+            required: [
+              "clientName",
+              "clientEmail",
+              "clientPhone",
+              "clientCompany",
+              "serviceType",
+              "eventName",
+              "shootingDate",
+              "shootingLocation",
+              "shootHours",
+              "shotCount",
+              "durationPackage",
+              "crewPhotographers",
+              "crewVideographers",
+              "quantitySource",
+              "assumptions",
+              "missingFields",
+              "notes",
+              "pricingTier",
+              "pricingSource",
+              "pricingLow",
+              "pricingMid",
+              "pricingHigh",
+              "suggestedItems",
+              "confidence",
+              "isInquiry",
+            ],
             additionalProperties: false,
           },
         },
@@ -995,6 +1053,17 @@ Extract and return a JSON object with these fields:
         }
       }
     }
+
+    // Normalize extras + draft readiness (understanding quality gate)
+    if (!Array.isArray(parsed.assumptions)) parsed.assumptions = [];
+    if (!Array.isArray(parsed.missingFields)) parsed.missingFields = [];
+    if (!parsed.quantitySource) {
+      const assumedFromItems = (parsed.suggestedItems ?? []).some((it: any) =>
+        /assumed|假設/i.test(String(it?.description ?? ""))
+      );
+      parsed.quantitySource = assumedFromItems ? "assumed" : "unknown";
+    }
+    parsed.draftReadiness = evaluateInquiryDraftReadiness(parsed);
 
     return parsed;
   } catch (e) {
@@ -1336,7 +1405,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
       skipped++; continue; 
     }
 
-    const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 3000), fromEmail);
+    const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 8000), fromEmail);
 
     // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
     let externalLink: string | null = null;
@@ -1348,10 +1417,14 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     }
 
     // AI 高信心度（high）且是真正詢價：
-    // - 非 FH 來源 → 設為 pending_send（待管理員確認後發送報價）
+    // - 非 FH 來源 → 設為 pending_send（待管理員確認後發送報價）——仍需 draftReadiness
     // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程，不應進入此流程）
     const isFHSource = isFreehunterEmail(fromEmail, htmlBody);
     const isHighConfidence = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
+    const draftReadiness =
+      aiResult?.draftReadiness ??
+      (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
+    const readyForAutoDraft = !!draftReadiness?.readyForAutoDraft;
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
     const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}`);
@@ -1365,7 +1438,10 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
         `[EmailInquiry] Crew high-value override for ${fromEmail}: ${crewSignal.reasons.join(", ")}`
       );
     }
-    const inquiryStatus = isHighConfidence && !isFHSource && !isHighValue ? "pending_send" : "pending";
+    const inquiryStatus =
+      isHighConfidence && !isFHSource && !isHighValue && readyForAutoDraft
+        ? "pending_send"
+        : "pending";
     // Generate meeting email draft for high-value inquiries using LLM
     let meetingEmailDraft: string | undefined;
     if (isHighValue) {
@@ -1431,8 +1507,8 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
         console.error("[EmailInquiry] Failed to auto-send meeting email:", e);
       }
     }
-    // AI 高信心度 + 非 FH 來源 + 非高價值：自動建立草稿報價單，等待管理員確認後發送
-    if (isHighConfidence && !isFHSource && !isHighValue && inquiry) {
+    // AI 高信心度 + 非 FH 來源 + 非高價值 + 需求夠清晰：自動建立草稿報價單，等待管理員確認後發送
+    if (isHighConfidence && !isFHSource && !isHighValue && readyForAutoDraft && inquiry) {
       try {
         const clientName = aiResult?.clientName || fromName || fromEmail;
         const items = (aiResult?.suggestedItems ?? []).map((item: any, idx: number) => {
@@ -1459,17 +1535,42 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
           serviceType: (aiResult?.serviceType as any) || "other",
           shootingDate: aiResult?.shootingDate || "",
           shootingLocation: aiResult?.shootingLocation || "",
-          notes: `[AI 自動草稿 - 待確認發送]
-寄件人: ${fromEmail}
-主題: ${subject}
-
-${aiResult?.notes || ""}`,
+          notes: formatInquiryDraftNotes({
+            fromEmail: fromEmail || "",
+            subject: subject || "",
+            aiNotes: aiResult?.notes,
+            readiness: draftReadiness,
+            autoDraft: true,
+          }),
           subtotal: subtotalNum.toString(),
           discountAmount: "0",
           total: subtotalNum.toString(),
           currency: "HKD",
           status: "draft",
           emailInquiryId: inquiry.id,
+          shootHours:
+            aiResult?.shootHours != null && Number(aiResult.shootHours) > 0
+              ? String(aiResult.shootHours)
+              : undefined,
+          shotCount:
+            aiResult?.shotCount != null && Number(aiResult.shotCount) > 0
+              ? Number(aiResult.shotCount)
+              : undefined,
+          durationPackage:
+            aiResult?.durationPackage === "hours" ||
+            aiResult?.durationPackage === "half_day" ||
+            aiResult?.durationPackage === "full_day" ||
+            aiResult?.durationPackage === "multi_day"
+              ? aiResult.durationPackage
+              : undefined,
+          crewPhotographers:
+            aiResult?.crewPhotographers != null
+              ? Number(aiResult.crewPhotographers) || 0
+              : undefined,
+          crewVideographers:
+            aiResult?.crewVideographers != null
+              ? Number(aiResult.crewVideographers) || 0
+              : undefined,
           leadSource: resolveQuoteLeadSource({
             fromEmail,
             htmlBody,
@@ -1483,6 +1584,10 @@ ${aiResult?.notes || ""}`,
       } catch (e) {
         console.error("[EmailInquiry] Failed to create draft quote for pending_send inquiry:", e);
       }
+    } else if (isHighConfidence && !isFHSource && !isHighValue && !readyForAutoDraft) {
+      console.log(
+        `[EmailInquiry] High-confidence inquiry kept pending (not auto-draft): ${draftReadiness?.summary ?? "readiness unknown"}`
+      );
     }
 
     newInquiries++;
@@ -1558,7 +1663,7 @@ export const emailInquiriesRouter = router({
         if (!containsTriggerKeyword(combinedText)) { skipped++; continue; }
 
         // AI parse
-        const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 3000), fromEmail);
+        const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 8000), fromEmail);
 
         // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
         let externalLink: string | null = null;
@@ -1569,10 +1674,14 @@ export const emailInquiriesRouter = router({
           }
         }
         // AI 高信心度（high）且是真正詢價：
-        // - 非 FH 來源 → 設為 pending_send（待管理員確認後發送報價）
+        // - 非 FH 來源 → 設為 pending_send（待管理員確認後發送報價）——仍需 draftReadiness
         // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程）
         const isFHSrc = isFreehunterEmail(fromEmail, htmlBody);
         const isHighConf = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
+        const draftReadinessScan =
+          aiResult?.draftReadiness ??
+          (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
+        const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
         const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}`);
@@ -1586,7 +1695,10 @@ export const emailInquiriesRouter = router({
             `[EmailInquiry] scanGmail crew high-value override for ${fromEmail}: ${crewSignalScan.reasons.join(", ")}`
           );
         }
-        const inqStatus = isHighConf && !isFHSrc && !isHighValueScan ? "pending_send" : "pending";
+        const inqStatus =
+          isHighConf && !isFHSrc && !isHighValueScan && readyForAutoDraftScan
+            ? "pending_send"
+            : "pending";
         let meetingEmailDraftScan: string | undefined;
         if (isHighValueScan) {
           const clientNameScan = aiResult?.clientName || fromName || "Sir/Madam";
@@ -1651,8 +1763,8 @@ export const emailInquiriesRouter = router({
             console.error("[EmailInquiry] scanGmail: Failed to auto-send meeting email:", e);
           }
         }
-        // AI 高信心度 + 非 FH 來源 + 非高價值：自動建立草稿報價單，等待管理員確認後發送
-        if (isHighConf && !isFHSrc && !isHighValueScan && savedInquiry) {
+        // AI 高信心度 + 非 FH + 非高價值 + 需求夠清晰：自動建立草稿報價單
+        if (isHighConf && !isFHSrc && !isHighValueScan && readyForAutoDraftScan && savedInquiry) {
           try {
             const clientName = aiResult?.clientName || fromName || fromEmail;
             const items = (aiResult?.suggestedItems ?? []).map((item: any, idx: number) => ({
@@ -1665,6 +1777,10 @@ export const emailInquiriesRouter = router({
             if (items.length === 0) {
               items.push({ description: "Photography Service", quantity: 1, unitPrice: 0, amount: 0, sortOrder: 0 });
             }
+            const subtotalNum = items.reduce(
+              (sum: number, it: { amount: number }) => sum + it.amount,
+              0
+            );
             const newQuote = await createQuote({
               clientName,
               clientEmail: aiResult?.clientEmail || fromEmail,
@@ -1673,17 +1789,42 @@ export const emailInquiriesRouter = router({
               serviceType: (aiResult?.serviceType as any) || "other",
               shootingDate: aiResult?.shootingDate || "",
               shootingLocation: aiResult?.shootingLocation || "",
-              notes: `[AI 自動批核 - 待確認發送]
-寄件人: ${fromEmail}
-主題: ${subject}
-
-${aiResult?.notes || ""}`,
-              subtotal: "0",
+              notes: formatInquiryDraftNotes({
+                fromEmail: fromEmail || "",
+                subject: subject || "",
+                aiNotes: aiResult?.notes,
+                readiness: draftReadinessScan,
+                autoDraft: true,
+              }),
+              subtotal: subtotalNum.toString(),
               discountAmount: "0",
-              total: "0",
+              total: subtotalNum.toString(),
               currency: "HKD",
               status: "draft",
               emailInquiryId: savedInquiry.id,
+              shootHours:
+                aiResult?.shootHours != null && Number(aiResult.shootHours) > 0
+                  ? String(aiResult.shootHours)
+                  : undefined,
+              shotCount:
+                aiResult?.shotCount != null && Number(aiResult.shotCount) > 0
+                  ? Number(aiResult.shotCount)
+                  : undefined,
+              durationPackage:
+                aiResult?.durationPackage === "hours" ||
+                aiResult?.durationPackage === "half_day" ||
+                aiResult?.durationPackage === "full_day" ||
+                aiResult?.durationPackage === "multi_day"
+                  ? aiResult.durationPackage
+                  : undefined,
+              crewPhotographers:
+                aiResult?.crewPhotographers != null
+                  ? Number(aiResult.crewPhotographers) || 0
+                  : undefined,
+              crewVideographers:
+                aiResult?.crewVideographers != null
+                  ? Number(aiResult.crewVideographers) || 0
+                  : undefined,
               leadSource: resolveQuoteLeadSource({
                 fromEmail,
                 htmlBody,
@@ -1697,6 +1838,10 @@ ${aiResult?.notes || ""}`,
           } catch (e) {
             console.error("[EmailInquiry] scanGmail: Failed to create draft quote for pending_send inquiry:", e);
           }
+        } else if (isHighConf && !isFHSrc && !isHighValueScan && !readyForAutoDraftScan) {
+          console.log(
+            `[EmailInquiry] scanGmail: kept pending (not auto-draft): ${draftReadinessScan?.summary ?? "readiness unknown"}`
+          );
         }
         newInquiries++;
       }
@@ -1745,6 +1890,13 @@ ${aiResult?.notes || ""}`,
           if (items.length === 0) {
             items.push({ description: "Photography Service", quantity: 1, unitPrice: 0, amount: 0, sortOrder: 0 });
           }
+          const readiness =
+            aiParsed?.draftReadiness ??
+            (aiParsed ? evaluateInquiryDraftReadiness(aiParsed) : null);
+          const subtotalNum = items.reduce(
+            (sum: number, it: { amount: number }) => sum + it.amount,
+            0
+          );
           const newQuote = await createQuote({
             clientName: input.clientName || clientName,
             clientEmail: input.clientEmail || aiParsed?.clientEmail || existing.fromEmail,
@@ -1753,13 +1905,42 @@ ${aiResult?.notes || ""}`,
             serviceType: (aiParsed?.serviceType as any) || "other",
             shootingDate: aiParsed?.shootingDate || "",
             shootingLocation: aiParsed?.shootingLocation || "",
-            notes: `[自動從郵件生成]\n寄件人: ${existing.fromEmail}\n主題: ${existing.subject}\n\n${aiParsed?.notes || ""}`,
-            subtotal: "0",
+            notes: formatInquiryDraftNotes({
+              fromEmail: existing.fromEmail,
+              subject: existing.subject || "",
+              aiNotes: aiParsed?.notes,
+              readiness,
+              autoDraft: false,
+            }),
+            subtotal: subtotalNum.toString(),
             discountAmount: "0",
-            total: "0",
+            total: subtotalNum.toString(),
             currency: "HKD",
             status: "draft",
             emailInquiryId: input.id,
+            shootHours:
+              aiParsed?.shootHours != null && Number(aiParsed.shootHours) > 0
+                ? String(aiParsed.shootHours)
+                : undefined,
+            shotCount:
+              aiParsed?.shotCount != null && Number(aiParsed.shotCount) > 0
+                ? Number(aiParsed.shotCount)
+                : undefined,
+            durationPackage:
+              aiParsed?.durationPackage === "hours" ||
+              aiParsed?.durationPackage === "half_day" ||
+              aiParsed?.durationPackage === "full_day" ||
+              aiParsed?.durationPackage === "multi_day"
+                ? aiParsed.durationPackage
+                : undefined,
+            crewPhotographers:
+              aiParsed?.crewPhotographers != null
+                ? Number(aiParsed.crewPhotographers) || 0
+                : undefined,
+            crewVideographers:
+              aiParsed?.crewVideographers != null
+                ? Number(aiParsed.crewVideographers) || 0
+                : undefined,
             leadSource: resolveQuoteLeadSource({
               fromEmail: existing.fromEmail,
               bodyText: existing.bodyText,

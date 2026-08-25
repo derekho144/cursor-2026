@@ -329,14 +329,91 @@ Web: https://jdstudiohk.com/`);
                       ["電話", aiParsed.clientPhone],
                       ["公司", aiParsed.clientCompany],
                       ["服務類型", SERVICE_LABELS[aiParsed.serviceType] ?? aiParsed.serviceType],
+                      ["活動／項目", aiParsed.eventName],
                       ["拍攝日期", aiParsed.shootingDate],
                       ["拍攝地點", aiParsed.shootingLocation],
+                      [
+                        "時數",
+                        aiParsed.shootHours > 0 ? `${aiParsed.shootHours} 小時` : null,
+                      ],
+                      [
+                        "張數",
+                        aiParsed.shotCount > 0 ? `${aiParsed.shotCount} 張` : null,
+                      ],
+                      [
+                        "時長套餐",
+                        aiParsed.durationPackage && aiParsed.durationPackage !== "unknown"
+                          ? aiParsed.durationPackage
+                          : null,
+                      ],
+                      [
+                        "數量來源",
+                        aiParsed.quantitySource === "explicit"
+                          ? "客人明確提供"
+                          : aiParsed.quantitySource === "assumed"
+                            ? "AI 假設（請核實）"
+                            : aiParsed.quantitySource || null,
+                      ],
                     ].filter(([, v]) => v).map(([label, value]) => (
-                      <div key={label} className="flex gap-2">
+                      <div key={label as string} className="flex gap-2">
                         <span className="text-muted-foreground shrink-0 w-16">{label}</span>
-                        <span>{value}</span>
+                        <span>{value as string}</span>
                       </div>
                     ))}
+                    {aiParsed.draftReadiness && (
+                      <div
+                        className="mt-2 pt-2 rounded p-2 text-xs"
+                        style={{
+                          borderTop: "1px solid rgba(255,255,255,0.06)",
+                          background: aiParsed.draftReadiness.readyForAutoDraft
+                            ? "rgba(76,175,80,0.08)"
+                            : "rgba(255,176,32,0.08)",
+                          border: aiParsed.draftReadiness.readyForAutoDraft
+                            ? "1px solid rgba(76,175,80,0.25)"
+                            : "1px solid rgba(255,176,32,0.25)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            color: aiParsed.draftReadiness.readyForAutoDraft
+                              ? "#4caf50"
+                              : "#ffb020",
+                            marginBottom: 4,
+                          }}
+                        >
+                          {aiParsed.draftReadiness.readyForAutoDraft
+                            ? "草稿就緒 · 可自動開草稿"
+                            : "暫不自動開草稿"}
+                        </div>
+                        <div className="text-muted-foreground leading-relaxed">
+                          {aiParsed.draftReadiness.summary}
+                        </div>
+                      </div>
+                    )}
+                    {Array.isArray(aiParsed.assumptions) &&
+                      aiParsed.assumptions.length > 0 && (
+                        <div
+                          className="mt-2 pt-2"
+                          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          <div className="text-muted-foreground mb-1">假設（請核實）</div>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {aiParsed.assumptions.map((a: string, i: number) => (
+                              <li key={i}>{a}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    {Array.isArray(aiParsed.missingFields) &&
+                      aiParsed.missingFields.length > 0 && (
+                        <div
+                          className="mt-2 pt-2"
+                          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          <div className="text-muted-foreground mb-1">缺欄</div>
+                          <div>{aiParsed.missingFields.join("、")}</div>
+                        </div>
+                      )}
                     {aiParsed.notes && (
                       <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <div className="text-muted-foreground mb-1">需求摘要</div>
