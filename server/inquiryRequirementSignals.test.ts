@@ -9,6 +9,7 @@ import {
   HKRC_FIXTURE,
   HA_FIXTURE,
   VIDEO_CLIPS_FIXTURE,
+  CITIC_MEETING_FIXTURE,
 } from "./inquiryComprehension.fixtures";
 
 describe("extractRequirementSignals", () => {
@@ -76,6 +77,28 @@ describe("extractRequirementSignals", () => {
     expect(signals.some((s) => s.kind === "event_hours" && s.value === 5)).toBe(
       true
     );
+    expect(isMultiScopeSignals(signals)).toBe(true);
+  });
+
+  it("CITIC #12480003: 4h + 200 photos + 30 retouch + 1-min video, not 3-day deadline", () => {
+    const signals = extractRequirementSignals(CITIC_MEETING_FIXTURE);
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 4)).toBe(
+      true
+    );
+    expect(signals.some((s) => s.kind === "shot_count" && s.value === 200)).toBe(
+      true
+    );
+    expect(
+      signals.some((s) => s.kind === "retouch_count" && s.value === 30)
+    ).toBe(true);
+    expect(
+      signals.some((s) => s.kind === "revision_rounds" && s.value === 3)
+    ).toBe(true);
+    expect(
+      signals.some((s) => s.kind === "clip_seconds" && s.value === 60)
+    ).toBe(true);
+    expect(signals.some((s) => s.kind === "video_edit")).toBe(true);
+    expect(signals.some((s) => s.kind === "event_days")).toBe(false);
     expect(isMultiScopeSignals(signals)).toBe(true);
   });
 });

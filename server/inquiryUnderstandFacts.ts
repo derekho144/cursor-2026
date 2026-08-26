@@ -141,11 +141,11 @@ ${formatSignalsForPrompt(signals)}
 ${retry}
 
 Rules:
-1. Split distinct jobs into separate workPackages. Counted deliverables are jobs: event coverage, artwork/product stills, 去背/cutout, video clips / 剪片, extra days.
-2. kind must be one of: event, product_shoot, artwork_shoot, background_removal, video, other.
-3. unit must be one of: hours, days, shots, pieces, cutouts, clips, seconds, unknown.
-4. Never collapse 去背 / 作品特寫 / per-piece stills / 剪片 into event "retouching included".
-5. "N days" is days, not N hours. "活動後7天內交付" is turnaround, not shoot days.
+1. Split distinct jobs into separate workPackages. Counted deliverables are jobs: event coverage, artwork/product stills, 去背/cutout, video clips / 剪片 / 精選視頻, extra days, explicit 精修 N 張.
+2. kind must be one of: event, product_shoot, artwork_shoot, background_removal, video, retouch, other.
+3. unit must be one of: hours, days, shots, pieces, cutouts, clips, seconds, minutes, unknown.
+4. Never collapse 去背 / 作品特寫 / per-piece stills / 剪片 / 精選視頻 / 精修 N 張 into event "retouching included".
+5. "N days" is days, not N hours. "活動後7天內交付" and job-board 「N日內」are deadlines, not shoot days.
 6. If PDF lists quantities/dates, copy them. Do not invent shootingDate.
 7. multiScope=true if more than one real work package.
 8. primaryServiceType: one of corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, kol_mi, other.
@@ -154,6 +154,8 @@ Rules:
 11. confidence high ONLY if every machine signal is in a workPackage (or justified in missingFields).
 12. If the body says 詳見附件 / see attached but there is no PDF ATTACHMENT TEXT section, confidence medium/low and missingFields includes attachmentText.
 13. 「N 條影片／clips」+「每條 N 秒」= one video workPackage. quantity = number of clips; put per-clip duration in summary (e.g. 「3 條影片，每條 20 秒」). Do not fold this into Event Photography hours.
+14. 「下午1點到5點」= event hours from the clock range. 「1分鐘精選視頻」= highlight duration, NEVER event hours.
+15. 「不少於200張合格照片」and「精修不少於30張」are two packages. Do not keep only the larger shot count.
 
 Return JSON only.`;
 }

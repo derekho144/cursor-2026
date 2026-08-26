@@ -128,9 +128,62 @@ function coversClipSeconds(
   const v = signal.value;
   if (v == null) return false;
   const blob = blobOf(input);
-  return (
-    blob.includes(String(v)) && /秒|sec|second|clip/.test(blob)
-  );
+  if (blob.includes(String(v)) && /秒|sec|second|clip/.test(blob)) return true;
+  if (v % 60 === 0) {
+    const mins = v / 60;
+    if (
+      (blob.includes(String(mins)) || blob.includes(String(v))) &&
+      /分鐘|minute|\bmin\b|精選/.test(blob)
+    ) {
+      return true;
+    }
+  }
+  for (const p of input.workPackages ?? []) {
+    if (String(p.unit ?? "") === "seconds" && qtyClose(Number(p.quantity), v)) {
+      return true;
+    }
+    if (
+      v % 60 === 0 &&
+      String(p.unit ?? "") === "minutes" &&
+      qtyClose(Number(p.quantity), v / 60)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isRetouchText(s: string): boolean {
+  return /精修|修圖|retouch|photo\s*edit/i.test(s);
+}
+
+function coversRetouch(
+  signal: RequirementSignal,
+  input: Parameters<typeof blobOf>[0]
+): boolean {
+  const v = signal.value;
+  if (v == null) return false;
+  for (const p of input.workPackages ?? []) {
+    const text = `${p.kind ?? ""} ${p.summary ?? ""} ${p.unit ?? ""}`;
+    if (!isRetouchText(text) && String(p.kind ?? "") !== "retouch") continue;
+    if (qtyClose(Number(p.quantity), v)) return true;
+  }
+  for (const it of input.suggestedItems ?? []) {
+    if (!isRetouchText(String(it.description ?? ""))) continue;
+    if (qtyClose(Number(it.quantity), v)) return true;
+  }
+  const blob = blobOf(input);
+  return blob.includes(String(v)) && isRetouchText(blob);
+}
+
+function coversRevisionRounds(
+  signal: RequirementSignal,
+  input: Parameters<typeof blobOf>[0]
+): boolean {
+  const v = signal.value;
+  if (v == null) return false;
+  const blob = blobOf(input);
+  return blob.includes(String(v)) && /次|round|revision/.test(blob);
 }
 
 function coversVideoEdit(input: Parameters<typeof blobOf>[0]): boolean {
@@ -166,6 +219,7 @@ function isCollapsedToEventHours(
   input: Parameters<typeof blobOf>[0]
 ): boolean {
   const hasShot = signals.some((s) => s.kind === "shot_count" && (s.value ?? 0) >= 20);
+  const hasRetouch = signals.some((s) => s.kind === "retouch_count" && (s.value ?? 0) >= 8);
   const hasCutout = signals.some((s) => s.kind === "background_removal");
   const hasVideo = signals.some(
     (s) =>
@@ -173,10 +227,13 @@ function isCollapsedToEventHours(
       s.kind === "clip_seconds" ||
       s.kind === "video_edit"
   );
-  if (!hasShot && !hasCutout && !hasVideo) return false;
+  if (!hasShot && !hasRetouch && !hasCutout && !hasVideo) return false;
 
   const items = input.suggestedItems ?? [];
   const hasLargeShotLine = items.some((it) => Number(it.quantity) >= 20);
+  const hasRetouchLine = items.some((it) =>
+    isRetouchText(String(it.description ?? ""))
+  );
   const hasCutoutLine = items.some((it) =>
     /去背|cut[\s-]?out|background/i.test(String(it.description ?? ""))
   );
@@ -184,7 +241,7 @@ function isCollapsedToEventHours(
     /video|clip|film|reel|影片|剪接|剪輯/i.test(String(it.description ?? ""))
   );
   const pkgHasStill = (input.workPackages ?? []).some((p) =>
-    /artwork|product|background|shot/i.test(`${p.kind ?? ""} ${p.unit ?? ""}`)
+    /artwork|product|background|shot|retouch/i.test(`${p.kind ?? ""} ${p.unit ?? ""}`)
   );
   const pkgHasVideo = (input.workPackages ?? []).some((p) =>
     /video/i.test(`${p.kind ?? ""} ${p.unit ?? ""}`)
@@ -193,9 +250,13 @@ function isCollapsedToEventHours(
   if (hasShot && !hasLargeShotLine && !pkgHasStill && !qtyClose(Number(input.shotCount), signals.find((s) => s.kind === "shot_count")?.value ?? -1)) {
     return true;
   }
+  if (hasRetouch && !hasRetouchLine && !(input.workPackages ?? []).some((p) => isRetouchText(`${p.kind ?? ""} ${p.summary ?? ""}`))) {
+    return true;
+  }
   if (hasCutout && !hasCutoutLine && !coversCutout(input)) return true;
   if (hasVideo && !hasVideoLine && !pkgHasVideo) return true;
   if (items.length > 0 && hasShot && !hasLargeShotLine) return true;
+  if (items.length > 0 && hasRetouch && !hasRetouchLine) return true;
   if (items.length > 0 && hasCutout && !hasCutoutLine) return true;
   if (items.length > 0 && hasVideo && !hasVideoLine) return true;
   return false;
@@ -217,6 +278,8 @@ export function findComprehensionGaps(input: {
   for (const signal of input.signals) {
     let ok = false;
     if (signal.kind === "shot_count") ok = coversShotCount(signal, input);
+    else if (signal.kind === "retouch_count") ok = coversRetouch(signal, input);
+    else if (signal.kind === "revision_rounds") ok = coversRevisionRounds(signal, input);
     else if (signal.kind === "background_removal") ok = coversCutout(input);
     else if (signal.kind === "event_days") ok = coversDays(signal, input);
     else if (signal.kind === "event_hours") ok = coversHours(signal, input);
@@ -239,7 +302,7 @@ export function findComprehensionGaps(input: {
 
   const collapsedToEventHours = isCollapsedToEventHours(input.signals, input);
   if (collapsedToEventHours) {
-    const msg = "多範圍 RFQ 被塌成單一活動時數（作品／去背／影片／張數消失）";
+    const msg = "多範圍 RFQ 被塌成單一活動時數（作品／去背／精修／影片／張數消失）";
     if (!gaps.includes(msg)) gaps.push(msg);
   }
 

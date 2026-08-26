@@ -8,6 +8,8 @@
 
 export type RequirementSignalKind =
   | "shot_count"
+  | "retouch_count"
+  | "revision_rounds"
   | "event_hours"
   | "event_days"
   | "background_removal"
@@ -45,6 +47,10 @@ function isDeliveryTurnaround(before: string, after: string): boolean {
 }
 
 const CN_STRIP: Array<[RegExp, string]> = [
+  [/兩次|两次|二次/g, "2次"],
+  [/三次/g, "3次"],
+  [/四次/g, "4次"],
+  [/五次/g, "5次"],
   [/兩條|两条|二條|二条/g, "2條"],
   [/三條|三条/g, "3條"],
   [/四條|四条/g, "4條"],
@@ -161,6 +167,21 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
+  // 「1分鐘精選視頻」is highlight duration, not event hours.
+  const highlightMinRe =
+    /(\d{1,2})\s*分鐘(?:精選)?(?:視頻|影片|片花|短片)|(\d{1,2})[- ]?minute(?:s)?\s+(?:highlight|video|film|reel)/gi;
+  while ((m = highlightMinRe.exec(text)) !== null) {
+    const n = Number(m[1] || m[2]);
+    if (!Number.isFinite(n) || n < 1 || n > 10) continue;
+    push({
+      kind: "clip_seconds",
+      label: `精選視頻約 ${n} 分鐘`,
+      value: n * 60,
+      unit: "seconds",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
   const shotRe =
     /(?:約|大约|大約|around|about|approx(?:imately)?|~)?\s*(\d{2,4})\s*(?:件|張|张|幅|款|套|pcs?|pieces?|photos?|images?|shots?|skus?|artworks?|products?)(?:\s*(?:作品|產品|菜式|jewelry|珠寶))?/gi;
   while ((m = shotRe.exec(text)) !== null) {
@@ -204,7 +225,35 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
-  const dayRe = /(\d{1,2})\s*(?:天|days?)(?!\s*(?:內|内|後|后))/gi;
+  const retouchRe =
+    /(?:精修|修圖)\s*(?:不少於|至少|約)?\s*(\d{2,4})\s*張|(?:不少於|至少|約)?\s*(\d{2,4})\s*張(?:合格)?(?:照片)?(?:之)?(?:精修|修圖)|(\d{2,4})\s+(?:retouched|edited)\s+(?:photos?|images?)/gi;
+  while ((m = retouchRe.exec(text)) !== null) {
+    const n = Number(m[1] || m[2] || m[3]);
+    if (!Number.isFinite(n) || n < 8 || n > 5000) continue;
+    push({
+      kind: "retouch_count",
+      label: `精修不少於 ${n} 張（獨立於合格張數）`,
+      value: n,
+      unit: "shots",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
+  const revisionRe =
+    /(\d{1,2})\s*次(?:根據要求)?(?:精修|修改|修圖|revision)|(\d{1,2})\s*(?:rounds?|revisions?)\s*(?:of\s*)?(?:retouch|edit)?/gi;
+  while ((m = revisionRe.exec(text)) !== null) {
+    const n = Number(m[1] || m[2]);
+    if (!Number.isFinite(n) || n < 2 || n > 10) continue;
+    push({
+      kind: "revision_rounds",
+      label: `精修 ${n} 次修改`,
+      value: n,
+      unit: "rounds",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
+  const dayRe = /(\d{1,2})\s*(?:天|日|days?)(?!\s*(?:內|内|後|后))/gi;
   while ((m = dayRe.exec(text)) !== null) {
     const n = Number(m[1]);
     if (!Number.isFinite(n) || n < 2 || n > 21) continue;
@@ -235,7 +284,7 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
   }
 
   const rangeRe =
-    /(?:中午|下午|上午)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時)?\s*(?:至|到|[-–~])\s*(?:下午|上午|晚上)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時)?/gi;
+    /(?:中午|下午|上午|晚上)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時|點|点)?\s*(?:至|到|[-–~])\s*(?:下午|上午|晚上)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時|點|点)?/gi;
   const rangeHours: number[] = [];
   while ((m = rangeRe.exec(text)) !== null) {
     const before = text.slice(Math.max(0, m.index - 3), m.index);
@@ -274,6 +323,8 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     }
   };
   collapseByMax("shot_count");
+  collapseByMax("retouch_count");
+  collapseByMax("revision_rounds");
   collapseByMax("event_hours");
   collapseByMax("event_days");
   collapseByMax("video_count");
@@ -287,7 +338,14 @@ export function isMultiScopeSignals(signals: RequirementSignal[]): boolean {
   const families = new Set<string>();
   for (const s of signals) {
     if (s.kind === "event_hours" || s.kind === "event_days") families.add("time");
-    if (s.kind === "shot_count" || s.kind === "background_removal") families.add("still");
+    if (
+      s.kind === "shot_count" ||
+      s.kind === "background_removal" ||
+      s.kind === "retouch_count" ||
+      s.kind === "revision_rounds"
+    ) {
+      families.add("still");
+    }
     if (
       s.kind === "video_count" ||
       s.kind === "clip_seconds" ||
