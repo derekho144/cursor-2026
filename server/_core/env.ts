@@ -7,6 +7,11 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  /**
+   * Chat model for inquiry understanding / AI quote drafts.
+   * Default: gemini-2.5-pro. Override with LLM_MODEL (e.g. gemini-2.5-flash).
+   */
+  llmModel: (process.env.LLM_MODEL ?? "gemini-2.5-pro").trim() || "gemini-2.5-pro",
   gmailUser: process.env.GMAIL_USER ?? "",
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
