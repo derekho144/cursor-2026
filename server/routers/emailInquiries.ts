@@ -33,6 +33,10 @@ import {
   evaluateInquiryDraftReadiness,
   formatInquiryDraftNotes,
 } from "../../shared/inquiryDraftReadiness";
+import {
+  extractTextFromPdfAttachments,
+  mergeEmailBodyWithPdfText,
+} from "../emailPdfAttachments";
 
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
@@ -901,6 +905,8 @@ Email Subject: ${subject}
 Email Body:
 ${body}
 
+IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF attachments. Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the PDF.
+
 ${pricingContext}
 
 ${BILLING_RULES}
@@ -1124,6 +1130,15 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
   bodyText: string;
   htmlBody: string;
   receivedAt: Date;
+  /** Text extracted from PDF attachments (empty if none / failed). */
+  attachmentText: string;
+  attachmentMeta: Array<{
+    filename: string;
+    pages?: number;
+    truncated: boolean;
+    error?: string;
+    chars: number;
+  }>;
 }>> {
   const gmailUser = process.env.GMAIL_USER;
   const gmailPassword = process.env.GMAIL_APP_PASSWORD;
@@ -1151,6 +1166,14 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
     bodyText: string;
     htmlBody: string;
     receivedAt: Date;
+    attachmentText: string;
+    attachmentMeta: Array<{
+      filename: string;
+      pages?: number;
+      truncated: boolean;
+      error?: string;
+      chars: number;
+    }>;
   }> = [];
 
   try {
@@ -1178,7 +1201,38 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
           const bodyText: string = parsed.text ?? (htmlBody ? htmlBody.replace(/<[^>]+>/g, " ") : "");
           const receivedAt: Date = parsed.date ?? new Date();
 
-          emails.push({ messageId, subject, fromEmail, fromName, bodyText, htmlBody, receivedAt });
+          const pdfExtract = await extractTextFromPdfAttachments(
+            (parsed.attachments ?? []).map((a: any) => ({
+              filename: a.filename,
+              contentType: a.contentType,
+              content: Buffer.isBuffer(a.content)
+                ? a.content
+                : Buffer.from(a.content ?? []),
+            }))
+          );
+          if (pdfExtract.pdfCount > 0) {
+            console.log(
+              `[EmailInquiry] PDF attachments: ${pdfExtract.pdfCount} on "${subject.slice(0, 40)}" chars=${pdfExtract.combinedText.length}`
+            );
+          }
+
+          emails.push({
+            messageId,
+            subject,
+            fromEmail,
+            fromName,
+            bodyText,
+            htmlBody,
+            receivedAt,
+            attachmentText: pdfExtract.combinedText,
+            attachmentMeta: pdfExtract.texts.map((t) => ({
+              filename: t.filename,
+              pages: t.pages,
+              truncated: t.truncated,
+              error: t.error,
+              chars: t.text.length,
+            })),
+          });
         } catch (e) {
           console.error("[EmailInquiry] Failed to parse message:", e);
         }
@@ -1355,7 +1409,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
   let skipped = 0;
 
   for (const email of emails) {
-    const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt } = email;
+    const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta } = email;
     const messageId = email.messageId.slice(0, 500);
 
     const existing = await getEmailInquiryByMessageId(messageId);
@@ -1399,13 +1453,24 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
       skipped++; continue; 
     }
 
-    const combinedText = `${subject} ${bodyText}`;
+    // Keyword + body check (also consider PDF text so attachment-only briefs still match)
+    const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
     if (!containsTriggerKeyword(combinedText)) { 
       console.log(`[EmailInquiry] Skip(no-keyword): from=${fromEmail} subj="${subject?.slice(0,40)}"`);
       skipped++; continue; 
     }
 
-    const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 8000), fromEmail);
+    const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
+    const aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+    if (aiResult && attachmentMeta?.length) {
+      aiResult.pdfAttachments = attachmentMeta;
+      if (attachmentText?.trim()) {
+        const names = attachmentMeta.map((m) => m.filename).join(", ");
+        aiResult.pdfTextUsed = true;
+        const note = `已讀取 PDF 附件：${names}`;
+        aiResult.notes = aiResult.notes ? `${aiResult.notes}（${note}）` : note;
+      }
+    }
 
     // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
     let externalLink: string | null = null;
@@ -1617,7 +1682,7 @@ export const emailInquiriesRouter = router({
       let skipped = 0;
 
       for (const email of emails) {
-        const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt } = email;
+        const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta } = email;
         // Truncate messageId to 500 chars to fit DB column
         const messageId = email.messageId.slice(0, 500);
 
@@ -1658,12 +1723,22 @@ export const emailInquiriesRouter = router({
         // Check excluded senders
         if (isExcludedSender(fromEmail)) { skipped++; continue; }
 
-        // Check trigger keywords
-        const combinedText = `${subject} ${bodyText}`;
+        // Check trigger keywords (include PDF text)
+        const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
         if (!containsTriggerKeyword(combinedText)) { skipped++; continue; }
 
-        // AI parse
-        const aiResult = await parseInquiryWithAI(subject, bodyText.slice(0, 8000), fromEmail);
+        // AI parse (body + PDF attachment text)
+        const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
+        const aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+        if (aiResult && attachmentMeta?.length) {
+          aiResult.pdfAttachments = attachmentMeta;
+          if (attachmentText?.trim()) {
+            const names = attachmentMeta.map((m) => m.filename).join(", ");
+            aiResult.pdfTextUsed = true;
+            const note = `已讀取 PDF 附件：${names}`;
+            aiResult.notes = aiResult.notes ? `${aiResult.notes}（${note}）` : note;
+          }
+        }
 
         // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
         let externalLink: string | null = null;

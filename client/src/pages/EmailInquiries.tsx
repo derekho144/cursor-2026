@@ -414,6 +414,40 @@ Web: https://jdstudiohk.com/`);
                           <div>{aiParsed.missingFields.join("、")}</div>
                         </div>
                       )}
+                    {Array.isArray(aiParsed.pdfAttachments) &&
+                      aiParsed.pdfAttachments.length > 0 && (
+                        <div
+                          className="mt-2 pt-2"
+                          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          <div className="text-muted-foreground mb-1">PDF 附件</div>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {aiParsed.pdfAttachments.map(
+                              (
+                                p: {
+                                  filename: string;
+                                  chars?: number;
+                                  pages?: number;
+                                  error?: string;
+                                  truncated?: boolean;
+                                },
+                                i: number
+                              ) => (
+                                <li key={i}>
+                                  {p.filename}
+                                  {p.pages ? ` · ${p.pages} 頁` : ""}
+                                  {p.chars ? ` · ${p.chars} 字` : ""}
+                                  {p.truncated ? " · 已截斷" : ""}
+                                  {p.error ? ` · ${p.error}` : ""}
+                                  {aiParsed.pdfTextUsed && !p.error
+                                    ? " · 已納入 AI 理解"
+                                    : ""}
+                                </li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                      )}
                     {aiParsed.notes && (
                       <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <div className="text-muted-foreground mb-1">需求摘要</div>
