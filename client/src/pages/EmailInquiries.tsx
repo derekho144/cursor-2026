@@ -228,6 +228,32 @@ Web: https://jdstudiohk.com/`);
                   AI 信心: {confidenceInfo.label}
                 </span>
               )}
+              {aiParsed?.attachmentStatus === "missing" && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(244,67,54,0.15)", color: "#ef5350", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(244,67,54,0.35)" }}
+                >
+                  附件未讀到
+                </span>
+              )}
+              {aiParsed?.attachmentStatus === "used" && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(33,150,243,0.12)", color: "#64b5f6", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(33,150,243,0.3)" }}
+                >
+                  已讀 PDF
+                </span>
+              )}
+              {aiParsed?.draftReadiness &&
+                !aiParsed.draftReadiness.readyForAutoDraft &&
+                (inquiry.status === "pending" || inquiry.status === "pending_send") && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(255,176,32,0.12)", color: "#ffb020", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(255,176,32,0.3)" }}
+                >
+                  暫不自動草稿
+                </span>
+              )}
               {inquiry.status === "approved" && inquiry.aiConfidence === "high" && inquiry.quoteId && (
                 <span
                   className="text-xs px-2 py-0.5 rounded-sm shrink-0"
@@ -354,6 +380,16 @@ Web: https://jdstudiohk.com/`);
                             ? "AI 假設（請核實）"
                             : aiParsed.quantitySource || null,
                       ],
+                      [
+                        "附件理解",
+                        aiParsed.attachmentStatus === "used"
+                          ? "已讀取 PDF 文字"
+                          : aiParsed.attachmentStatus === "missing"
+                            ? "正文／PDF 指明附件但未讀到文字"
+                            : aiParsed.attachmentStatus === "none"
+                              ? "無附件（正文 RFQ）"
+                              : null,
+                      ],
                     ].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label as string} className="flex gap-2">
                         <span className="text-muted-foreground shrink-0 w-16">{label}</span>
@@ -388,6 +424,16 @@ Web: https://jdstudiohk.com/`);
                         <div className="text-muted-foreground leading-relaxed">
                           {aiParsed.draftReadiness.summary}
                         </div>
+                        {Array.isArray(aiParsed.draftReadiness.blockers) &&
+                          aiParsed.draftReadiness.blockers.length > 0 && (
+                            <ul className="list-disc pl-4 mt-2 space-y-0.5 text-muted-foreground">
+                              {aiParsed.draftReadiness.blockers.map(
+                                (b: string, i: number) => (
+                                  <li key={i}>{b}</li>
+                                )
+                              )}
+                            </ul>
+                          )}
                       </div>
                     )}
                     {Array.isArray(aiParsed.assumptions) &&

@@ -1538,6 +1538,9 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
           ).ready,
         })
       : null;
+    if (aiResult && draftReadiness) {
+      aiResult.draftReadiness = draftReadiness;
+    }
     const readyForAutoDraft = !!draftReadiness?.readyForAutoDraft;
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
@@ -1807,6 +1810,9 @@ export const emailInquiriesRouter = router({
               ).ready,
             })
           : null;
+        if (aiResult && draftReadinessScan) {
+          aiResult.draftReadiness = draftReadinessScan;
+        }
         const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
