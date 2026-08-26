@@ -38,6 +38,51 @@ import {
   extractTextFromPdfAttachments,
   mergeEmailBodyWithPdfText,
 } from "../emailPdfAttachments";
+import {
+  applyAttachmentUnderstandingToParsed,
+  resolveAttachmentUnderstanding,
+} from "../../shared/emailAttachmentUnderstanding";
+
+/** After AI parse: annotate attachment status (none/used/missing) and gate confidence. */
+function enrichParsedWithAttachmentGate(
+  aiResult: Record<string, unknown> | null | undefined,
+  opts: {
+    subject: string;
+    bodyText: string;
+    attachmentText?: string | null;
+    attachmentMeta?: Array<{ filename: string; chars?: number; error?: string }> | null;
+  }
+): Record<string, unknown> | null {
+  if (!aiResult) return null;
+  const pdfFileCount = Array.isArray(opts.attachmentMeta)
+    ? opts.attachmentMeta.length
+    : 0;
+  const understanding = resolveAttachmentUnderstanding({
+    subject: opts.subject,
+    bodyText: opts.bodyText,
+    attachmentText: opts.attachmentText,
+    pdfFileCount,
+  });
+  let enriched = applyAttachmentUnderstandingToParsed(aiResult, understanding);
+  if (pdfFileCount > 0) {
+    enriched = {
+      ...enriched,
+      pdfAttachments: opts.attachmentMeta,
+      pdfTextUsed: understanding.status === "used",
+    };
+    if (understanding.status === "used") {
+      const names = (opts.attachmentMeta ?? []).map((m) => m.filename).join(", ");
+      const note = `已讀取 PDF 附件：${names}`;
+      const notes = String(enriched.notes ?? "");
+      enriched.notes = notes.includes(note)
+        ? notes
+        : notes.trim()
+          ? `${notes.trim()}（${note}）`
+          : note;
+    }
+  }
+  return enriched;
+}
 
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
@@ -823,6 +868,7 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 6. pricingLow = pricingMid x 0.7 (rounded to nearest 100). pricingHigh = pricingMid x 1.35 (rounded to nearest 100).
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
+9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
@@ -1462,16 +1508,13 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     }
 
     const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
-    const aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
-    if (aiResult && attachmentMeta?.length) {
-      aiResult.pdfAttachments = attachmentMeta;
-      if (attachmentText?.trim()) {
-        const names = attachmentMeta.map((m) => m.filename).join(", ");
-        aiResult.pdfTextUsed = true;
-        const note = `已讀取 PDF 附件：${names}`;
-        aiResult.notes = aiResult.notes ? `${aiResult.notes}（${note}）` : note;
-      }
-    }
+    let aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+    aiResult = enrichParsedWithAttachmentGate(aiResult, {
+      subject,
+      bodyText,
+      attachmentText,
+      attachmentMeta,
+    }) as typeof aiResult;
 
     // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
     let externalLink: string | null = null;
@@ -1735,16 +1778,13 @@ export const emailInquiriesRouter = router({
 
         // AI parse (body + PDF attachment text)
         const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
-        const aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
-        if (aiResult && attachmentMeta?.length) {
-          aiResult.pdfAttachments = attachmentMeta;
-          if (attachmentText?.trim()) {
-            const names = attachmentMeta.map((m) => m.filename).join(", ");
-            aiResult.pdfTextUsed = true;
-            const note = `已讀取 PDF 附件：${names}`;
-            aiResult.notes = aiResult.notes ? `${aiResult.notes}（${note}）` : note;
-          }
-        }
+        let aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+        aiResult = enrichParsedWithAttachmentGate(aiResult, {
+          subject,
+          bodyText,
+          attachmentText,
+          attachmentMeta,
+        }) as typeof aiResult;
 
         // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
         let externalLink: string | null = null;
