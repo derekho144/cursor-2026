@@ -85,6 +85,21 @@ describe("evaluateInquiryDraftReadiness", () => {
     expect(r.readyForAutoDraft).toBe(true);
     expect(r.pricingMode).toBe("design");
   });
+
+  it("blocks auto-draft when learning is not ready", () => {
+    const r = evaluateInquiryDraftReadiness({
+      serviceType: "corporate_event",
+      isInquiry: true,
+      confidence: "high",
+      quantitySource: "explicit",
+      shootHours: 5,
+      durationPackage: "half_day",
+      suggestedItems: [{ quantity: 5, unitPrice: 950 }],
+      learningReady: false,
+    });
+    expect(r.readyForAutoDraft).toBe(false);
+    expect(r.blockers.some((b) => b.includes("定價學習"))).toBe(true);
+  });
 });
 
 describe("formatInquiryDraftNotes", () => {

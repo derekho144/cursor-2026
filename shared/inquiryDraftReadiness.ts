@@ -64,6 +64,11 @@ export function evaluateInquiryDraftReadiness(parsed: {
   confidence?: string | null;
   shootingDate?: string | null;
   suggestedItems?: Array<{ quantity?: number; unitPrice?: number }> | null;
+  /**
+   * When false, skip auto-draft even if the parse is clear.
+   * Pass from pricing-learning trust (usable/trusted). Omit to skip this check (unit tests).
+   */
+  learningReady?: boolean | null;
 } & InquiryParseExtras): InquiryDraftReadiness {
   const serviceType = (parsed.serviceType ?? "other").trim() || "other";
   const pricingMode = quotePricingMode(serviceType);
@@ -90,6 +95,9 @@ export function evaluateInquiryDraftReadiness(parsed: {
   if (serviceType === "other") {
     blockers.push("服務類型為「其他」，太雜唔宜自動草稿");
     if (!missingFields.includes("serviceType")) missingFields.push("serviceType");
+  }
+  if (parsed.learningReady === false) {
+    blockers.push("定價學習未達「可參考」，暫不自動開草稿（避免規則價偏離人手成交）");
   }
 
   if (pricingMode === "time_crew") {

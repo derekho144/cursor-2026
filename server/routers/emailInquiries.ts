@@ -33,6 +33,7 @@ import {
   evaluateInquiryDraftReadiness,
   formatInquiryDraftNotes,
 } from "../../shared/inquiryDraftReadiness";
+import { getLearningAutoDraftGate } from "../pricingLearning";
 import {
   extractTextFromPdfAttachments,
   mergeEmailBodyWithPdfText,
@@ -1486,9 +1487,14 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程，不應進入此流程）
     const isFHSource = isFreehunterEmail(fromEmail, htmlBody);
     const isHighConfidence = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
-    const draftReadiness =
-      aiResult?.draftReadiness ??
-      (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
+    const draftReadiness = aiResult
+      ? evaluateInquiryDraftReadiness({
+          ...aiResult,
+          learningReady: (
+            await getLearningAutoDraftGate(aiResult.serviceType ?? "other")
+          ).ready,
+        })
+      : null;
     const readyForAutoDraft = !!draftReadiness?.readyForAutoDraft;
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
@@ -1753,9 +1759,14 @@ export const emailInquiriesRouter = router({
         // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程）
         const isFHSrc = isFreehunterEmail(fromEmail, htmlBody);
         const isHighConf = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
-        const draftReadinessScan =
-          aiResult?.draftReadiness ??
-          (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
+        const draftReadinessScan = aiResult
+          ? evaluateInquiryDraftReadiness({
+              ...aiResult,
+              learningReady: (
+                await getLearningAutoDraftGate(aiResult.serviceType ?? "other")
+              ).ready,
+            })
+          : null;
         const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;

@@ -41,6 +41,7 @@ import {
   evaluateSuggestConfidence,
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
+  isLearningReadyForAutoDraft,
   pricingLearningStartAtIso,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
@@ -739,6 +740,38 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       accuracyPct: r.accuracyPct,
     })),
     winAnalytics: buildWinAnalytics(allRows),
+  };
+}
+
+/**
+ * Auto email drafts wait until this service type has usable/trusted learning
+ * (not just BILLING_RULES). Rule-card totals often diverge from human packages.
+ */
+export async function getLearningAutoDraftGate(serviceType: string): Promise<{
+  ready: boolean;
+  acceptedCount: number;
+  confidence: ReturnType<typeof evaluateSuggestConfidence>["confidence"];
+}> {
+  if (!serviceType || !isPricingLearningServiceType(serviceType)) {
+    return { ready: false, acceptedCount: 0, confidence: "none" };
+  }
+  const data = await getPricingLearningByServiceType(serviceType);
+  const mode = quotePricingMode(serviceType);
+  const structuredCount =
+    mode === "shot_count"
+      ? data.coverage.withStructuredShots
+      : Math.min(
+          data.coverage.withStructuredHours,
+          data.coverage.withStructuredCrew
+        );
+  const trust = evaluateSuggestConfidence({
+    acceptedCount: data.acceptedCount,
+    structuredCount,
+  });
+  return {
+    ready: isLearningReadyForAutoDraft(trust.confidence),
+    acceptedCount: data.acceptedCount,
+    confidence: trust.confidence,
   };
 }
 

@@ -3,6 +3,7 @@ import {
   evaluateSuggestConfidence,
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
+  isLearningReadyForAutoDraft,
   isQuoteEligibleForPricingLearning,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
@@ -78,5 +79,14 @@ describe("evaluateSuggestConfidence", () => {
       structuredCount: 18,
     });
     expect(r.confidence).toBe("trusted");
+  });
+});
+
+describe("isLearningReadyForAutoDraft", () => {
+  it("only allows usable or trusted", () => {
+    expect(isLearningReadyForAutoDraft("none")).toBe(false);
+    expect(isLearningReadyForAutoDraft("advisory")).toBe(false);
+    expect(isLearningReadyForAutoDraft("usable")).toBe(true);
+    expect(isLearningReadyForAutoDraft("trusted")).toBe(true);
   });
 });

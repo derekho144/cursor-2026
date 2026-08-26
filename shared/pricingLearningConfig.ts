@@ -34,6 +34,13 @@ export type SuggestConfidence =
   | "usable"
   | "trusted";
 
+/** Auto email drafts only when learning is usable/trusted — rule-card prices alone are not enough. */
+export function isLearningReadyForAutoDraft(
+  confidence: SuggestConfidence | null | undefined
+): boolean {
+  return confidence === "usable" || confidence === "trusted";
+}
+
 export function evaluateSuggestConfidence(input: {
   acceptedCount: number;
   structuredCount: number;
