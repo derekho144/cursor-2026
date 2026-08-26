@@ -590,12 +590,9 @@ const HK_MARKET_PRICING: Record<string, { low: number; mid: number; high: number
     ]
   },
   drone: {
-    low: 3000, mid: 6500, high: 13000,
-    note: "BILLING: per hour HK$2,000-3,500. HK market 2026: drone photography/video HK$3,000-6,500 per session; requires CAD permit",
-    items: [
-      {desc:"Drone Photography / Aerial Videography (2 hrs)",unitPrice:5000},
-      {desc:"Post-Processing & Video Edit",unitPrice:1500},
-    ]
+    low: 0, mid: 0, high: 0,
+    note: "OUT OF AI QUOTE SCOPE: classify as drone only; leave suggestedItems empty — manual quote (CAD permit etc.)",
+    items: [] as { desc: string; unitPrice: number }[],
   },
   menu_design: {
     low: 3000, mid: 6000, high: 12000,
@@ -666,7 +663,14 @@ Email Subject: ${subject}\nEmail Body (first 300 chars): ${body.substring(0, 300
 
   // 建立定價參考資訊注入 prompt（四種 context 合併）
   let pricingContext = "";
-  if (historicalData && historicalData.count >= 3) {
+  if (detectedServiceType === "drone") {
+    pricingContext = `
+=== AI AUTO-QUOTE SCOPE ===
+serviceType "drone" (航拍) is OUT OF AI quote scope.
+Classify only. Set suggestedItems=[], pricingLow=0, pricingMid=0, pricingHigh=0.
+Do NOT use historical pricing or market tiers for drone. Manual quote required.
+`;
+  } else if (historicalData && historicalData.count >= 3) {
     // A: 時間加權定價（D）優先於普通歷史平均
     const avgToUse = timeWeightedData ? timeWeightedData.weightedAvg : historicalData.avgTotal;
     const p25ToUse = timeWeightedData ? timeWeightedData.p25 : historicalData.p25;
@@ -694,8 +698,8 @@ VALIDATION RULE:
 `;
   }
 
-  // B: Win-rate context（成交率分析）
-  if (winRateData) {
+  // B: Win-rate context（成交率分析）— skip for out-of-scope types (e.g. drone)
+  if (detectedServiceType !== "drone" && winRateData) {
     pricingContext += `
 === WIN RATE ANALYSIS (${winRateData.totalQuotes} total quotes, ${winRateData.overallWinRate}% overall win rate) ===
 - Low tier (≤HKD ${winRateData.lowTier.maxPrice}): ${winRateData.lowTier.winRate}% win rate (${winRateData.lowTier.count} quotes)
@@ -706,7 +710,11 @@ IMPORTANT: Prefer the price tier with the highest win rate unless the inquiry si
   }
 
   // E: Deviation correction factor context
-  if (deviationFactor && deviationFactor.correctionFactor !== 1.0) {
+  if (
+    detectedServiceType !== "drone" &&
+    deviationFactor &&
+    deviationFactor.correctionFactor !== 1.0
+  ) {
     const dir = deviationFactor.avgDeviation > 0 ? "UNDERESTIMATING" : "OVERESTIMATING";
     pricingContext += `
 === AI SELF-CORRECTION FACTOR (${deviationFactor.confidence} confidence, ${deviationFactor.sampleCount} samples) ===
@@ -717,7 +725,7 @@ INSTRUCTION: The pricingMid you output will be multiplied by ${deviationFactor.c
 `;
   }
   // A: Item-level frequency context（最常用項目）
-  if (frequentItems && frequentItems.length > 0) {
+  if (detectedServiceType !== "drone" && frequentItems && frequentItems.length > 0) {
     pricingContext += `
 === MOST FREQUENTLY USED ITEMS IN ACCEPTED QUOTES (use for item naming reference only) ===
 ${frequentItems.map(item => `- "${item.description}": historical avg HKD ${item.avgUnitPrice} (range ${item.minUnitPrice}–${item.maxUnitPrice}), used ${item.usageCount}x`).join("\n")}
@@ -789,11 +797,11 @@ portrait photography
   - Add: "Transportation Fee" HKD 320 (fixed, always include).
   - Example: 2 hrs x HKD 1,000 + retouching 10 x HKD 150 + transport HKD 320 = HKD 3,820.
 
-drone photography/videography
-  - Main item: "Drone Photography / Aerial Videography" - billed PER HOUR. Extract flight duration. Default: 2 hours.
-  - unitPrice per hour: HKD 2,000-3,500
-  - Add: "Post-Processing & Video Edit" flat HKD 1,500-3,000. Add: "Transportation Fee" HKD 320 (fixed).
-  - Example: 2 hrs x HKD 2,500 + editing HKD 2,000 + transport HKD 320 = HKD 7,320.
+drone photography/videography — OUT OF AI AUTO-QUOTE SCOPE
+  - If the inquiry is primarily aerial / drone / 航拍: set serviceType="drone".
+  - Do NOT invent suggestedItems or pricing for drone. Set suggestedItems=[], pricingLow/Mid/High=0.
+  - In notes (Traditional Chinese) state that 航拍需人手報價（CAD 許可等）. Set confidence medium/high for classification only.
+  - Never treat drone as corporate_event / video_production just to auto-price.
 
 menu_design (photography + design)
   - Main item: "Menu Item Photography" - billed PER IMAGE. Extract number of menu items. Default: 20 images.
@@ -918,6 +926,7 @@ Extract and return a JSON object with these fields:
 - clientCompany: string (company name if mentioned, or empty string)
 - serviceType: one of ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"]
   (use "kol_mi" for KOL/influencer marketing, social media content creation, MI promotions)
+  (use "drone" for aerial / 航拍 — OUT OF AI auto-quote scope: empty suggestedItems and zero pricing)
 - eventName: string (event / project name if mentioned, else empty string)
 - shootingDate: string (date mentioned, YYYY-MM-DD format, or empty string — do NOT invent)
 - shootingLocation: string (location mentioned, or empty string)

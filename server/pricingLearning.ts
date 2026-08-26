@@ -113,6 +113,7 @@ async function loadLearningQuotesWithItems(opts?: {
     inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
     ne(quotes.serviceType, "other"),
+    ne(quotes.serviceType, "drone"),
     pricingLearningStartCondition(),
   ];
   if (opts?.serviceType) {
@@ -753,6 +754,48 @@ export async function suggestPriceFromLearning(input: {
   shotCount?: number | null;
   durationPackage?: string | null;
 }) {
+  if (!isPricingLearningServiceType(input.serviceType)) {
+    const mode = quotePricingMode(input.serviceType);
+    const excludeNote =
+      input.serviceType === "drone"
+        ? "航拍拍攝不納入 AI 報價範圍，請人手報價。"
+        : "此服務類型不納入 AI 報價學習。";
+    return {
+      serviceType: input.serviceType,
+      pricingMode: mode,
+      learningStartAt: pricingLearningStartAtIso(),
+      learningStartLabel: formatPricingLearningStartAtLabel(),
+      filters: {
+        hours: input.hours ?? null,
+        hoursBucket: null,
+        crewSize: input.crewSize ?? null,
+        crewBucket: null,
+        shotCount: input.shotCount ?? null,
+        shotCountBucket: null,
+        durationPackage: resolveDurationPackage({
+          durationPackage: input.durationPackage,
+          shootHours: input.hours,
+        }),
+      },
+      sampleCount: 0,
+      structuredCount: 0,
+      preferredStructured: false,
+      confidence: "none" as const,
+      confidenceLabel: excludeNote,
+      confidenceShortLabel: "不適用",
+      trustProgress: 0,
+      showSuggestion: false,
+      suggestion: null,
+      packages: null,
+      winRate: { decided: 0, accepted: 0, rejected: 0, winPct: null },
+      durationWinRates: [],
+      avgOverBudgetOnPriceRejects: null,
+      costFloorNote: excludeNote,
+      note: excludeNote,
+      comparables: [],
+    };
+  }
+
   const allRows = await loadLearningQuotesWithItems({
     serviceType: input.serviceType,
     limit: 1000,

@@ -21,13 +21,19 @@ export const SHOT_COUNT_SERVICE_TYPES = new Set([
 ]);
 
 /**
- * Excluded from pricing learning / win-rate / suggest.
- * "other" is too mixed to learn from.
+ * Excluded from pricing learning / win-rate / suggest / AI auto-quote.
+ * - "other": too mixed to learn from
+ * - "drone" (航拍): out of AI quote scope — manual quotes only
  */
-export const PRICING_LEARNING_EXCLUDED_TYPES = new Set(["other"]);
+export const PRICING_LEARNING_EXCLUDED_TYPES = new Set(["other", "drone"]);
 
 export function isPricingLearningServiceType(serviceType: string): boolean {
   return !PRICING_LEARNING_EXCLUDED_TYPES.has(serviceType);
+}
+
+/** Service types that must never auto-create AI draft quotes. */
+export function isAiAutoQuoteExcludedServiceType(serviceType: string): boolean {
+  return PRICING_LEARNING_EXCLUDED_TYPES.has(serviceType);
 }
 
 export type QuotePricingMode = "design" | "shot_count" | "time_crew";
