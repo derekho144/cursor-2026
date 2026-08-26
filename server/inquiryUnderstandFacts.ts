@@ -156,7 +156,7 @@ Rules:
 13. 「N 條影片／clips」+「每條 N 秒」= one video workPackage. quantity = number of clips; put per-clip duration in summary (e.g. 「3 條影片，每條 20 秒」). Do not fold this into Event Photography hours.
 14. 「下午1點到5點」= event hours from the clock range. 「1分鐘精選視頻」= highlight duration, NEVER event hours.
 15. 「不少於200張合格照片」and「精修不少於30張」are two packages. Do not keep only the larger shot count.
-16. If the brief needs both photography (攝影/照片) AND video (攝像/影片/視頻), on-site crew is always 1 photographer + 1 videographer (1P+1V). Not one person dual-role. Set crewPhotographers=1, crewVideographers=1. Add a workPackage kind=crew, summary「現場 1 攝影師 + 1 攝像師」.
+16. If the brief needs both photography (攝影/照片) AND video (攝像/影片/視頻), on-site crew is at least 1 photographer + 1 videographer. If the brief states 2 Chief photographer / 2P / 2 拍攝助理 (video) / 1V, copy those counts — do not collapse to 1P+1V. Add a workPackage kind=crew.
 
 Return JSON only.`;
 }
@@ -210,24 +210,37 @@ export function applyStudioCrewDefaults(
   facts: InquiryFacts,
   signals: RequirementSignal[]
 ): InquiryFacts {
-  if (!signals.some((s) => s.kind === "crew_1p1v")) return facts;
-  facts.crewPhotographers = Math.max(Number(facts.crewPhotographers) || 0, 1);
-  facts.crewVideographers = Math.max(Number(facts.crewVideographers) || 0, 1);
-  const hasCrewPkg = (facts.workPackages ?? []).some((p) => {
-    const t = `${p.kind ?? ""} ${p.summary ?? ""}`;
+  const pSig = signals.find((s) => s.kind === "crew_photographers");
+  const vSig = signals.find((s) => s.kind === "crew_videographers");
+  const dual = signals.some((s) => s.kind === "crew_1p1v");
+  if (!dual && !pSig && !vSig) return facts;
+  const pNeed = Math.max(
+    Number(pSig?.value) || 0,
+    dual ? 1 : 0
+  );
+  const vNeed = Math.max(
+    Number(vSig?.value) || 0,
+    dual ? 1 : 0
+  );
+  facts.crewPhotographers = Math.max(Number(facts.crewPhotographers) || 0, pNeed);
+  facts.crewVideographers = Math.max(Number(facts.crewVideographers) || 0, vNeed);
+  const p = facts.crewPhotographers;
+  const v = facts.crewVideographers;
+  const hasCrewPkg = (facts.workPackages ?? []).some((p0) => {
+    const t = `${p0.kind ?? ""} ${p0.summary ?? ""}`;
     return (
-      p.kind === "crew" ||
-      (/1\s*p/i.test(t) && /1\s*v/i.test(t)) ||
-      (/攝影師/.test(t) && /攝像師|錄影師/.test(t))
+      p0.kind === "crew" ||
+      (/\d\s*p/i.test(t) && /\d\s*v/i.test(t)) ||
+      (/攝影師/.test(t) && /攝像師|錄影師|視頻人手/.test(t))
     );
   });
-  if (!hasCrewPkg) {
+  if (!hasCrewPkg && (p >= 1 || v >= 1)) {
     facts.workPackages = [
       ...(facts.workPackages ?? []),
       {
         kind: "crew",
-        summary: "現場 1 攝影師 + 1 攝像師（影相兼拍片）",
-        quantity: 2,
+        summary: `現場 ${p} 攝影師 + ${v} 攝像／視頻人手（影相兼拍片）`,
+        quantity: p + v,
         unit: "people",
         date: facts.shootingDate || "",
         location: facts.shootingLocation || "",
@@ -263,6 +276,6 @@ ${JSON.stringify(
 RULE: suggestedItems MUST include a billable line (or an explicit bundled $0 line with reason) for EVERY workPackage.
 If multiScope is true, do NOT output a single Event Photography hours line as the whole job.
 Event "retouching included" does NOT cover explicit 去背 / cutout / 作品特寫.
-If crewPhotographers>=1 and crewVideographers>=1 (1P+1V), Event Photography does NOT include the videographer — emit a Videographer line.
+If crewPhotographers and crewVideographers are set, Event Photography does NOT include videographers. Use the frozen headcount (e.g. 2P+2V), never collapse to 1 person.
 `;
 }

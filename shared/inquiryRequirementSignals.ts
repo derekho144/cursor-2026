@@ -16,7 +16,9 @@ export type RequirementSignalKind =
   | "video_count"
   | "clip_seconds"
   | "video_edit"
-  | "crew_1p1v";
+  | "crew_1p1v"
+  | "crew_photographers"
+  | "crew_videographers";
 
 export type RequirementSignal = {
   kind: RequirementSignalKind;
@@ -123,6 +125,26 @@ export function briefNeedsCrew1p1v(text: string): boolean {
   return briefNeedsPhotography(t) && briefNeedsVideo(t);
 }
 
+function sumRoleMentions(text: string, re: RegExp): { total: number; evidence: string } {
+  const copy = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+  let total = 0;
+  let evidence = "";
+  let m: RegExpExecArray | null;
+  while ((m = copy.exec(text)) !== null) {
+    let n = NaN;
+    for (let i = 1; i < m.length; i++) {
+      if (m[i] != null && m[i] !== "") {
+        n = Number(m[i]);
+        break;
+      }
+    }
+    if (!Number.isFinite(n) || n < 1 || n > 20) continue;
+    total += n;
+    if (!evidence) evidence = clipEvidence(text, m.index, m.index + m[0].length);
+  }
+  return { total, evidence };
+}
+
 export function extractRequirementSignals(raw: string): RequirementSignal[] {
   const text = normalizeDeliverableCounts(raw ?? "");
   const signals: RequirementSignal[] = [];
@@ -163,17 +185,39 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
+  let videoPieces = 0;
+  let videoPiecesEvidence = "";
   const videoCountRe =
     /(\d{1,2})\s*(?:條|条|支)?\s*(?:影片|短片|片花|宣傳片|clips?|videos?|reels?|films?)/gi;
   while ((m = videoCountRe.exec(text)) !== null) {
     const n = Number(m[1]);
     if (!Number.isFinite(n) || n < 1 || n > 30) continue;
+    videoPieces += n;
+    if (!videoPiecesEvidence) {
+      videoPiecesEvidence = clipEvidence(text, m.index, m.index + m[0].length);
+    }
+  }
+  const tiaoClipRe =
+    /(\d{1,2})\s*條\s*(?:\d{1,2}\s*[-–~至到]\s*)?\d{1,3}\s*(?:分鐘|秒|mins?)[^\n]{0,24}(?:highlight|IG|Story|花絮|片)?/gi;
+  while ((m = tiaoClipRe.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n < 1 || n > 30) continue;
+    videoPieces += n;
+    if (!videoPiecesEvidence) {
+      videoPiecesEvidence = clipEvidence(text, m.index, m.index + m[0].length);
+    }
+  }
+  if (/花絮[（(]\d+\s*秒/.test(text) && !/條[^\n]{0,16}花絮/.test(text)) {
+    videoPieces += 1;
+    if (!videoPiecesEvidence) videoPiecesEvidence = "活動花絮（秒）";
+  }
+  if (videoPieces >= 1 && videoPieces <= 30) {
     push({
       kind: "video_count",
-      label: `${n} 條影片／clips（獨立交付）`,
-      value: n,
+      label: `${videoPieces} 條影片／clips（獨立交付）`,
+      value: videoPieces,
       unit: "clips",
-      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+      evidence: videoPiecesEvidence || "影片",
     });
   }
 
@@ -191,12 +235,16 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
-  // 「1分鐘精選視頻」is highlight duration, not event hours.
+  // 「1分鐘精選視頻」/「2-3分鐘 highlight」is clip duration, not event hours.
   const highlightMinRe =
-    /(\d{1,2})\s*分鐘(?:精選)?(?:視頻|影片|片花|短片)|(\d{1,2})[- ]?minute(?:s)?\s+(?:highlight|video|film|reel)/gi;
+    /(\d{1,2})(?:\s*[-–~至到]\s*(\d{1,2}))?\s*分鐘(?:精選)?(?:視頻|影片|片花|短片|highlight|花絮)?|(\d{1,2})(?:\s*[-–~]\s*(\d{1,2}))?\s*min(?:ute)?s?\s*(?:highlight|video|film|reel)?/gi;
   while ((m = highlightMinRe.exec(text)) !== null) {
-    const n = Number(m[1] || m[2]);
+    const a = Number(m[1] || m[3]);
+    const b = Number(m[2] || m[4] || a);
+    const n = Math.max(a, b);
     if (!Number.isFinite(n) || n < 1 || n > 10) continue;
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8);
+    if (/時|小時|hour/i.test(after)) continue;
     push({
       kind: "clip_seconds",
       label: `精選視頻約 ${n} 分鐘`,
@@ -307,13 +355,34 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
+  const compactTimeRe = /(\d{2})(\d{2})\s*[-–—~至到]\s*(\d{2})(\d{2})/g;
+  while ((m = compactTimeRe.exec(text)) !== null) {
+    const startH = Number(m[1]);
+    const startMin = Number(m[2]);
+    const endH = Number(m[3]);
+    const endMin = Number(m[4]);
+    if (startH > 23 || endH > 23 || startMin > 59 || endMin > 59) continue;
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8);
+    if (/分鐘|mins?|秒|secs?/i.test(after)) continue;
+    const hours = parseHourRange(startH, startMin, "", endH, endMin, "");
+    if (hours == null) continue;
+    push({
+      kind: "event_hours",
+      label: `時段約 ${hours} 小時`,
+      value: hours,
+      unit: "hours",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
   const rangeRe =
     /(?:中午|下午|上午|晚上)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時|點|点)?\s*(?:至|到|[-–~])\s*(?:下午|上午|晚上)?\s*(\d{1,2})(?::(\d{2}))?\s*(nn|noon|am|pm|時|點|点)?/gi;
   const rangeHours: number[] = [];
   while ((m = rangeRe.exec(text)) !== null) {
     const before = text.slice(Math.max(0, m.index - 3), m.index);
-    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 8);
     if (/月/.test(before) || /^日/.test(after)) continue; // 12月15-22日
+    if (/^\s*(?:分鐘|mins?|minutes?|秒|secs?)/i.test(after)) continue; // 2-3分鐘 highlight
     const startH = Number(m[1]);
     const endH = Number(m[4]);
     const looksLikeDateRange =
@@ -351,18 +420,49 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
   collapseByMax("revision_rounds");
   collapseByMax("event_hours");
   collapseByMax("event_days");
-  collapseByMax("video_count");
   collapseByMax("clip_seconds");
 
+  const photographers = sumRoleMentions(
+    text,
+    /(\d{1,2})\s*(?:x\s*)?(?:chief\s+)?photographers?\b|(\d{1,2})\s*(?:位|名)?\s*(?:首席|主)?攝影師|(\d{1,2})\s*P\b/gi
+  );
+  const videographers = sumRoleMentions(
+    text,
+    /(\d{1,2})\s*(?:x\s*)?videographers?\b|(\d{1,2})\s*(?:位|名)?(?:攝像|錄影)師|(\d{1,2})\s*V\b|(\d{1,2})\s*(?:位|名)?拍攝助理\s*[（(]?\s*video|(\d{1,2})\s*video\s*assistants?/gi
+  );
+  if (photographers.total >= 1) {
+    push({
+      kind: "crew_photographers",
+      label: `現場 ${photographers.total} 位攝影師`,
+      value: photographers.total,
+      unit: "people",
+      evidence: photographers.evidence,
+    });
+  }
+  if (videographers.total >= 1) {
+    push({
+      kind: "crew_videographers",
+      label: `現場 ${videographers.total} 位攝像／視頻人手`,
+      value: videographers.total,
+      unit: "people",
+      evidence: videographers.evidence,
+    });
+  }
+
   if (briefNeedsCrew1p1v(text)) {
+    const p = Math.max(photographers.total, 1);
+    const v = Math.max(videographers.total, 1);
     const ev =
+      photographers.evidence ||
+      videographers.evidence ||
       text.match(
         /.{0,10}(?:攝影攝像|攝影.{0,16}(?:攝像|影片|視頻|video)|photograph.{0,24}video).{0,12}/i
-      )?.[0] ?? "攝影 + 影片";
+      )?.[0] ||
+      "攝影 + 影片";
     push({
       kind: "crew_1p1v",
-      label: "現場人手 1 攝影師 + 1 攝像師（影相兼拍片，唔可以一人包辦）",
-      value: 2,
+      label: `現場人手 ${p} 攝影師 + ${v} 攝像／視頻人手（影相兼拍片，唔可以一人包辦）`,
+      value: p + v,
       unit: "people",
       evidence: ev.replace(/\s+/g, " ").trim(),
     });
@@ -391,7 +491,13 @@ export function isMultiScopeSignals(signals: RequirementSignal[]): boolean {
     ) {
       families.add("video");
     }
-    if (s.kind === "crew_1p1v") families.add("crew");
+    if (
+      s.kind === "crew_1p1v" ||
+      s.kind === "crew_photographers" ||
+      s.kind === "crew_videographers"
+    ) {
+      families.add("crew");
+    }
   }
   return families.size >= 2;
 }

@@ -283,16 +283,27 @@ Web: https://jdstudiohk.com/`);
                 </span>
               )}
               {Array.isArray(aiParsed?.requirementSignals) &&
-                aiParsed.requirementSignals.some(
-                  (s: { kind?: string }) => s.kind === "crew_1p1v"
-                ) && (
+                (() => {
+                  const sigs = aiParsed.requirementSignals as Array<{
+                    kind?: string;
+                    value?: number | null;
+                  }>;
+                  const p =
+                    sigs.find((s) => s.kind === "crew_photographers")?.value ??
+                    (sigs.some((s) => s.kind === "crew_1p1v") ? 1 : 0);
+                  const v =
+                    sigs.find((s) => s.kind === "crew_videographers")?.value ??
+                    (sigs.some((s) => s.kind === "crew_1p1v") ? 1 : 0);
+                  if (!p && !v) return null;
+                  return (
                 <span
                   className="text-xs px-2 py-0.5 rounded-sm shrink-0"
                   style={{ background: "rgba(33,150,243,0.12)", color: "#90caf9", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(33,150,243,0.3)" }}
                 >
-                  現場 1P+1V
+                  現場 {p}P+{v}V
                 </span>
-              )}
+                  );
+                })()}
               {aiParsed?.draftReadiness &&
                 !aiParsed.draftReadiness.readyForAutoDraft &&
                 (inquiry.status === "pending" || inquiry.status === "pending_send") && (

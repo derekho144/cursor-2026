@@ -222,6 +222,31 @@ function coversHours(
  * 1P is implied by Event Photography / 攝影師.
  * 1V requires an actual videographer — not 攝影攝像 wording, not highlight edit.
  */
+function coversCrewHeadcount(
+  signal: RequirementSignal,
+  input: CoverageInput,
+  role: "photo" | "video"
+): boolean {
+  const need = signal.value;
+  if (need == null) return false;
+  const have =
+    role === "photo"
+      ? Number(input.crewPhotographers) || 0
+      : Number(input.crewVideographers) || 0;
+  if (have >= need) return true;
+  const blob = blobOf(input);
+  if (role === "photo") {
+    return new RegExp(
+      `${need}\\s*(?:chief\\s+)?photographers?|${need}\\s*P\\b|${need}\\s*位攝影師|${need}\\s*攝影師`,
+      "i"
+    ).test(blob);
+  }
+  return new RegExp(
+    `${need}\\s*videographers?|${need}\\s*V\\b|${need}\\s*拍攝助理|${need}\\s*位攝像|${need}\\s*攝像`,
+    "i"
+  ).test(blob);
+}
+
 function coversCrew1p1v(input: CoverageInput): boolean {
   const pCrew = Number(input.crewPhotographers) >= 1;
   const vCrew = Number(input.crewVideographers) >= 1;
@@ -235,8 +260,8 @@ function coversCrew1p1v(input: CoverageInput): boolean {
     const t = `${p.kind ?? ""} ${p.summary ?? ""}`;
     return (
       String(p.kind ?? "") === "crew" ||
-      (/1\s*p/i.test(t) && /1\s*v/i.test(t)) ||
-      ( /攝影師/.test(t) && /攝像師|錄影師/.test(t) )
+      (/\d\s*p/i.test(t) && /\d\s*v/i.test(t)) ||
+      (/攝影師/.test(t) && /攝像師|錄影師|視頻人手/.test(t))
     );
   });
   const hasP = pCrew || pText || photoLine || crewPkg;
@@ -319,6 +344,10 @@ export function findComprehensionGaps(input: {
     else if (signal.kind === "clip_seconds") ok = coversClipSeconds(signal, input);
     else if (signal.kind === "video_edit") ok = coversVideoEdit(input);
     else if (signal.kind === "crew_1p1v") ok = coversCrew1p1v(input);
+    else if (signal.kind === "crew_photographers")
+      ok = coversCrewHeadcount(signal, input, "photo");
+    else if (signal.kind === "crew_videographers")
+      ok = coversCrewHeadcount(signal, input, "video");
 
     if (ok) covered.push(signal);
     else {
@@ -329,7 +358,15 @@ export function findComprehensionGaps(input: {
         );
       } else if (signal.kind === "crew_1p1v") {
         gaps.push(
-          `原文要影相兼拍片，現場人手應為 1 攝影師 + 1 攝像師（1P+1V），解析未覆蓋（${signal.evidence}）`
+          `原文要影相兼拍片，現場人手應為攝影師 + 攝像／視頻人手，解析未覆蓋（${signal.evidence}）`
+        );
+      } else if (signal.kind === "crew_photographers") {
+        gaps.push(
+          `原文現場攝影師 ${signal.value} 人，解析未覆蓋（${signal.evidence}）`
+        );
+      } else if (signal.kind === "crew_videographers") {
+        gaps.push(
+          `原文現場攝像／視頻人手 ${signal.value} 人，解析未覆蓋（${signal.evidence}）`
         );
       } else {
         gaps.push(`原文有「${signal.label}」，解析未覆蓋（${signal.evidence}）`);

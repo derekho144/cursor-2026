@@ -10,6 +10,7 @@ import {
   HA_FIXTURE,
   VIDEO_CLIPS_FIXTURE,
   CITIC_MEETING_FIXTURE,
+  AWL_FIXTURE,
 } from "./inquiryComprehension.fixtures";
 
 describe("extractRequirementSignals", () => {
@@ -118,5 +119,48 @@ describe("extractRequirementSignals", () => {
   it("活動攝影 + 剪片 is photography and video → 1P+1V", () => {
     const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
     expect(signals.some((s) => s.kind === "crew_1p1v")).toBe(true);
+  });
+
+  it("AWL #11400001: 4h 0900-1300, 400 shots, 2P+2 video, not 2-3min as 1 hour", () => {
+    const signals = extractRequirementSignals(AWL_FIXTURE);
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 4)).toBe(
+      true
+    );
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 1)).toBe(
+      false
+    );
+    expect(signals.some((s) => s.kind === "shot_count" && s.value === 400)).toBe(
+      true
+    );
+    expect(
+      signals.some((s) => s.kind === "crew_photographers" && s.value === 2)
+    ).toBe(true);
+    expect(
+      signals.some((s) => s.kind === "crew_videographers" && s.value === 2)
+    ).toBe(true);
+    expect(
+      signals.some((s) => s.kind === "video_count" && s.value === 3)
+    ).toBe(true);
+    expect(signals.some((s) => s.kind === "video_edit")).toBe(true);
+  });
+
+  it("two 1P lines + 1V is 2 photographers not 1", () => {
+    const signals = extractRequirementSignals(
+      `Time: 1000-1830 for 1P and 1000-1500 for 1P
+1000-1830 for 1V
+Video Editing Service for One 2-3mins Video`
+    );
+    expect(
+      signals.some((s) => s.kind === "crew_photographers" && s.value === 2)
+    ).toBe(true);
+    expect(
+      signals.some((s) => s.kind === "crew_videographers" && s.value === 1)
+    ).toBe(true);
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 8.5)).toBe(
+      true
+    );
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 1)).toBe(
+      false
+    );
   });
 });

@@ -13,7 +13,7 @@ alwaysApply: true
 
 1. **只重讀事實**：正文 + PDF／附件。列出工作包（分開日子／地點／數量）。唔開價。
 2. **對三欄**：原文事實 vs `aiParsed` vs `suggestedItems`。有包消失 = 理解缺口，唔係 rate card。
-3. **加回歸樣本**：把原文放進 `server/inquiryComprehension.fixtures.ts`（去背、三條 20 秒片、N 天、1 分鐘精選、精修 N 張、影+片=1P+1V…下一類漏包都係加 fixture，唔係加價錢表）。
+3. **加回歸樣本**：把原文放進 `server/inquiryComprehension.fixtures.ts`（去背、三條 20 秒片、N 天、1 分鐘精選、精修 N 張、影+片至少 1P+1V、原文寫 2P+2V 就抄人數…下一類漏包都係加 fixture，唔係加價錢表）。
 4. **先理解、後報價**：`understandInquiryFacts` 唔准帶 `BILLING_RULES`。機械訊號（張數／天數／去背）漏咗就降 confidence、擋自動草稿。
 5. **最後先映射價錢**：每個工作包一條 line。只有確認係「規則把已理解嘅去背吞掉」先改 billing。
 6. **有理解缺口就唔准寄**：`quoteSendBlocker` 擋住 `confirmSendQuote`。舊 pending_send（有 PDF、無工作包）要先按「重讀需求」。
