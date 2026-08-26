@@ -16,5 +16,6 @@ alwaysApply: true
 3. **加回歸樣本**：把原文放進 `server/inquiryRequirementSignals.test.ts` fixture；覆蓋檢查必須 fail 舊 parse、pass 正確工作包。
 4. **先理解、後報價**：`understandInquiryFacts` 唔准帶 `BILLING_RULES`。機械訊號（張數／天數／去背）漏咗就降 confidence、擋自動草稿。
 5. **最後先映射價錢**：每個工作包一條 line。只有確認係「規則把已理解嘅去背吞掉」先改 billing。
+6. **有理解缺口就唔准寄**：`quoteSendBlocker` 擋住 `confirmSendQuote`。舊 pending_send（有 PDF、無工作包）要先按「重讀需求」。
 
-禁止一開始就改 `BILLING_RULES`／歷史均價／建議價門檻。`confidence: high` 唔可以同假設時數或漏包同時出現。
+禁止一開始就改 `BILLING_RULES`／歷史均價／建議價門檻。`confidence: high` 唔可以同假設時數或漏包同時出現。唔可以喺理解缺口未清時寄報價電郵。

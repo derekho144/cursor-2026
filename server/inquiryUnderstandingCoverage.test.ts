@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyComprehensionToParsed,
   findComprehensionGaps,
+  quoteSendBlocker,
 } from "../shared/inquiryUnderstandingCoverage";
 import { extractRequirementSignals } from "../shared/inquiryRequirementSignals";
 import { evaluateInquiryDraftReadiness } from "../shared/inquiryDraftReadiness";
@@ -109,6 +110,37 @@ describe("findComprehensionGaps — days vs hours", () => {
     expect(coverage.gaps.some((g) => g.includes("3 天") && g.includes("小時"))).toBe(
       true
     );
+  });
+});
+
+describe("quoteSendBlocker", () => {
+  it("blocks HKSEA-style gaps", () => {
+    const reason = quoteSendBlocker({
+      comprehensionGaps: ["原文有「約 200 件／張拍攝或交付」，解析未覆蓋"],
+      workPackages: [{ kind: "event", quantity: 4, unit: "hours" }],
+    });
+    expect(reason).toMatch(/閱讀理解缺口/);
+  });
+
+  it("blocks old pending_send with PDF but no workPackages", () => {
+    const reason = quoteSendBlocker({
+      attachmentStatus: "used",
+      suggestedItems: [{ description: "Event Photography", quantity: 4 }],
+    } as any);
+    expect(reason).toMatch(/重讀需求/);
+  });
+
+  it("allows a complete re-read", () => {
+    expect(
+      quoteSendBlocker({
+        comprehensionGaps: [],
+        workPackages: [
+          { kind: "event", quantity: 5, unit: "hours" },
+          { kind: "artwork_shoot", quantity: 200, unit: "pieces" },
+        ],
+        attachmentStatus: "used",
+      })
+    ).toBeNull();
   });
 });
 

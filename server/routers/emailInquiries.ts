@@ -49,6 +49,7 @@ import {
 import {
   applyComprehensionToParsed,
   findComprehensionGaps,
+  quoteSendBlocker,
 } from "../../shared/inquiryUnderstandingCoverage";
 import {
   formatFrozenFactsForPricing,
@@ -77,6 +78,12 @@ function enrichParsedWithAttachmentGate(
     pdfFileCount,
   });
   let enriched = applyAttachmentUnderstandingToParsed(aiResult, understanding);
+  if (opts.attachmentText?.trim()) {
+    enriched = {
+      ...enriched,
+      pdfTextExcerpt: opts.attachmentText.trim().slice(0, 12000),
+    };
+  }
   if (pdfFileCount > 0) {
     enriched = {
       ...enriched,
@@ -2192,6 +2199,17 @@ export const emailInquiriesRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "尚未建立草稿報價單，請先建立報價單" });
       }
 
+      let aiParsed: Record<string, unknown> | null = null;
+      try {
+        aiParsed = inquiryRows.aiParsed ? JSON.parse(inquiryRows.aiParsed) : null;
+      } catch {
+        aiParsed = null;
+      }
+      const sendBlock = quoteSendBlocker(aiParsed);
+      if (sendBlock) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: sendBlock });
+      }
+
       // Get quote details
       const quote = await getQuoteById(inquiryRows.quoteId);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
@@ -2470,6 +2488,96 @@ Do NOT include a subject line. Start directly with "Dear ${clientName},". Output
         nextScanAt,
         withinActiveHours,
         lastResult: lastGmailScanResult,
+      };
+    }),
+
+  // Re-read body + stored/pasted PDF so old collapsed parses (HKSEA 4h) get work packages.
+  reparseInquiry: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        extraText: z.string().max(16000).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const existing = await getEmailInquiryById(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Inquiry not found" });
+      if (existing.status === "approved" || existing.status === "rejected") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "已批核／已拒絕嘅詢價唔好重讀覆蓋",
+        });
+      }
+
+      let prev: Record<string, unknown> = {};
+      try {
+        prev = existing.aiParsed ? JSON.parse(existing.aiParsed) : {};
+      } catch {
+        prev = {};
+      }
+      const excerpt =
+        (input.extraText ?? "").trim() ||
+        String(prev.pdfTextExcerpt ?? "").trim();
+      const parseBody = mergeEmailBodyWithPdfText(
+        existing.bodyText || "",
+        excerpt
+      );
+      let aiResult = await parseInquiryWithAI(
+        existing.subject || "",
+        parseBody.slice(0, 16000),
+        existing.fromEmail
+      );
+      aiResult = enrichParsedWithAttachmentGate(aiResult, {
+        subject: existing.subject || "",
+        bodyText: existing.bodyText || "",
+        attachmentText: excerpt,
+        attachmentMeta: Array.isArray(prev.pdfAttachments)
+          ? (prev.pdfAttachments as Array<{ filename: string; chars?: number; error?: string }>)
+          : excerpt
+            ? [{ filename: "reparse.txt", chars: excerpt.length }]
+            : [],
+      }) as typeof aiResult;
+
+      const draftReadiness = aiResult
+        ? evaluateInquiryDraftReadiness({
+            ...aiResult,
+            learningReady: (
+              await getLearningAutoDraftGate(aiResult.serviceType ?? "other")
+            ).ready,
+          })
+        : null;
+      if (aiResult && draftReadiness) {
+        aiResult.draftReadiness = draftReadiness;
+      }
+
+      const sendBlock = quoteSendBlocker(aiResult);
+      const estimatedTotal = aiResult?.pricingMid
+        ? Number(aiResult.pricingMid)
+        : 0;
+      const patch: Record<string, unknown> = {
+        aiParsed: aiResult ? JSON.stringify(aiResult) : existing.aiParsed,
+        aiConfidence: aiResult?.confidence ?? "low",
+        estimatedTotal: estimatedTotal > 0 ? estimatedTotal : existing.estimatedTotal,
+      };
+      let demotedToPending = false;
+      if (existing.status === "pending_send" && sendBlock) {
+        patch.status = "pending";
+        demotedToPending = true;
+      }
+      await updateEmailInquiry(input.id, patch as any);
+
+      return {
+        id: input.id,
+        sendBlocked: !!sendBlock,
+        sendBlockReason: sendBlock,
+        demotedToPending,
+        confidence: aiResult?.confidence ?? null,
+        comprehensionGaps: Array.isArray(aiResult?.comprehensionGaps)
+          ? aiResult.comprehensionGaps
+          : [],
+        workPackageCount: Array.isArray(aiResult?.workPackages)
+          ? aiResult.workPackages.length
+          : 0,
       };
     }),
 

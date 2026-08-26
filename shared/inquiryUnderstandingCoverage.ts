@@ -245,3 +245,28 @@ export function applyComprehensionToParsed<
     multiScope: coverage.multiScope,
   };
 }
+
+/**
+ * Hard stop before sending a quote email.
+ * Old records (no workPackages) that pointed at an attachment must be re-read first —
+ * that is how HKSEA pending_send 4h drafts get blocked after deploy.
+ */
+export function quoteSendBlocker(parsed: {
+  comprehensionGaps?: string[] | null;
+  workPackages?: CoverageWorkPackage[] | null;
+  attachmentStatus?: string | null;
+} | null | undefined): string | null {
+  if (!parsed) return "未有 AI 解析結果，唔可以寄報價";
+  const gaps = Array.isArray(parsed.comprehensionGaps)
+    ? parsed.comprehensionGaps.map((g) => String(g).trim()).filter(Boolean)
+    : [];
+  if (gaps.length > 0) {
+    return `閱讀理解缺口未解決，唔可以寄報價：${gaps.join("；")}`;
+  }
+  const hasPackages = Array.isArray(parsed.workPackages) && parsed.workPackages.length > 0;
+  const att = String(parsed.attachmentStatus ?? "");
+  if (!hasPackages && (att === "used" || att === "missing")) {
+    return "此單未用工作包流程重讀（附件 RFQ）。請先按「重讀需求」，確認範圍齊再寄。";
+  }
+  return null;
+}

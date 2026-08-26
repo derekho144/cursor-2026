@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import DashboardLayout from "@/components/DashboardLayout";
 import { keepPreviousData } from "@tanstack/react-query";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
+import { quoteSendBlocker } from "@shared/inquiryUnderstandingCoverage";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   pending: { label: "待處理", color: "#d4a843" },
@@ -133,7 +134,27 @@ const InquiryCard = memo(function InquiryCard({ inquiry, onRefresh }: { inquiry:
     },
     onError: (err) => toast.error(`發送失敗: ${err.message}`),
   });
+  const reparseMutation = trpc.emailInquiries.reparseInquiry.useMutation({
+    onSuccess: (data) => {
+      if (data.demotedToPending) {
+        toast.warning("理解缺口：已由待發送改回待處理，請核對工作範圍後再寄。");
+      } else if (data.sendBlocked) {
+        toast.warning(data.sendBlockReason || "理解仍未齊，暫唔可以寄。");
+      } else {
+        toast.success(
+          `已重讀需求：${data.workPackageCount} 個工作包${data.confidence ? ` · 信心 ${data.confidence}` : ""}`
+        );
+      }
+      onRefresh();
+    },
+    onError: (err) => toast.error(`重讀失敗: ${err.message}`),
+  });
+  const sendBlockReason = quoteSendBlocker(aiParsed);
   const openConfirmSendDialog = () => {
+    if (sendBlockReason) {
+      toast.error(sendBlockReason);
+      return;
+    }
     const aiP = aiParsed;
     const clientName = aiP?.clientName || inquiry.fromName || "Sir/Madam";
     setConfirmEmailSubject("");
@@ -656,6 +677,22 @@ Web: https://jdstudiohk.com/`);
                   <EyeOff className="h-3.5 w-3.5" />
                   忽略
                 </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reparseMutation.mutate({ id: inquiry.id });
+                  }}
+                  disabled={reparseMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded transition-all hover:opacity-80 disabled:opacity-40"
+                  style={{ color: "#64b5f6", border: "1px solid rgba(100,181,246,0.3)" }}
+                >
+                  {reparseMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  重讀需求
+                </button>
                 {inquiry.quoteId && (
                   <button
                     onClick={() => setLocation(`/quotes/${inquiry.quoteId}/edit`)}
@@ -717,10 +754,30 @@ Web: https://jdstudiohk.com/`);
             {/* pending_send: AI auto-approved, awaiting admin confirmation to send */}
             {isPendingSend && (
               <div className="px-5 py-3 flex items-center gap-3 flex-wrap" style={{ background: "rgba(255,112,67,0.06)", borderTop: "1px solid rgba(255,112,67,0.15)" }}>
-                <div className="flex items-center gap-2 text-xs mr-2" style={{ color: "#ff7043" }}>
+                <div className="flex items-center gap-2 text-xs mr-2" style={{ color: sendBlockReason ? "#ef5350" : "#ff7043" }}>
                   <AlertCircle className="h-3.5 w-3.5" />
-                  <span>AI 已自動批核並建立草稿報價單，請確認後發送</span>
+                  <span>
+                    {sendBlockReason
+                      ? `唔可以寄：${sendBlockReason}`
+                      : "AI 已自動批核並建立草稿報價單，請確認範圍齊再發送"}
+                  </span>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reparseMutation.mutate({ id: inquiry.id });
+                  }}
+                  disabled={reparseMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded transition-all hover:opacity-80 disabled:opacity-40"
+                  style={{ color: "#64b5f6", border: "1px solid rgba(100,181,246,0.3)" }}
+                >
+                  {reparseMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  重讀需求
+                </button>
                 {inquiry.quoteId && (
                   <button
                     onClick={() => setLocation(`/quotes/${inquiry.quoteId}/edit`)}
@@ -733,8 +790,10 @@ Web: https://jdstudiohk.com/`);
                 )}
                 <button
                   onClick={openConfirmSendDialog}
-                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded transition-all hover:opacity-80"
+                  disabled={!!sendBlockReason}
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-medium rounded transition-all hover:opacity-80 disabled:opacity-40"
                   style={{ background: "rgba(255,112,67,0.18)", color: "#ff7043", border: "1px solid rgba(255,112,67,0.4)" }}
+                  title={sendBlockReason || undefined}
                 >
                   <CheckCircle className="h-3.5 w-3.5" />
                   確認並發送報價郵件
