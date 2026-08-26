@@ -8,6 +8,7 @@ import {
   HKSEA_FIXTURE,
   HKRC_FIXTURE,
   HA_FIXTURE,
+  VIDEO_CLIPS_FIXTURE,
 } from "./inquiryComprehension.fixtures";
 
 describe("extractRequirementSignals", () => {
@@ -61,5 +62,20 @@ describe("extractRequirementSignals", () => {
     const hours = signals.filter((s) => s.kind === "event_hours");
     expect(hours).toHaveLength(1);
     expect(hours[0].value).toBe(5);
+  });
+
+  it("reads 剪埋三條影片每條20秒 as clips + seconds, not event hours", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    expect(signals.some((s) => s.kind === "video_edit")).toBe(true);
+    expect(signals.some((s) => s.kind === "video_count" && s.value === 3)).toBe(
+      true
+    );
+    expect(signals.some((s) => s.kind === "clip_seconds" && s.value === 20)).toBe(
+      true
+    );
+    expect(signals.some((s) => s.kind === "event_hours" && s.value === 5)).toBe(
+      true
+    );
+    expect(isMultiScopeSignals(signals)).toBe(true);
   });
 });

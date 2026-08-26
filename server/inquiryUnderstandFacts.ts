@@ -141,10 +141,10 @@ ${formatSignalsForPrompt(signals)}
 ${retry}
 
 Rules:
-1. Split distinct jobs into separate workPackages (event coverage vs artwork/product stills vs 去背/cutout vs video vs extra days).
+1. Split distinct jobs into separate workPackages. Counted deliverables are jobs: event coverage, artwork/product stills, 去背/cutout, video clips / 剪片, extra days.
 2. kind must be one of: event, product_shoot, artwork_shoot, background_removal, video, other.
-3. unit must be one of: hours, days, shots, pieces, cutouts, unknown.
-4. Never collapse 去背 / 作品特寫 / per-piece stills into event "retouching included".
+3. unit must be one of: hours, days, shots, pieces, cutouts, clips, seconds, unknown.
+4. Never collapse 去背 / 作品特寫 / per-piece stills / 剪片 into event "retouching included".
 5. "N days" is days, not N hours. "活動後7天內交付" is turnaround, not shoot days.
 6. If PDF lists quantities/dates, copy them. Do not invent shootingDate.
 7. multiScope=true if more than one real work package.
@@ -153,6 +153,7 @@ Rules:
 10. notes: Traditional Chinese, max 280 chars, list every work package first.
 11. confidence high ONLY if every machine signal is in a workPackage (or justified in missingFields).
 12. If the body says 詳見附件 / see attached but there is no PDF ATTACHMENT TEXT section, confidence medium/low and missingFields includes attachmentText.
+13. 「N 條影片／clips」+「每條 N 秒」= one video workPackage. quantity = number of clips; put per-clip duration in summary (e.g. 「3 條影片，每條 20 秒」). Do not fold this into Event Photography hours.
 
 Return JSON only.`;
 }

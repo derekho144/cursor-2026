@@ -10,7 +10,10 @@ export type RequirementSignalKind =
   | "shot_count"
   | "event_hours"
   | "event_days"
-  | "background_removal";
+  | "background_removal"
+  | "video_count"
+  | "clip_seconds"
+  | "video_edit";
 
 export type RequirementSignal = {
   kind: RequirementSignalKind;
@@ -41,6 +44,34 @@ function isDeliveryTurnaround(before: string, after: string): boolean {
   );
 }
 
+const CN_STRIP: Array<[RegExp, string]> = [
+  [/兩條|两条|二條|二条/g, "2條"],
+  [/三條|三条/g, "3條"],
+  [/四條|四条/g, "4條"],
+  [/五條|五条/g, "5條"],
+  [/六條|六条/g, "6條"],
+  [/七條|七条/g, "7條"],
+  [/八條|八条/g, "8條"],
+  [/九條|九条/g, "9條"],
+  [/十條|十条/g, "10條"],
+];
+
+const EN_COUNT: Array<[RegExp, string]> = [
+  [/\btwo\s+(videos?|clips?|reels?|films?)/gi, "2 $1"],
+  [/\bthree\s+(videos?|clips?|reels?|films?)/gi, "3 $1"],
+  [/\bfour\s+(videos?|clips?|reels?|films?)/gi, "4 $1"],
+  [/\bfive\s+(videos?|clips?|reels?|films?)/gi, "5 $1"],
+  [/\bsix\s+(videos?|clips?|reels?|films?)/gi, "6 $1"],
+];
+
+/** 「三條影片」→「3條影片」so count regex can run. */
+export function normalizeDeliverableCounts(raw: string): string {
+  let t = raw ?? "";
+  for (const [re, to] of CN_STRIP) t = t.replace(re, to);
+  for (const [re, to] of EN_COUNT) t = t.replace(re, to);
+  return t;
+}
+
 function parseHourRange(startH: number, startMin: number, startMer: string, endH: number, endMin: number, endMer: string): number | null {
   const to24 = (h: number, mer: string): number => {
     let hh = h;
@@ -63,7 +94,7 @@ function parseHourRange(startH: number, startMin: number, startMer: string, endH
 }
 
 export function extractRequirementSignals(raw: string): RequirementSignal[] {
-  const text = raw ?? "";
+  const text = normalizeDeliverableCounts(raw ?? "");
   const signals: RequirementSignal[] = [];
   const seen = new Set<string>();
 
@@ -73,6 +104,8 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     seen.add(key);
     signals.push(s);
   };
+
+  let m: RegExpExecArray | null;
 
   if (/去背|去背景|抠图|摳圖|cut[\s-]?outs?|background\s*remov(?:al|e)/i.test(text)) {
     const m = text.match(
@@ -87,9 +120,49 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
+  if (/剪埋|剪接|剪輯|剪片|video\s*edit|post[- ]?production\s*edit/i.test(text)) {
+    const em = text.match(
+      /.{0,10}(?:剪埋|剪接|剪輯|剪片|video\s*edit|post[- ]?production\s*edit).{0,16}/i
+    );
+    push({
+      kind: "video_edit",
+      label: "影片剪接／後期（獨立工作包，唔係活動攝影附送）",
+      value: null,
+      unit: "edit",
+      evidence: (em?.[0] ?? "剪接").replace(/\s+/g, " ").trim(),
+    });
+  }
+
+  const videoCountRe =
+    /(\d{1,2})\s*(?:條|条|支)?\s*(?:影片|短片|片花|宣傳片|clips?|videos?|reels?|films?)/gi;
+  while ((m = videoCountRe.exec(text)) !== null) {
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n < 1 || n > 30) continue;
+    push({
+      kind: "video_count",
+      label: `${n} 條影片／clips（獨立交付）`,
+      value: n,
+      unit: "clips",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
+  const perClipSecRe =
+    /每[條条支個个]\s*(\d{1,4})\s*(?:秒|seconds?|secs?)|(\d{1,4})\s*(?:秒|seconds?|secs?)\s*(?:each|一條|一条|\/\s*clip)/gi;
+  while ((m = perClipSecRe.exec(text)) !== null) {
+    const n = Number(m[1] || m[2]);
+    if (!Number.isFinite(n) || n < 5 || n > 600) continue;
+    push({
+      kind: "clip_seconds",
+      label: `每條約 ${n} 秒`,
+      value: n,
+      unit: "seconds",
+      evidence: clipEvidence(text, m.index, m.index + m[0].length),
+    });
+  }
+
   const shotRe =
     /(?:約|大约|大約|around|about|approx(?:imately)?|~)?\s*(\d{2,4})\s*(?:件|張|张|幅|款|套|pcs?|pieces?|photos?|images?|shots?|skus?|artworks?|products?)(?:\s*(?:作品|產品|菜式|jewelry|珠寶))?/gi;
-  let m: RegExpExecArray | null;
   while ((m = shotRe.exec(text)) !== null) {
     const n = Number(m[1]);
     const after = text.slice(m.index + m[0].length, m.index + m[0].length + 6);
@@ -148,7 +221,7 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
     });
   }
 
-  const hourRe = /(\d{1,2}(?:\.\d)?)\s*(?:小時|hrs?|hours?)\b/gi;
+  const hourRe = /(\d{1,2}(?:\.\d)?)\s*(?:小時|hrs?|hours?)/gi;
   while ((m = hourRe.exec(text)) !== null) {
     const n = Number(m[1]);
     if (!Number.isFinite(n) || n < 1 || n > 16) continue;
@@ -203,24 +276,32 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
   collapseByMax("shot_count");
   collapseByMax("event_hours");
   collapseByMax("event_days");
+  collapseByMax("video_count");
+  collapseByMax("clip_seconds");
 
   void rangeHours;
   return signals;
 }
 
 export function isMultiScopeSignals(signals: RequirementSignal[]): boolean {
-  const hasTime = signals.some(
-    (s) => s.kind === "event_hours" || s.kind === "event_days"
-  );
-  const hasStill = signals.some(
-    (s) => s.kind === "shot_count" || s.kind === "background_removal"
-  );
-  return hasTime && hasStill;
+  const families = new Set<string>();
+  for (const s of signals) {
+    if (s.kind === "event_hours" || s.kind === "event_days") families.add("time");
+    if (s.kind === "shot_count" || s.kind === "background_removal") families.add("still");
+    if (
+      s.kind === "video_count" ||
+      s.kind === "clip_seconds" ||
+      s.kind === "video_edit"
+    ) {
+      families.add("video");
+    }
+  }
+  return families.size >= 2;
 }
 
 export function formatSignalsForPrompt(signals: RequirementSignal[]): string {
   if (!signals.length) {
-    return "（機械抽取：無明確數量／去背／天數訊號。唔好發明時數或張數。）";
+    return "（機械抽取：無明確數量／去背／影片／天數訊號。唔好發明時數或張數。）";
   }
   return signals
     .map(

@@ -14,3 +14,6 @@ export const HKSEA_FIXTURE = `本會將於今年12月舉辦「香港視覺藝術
 export const HKRC_FIXTURE = `Need 3 days outdoor photography at the race course. Deliver 120 photos.`;
 
 export const HA_FIXTURE = `Graduation photography 3 hours on 2 Nov 2026 at HA Building, 40 retouched photos.`;
+
+/** Event + 3 edited clips × 20s — next miss after 去背 if we only special-case artwork. */
+export const VIDEO_CLIPS_FIXTURE = `活動攝影 5 小時。另外請剪埋三條影片，每條20秒，用於 IG Reels。`;

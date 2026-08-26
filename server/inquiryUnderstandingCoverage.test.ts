@@ -6,7 +6,7 @@ import {
 } from "../shared/inquiryUnderstandingCoverage";
 import { extractRequirementSignals } from "../shared/inquiryRequirementSignals";
 import { evaluateInquiryDraftReadiness } from "../shared/inquiryDraftReadiness";
-import { HKSEA_FIXTURE, HKRC_FIXTURE, HA_FIXTURE } from "./inquiryComprehension.fixtures";
+import { HKSEA_FIXTURE, HKRC_FIXTURE, HA_FIXTURE, VIDEO_CLIPS_FIXTURE } from "./inquiryComprehension.fixtures";
 
 describe("findComprehensionGaps — HKSEA collapse", () => {
   it("flags the stored 4h-event parse as a comprehension miss", () => {
@@ -141,6 +141,51 @@ describe("quoteSendBlocker", () => {
         attachmentStatus: "used",
       })
     ).toBeNull();
+  });
+});
+
+describe("findComprehensionGaps — 3 clips × 20s", () => {
+  it("flags event-hours-only parse that drops the videos", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Event Photography", quantity: 5 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 5,
+      shotCount: 0,
+    });
+    expect(coverage.multiScope).toBe(true);
+    expect(coverage.gaps.some((g) => g.includes("3") && /影片|clip/i.test(g))).toBe(
+      true
+    );
+    expect(coverage.gaps.some((g) => /20/.test(g))).toBe(true);
+    expect(coverage.collapsedToEventHours).toBe(true);
+  });
+
+  it("passes when a video package has 3 clips × 20s", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        { kind: "event", summary: "活動攝影 5 小時", quantity: 5, unit: "hours" },
+        {
+          kind: "video",
+          summary: "剪接 3 條影片，每條 20 秒",
+          quantity: 3,
+          unit: "clips",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 5 },
+        { description: "Video Editing (3 clips × 20s)", quantity: 3 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 5,
+    });
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.collapsedToEventHours).toBe(false);
   });
 });
 

@@ -99,6 +99,47 @@ function coversDays(
   return /multi_day|多日|天拍攝/.test(blob) && blob.includes(String(v));
 }
 
+function coversVideoCount(
+  signal: RequirementSignal,
+  input: Parameters<typeof blobOf>[0]
+): boolean {
+  const v = signal.value;
+  if (v == null) return false;
+  for (const p of input.workPackages ?? []) {
+    if (
+      qtyClose(Number(p.quantity), v) &&
+      /video|clip|film|reel|影片|片/i.test(`${p.kind ?? ""} ${p.unit ?? ""} ${p.summary ?? ""}`)
+    ) {
+      return true;
+    }
+  }
+  for (const it of input.suggestedItems ?? []) {
+    if (!qtyClose(Number(it.quantity), v)) continue;
+    if (/video|clip|film|reel|影片|剪/i.test(String(it.description ?? ""))) return true;
+  }
+  const blob = blobOf(input);
+  return blob.includes(String(v)) && /video|clip|film|reel|影片/.test(blob);
+}
+
+function coversClipSeconds(
+  signal: RequirementSignal,
+  input: Parameters<typeof blobOf>[0]
+): boolean {
+  const v = signal.value;
+  if (v == null) return false;
+  const blob = blobOf(input);
+  return (
+    blob.includes(String(v)) && /秒|sec|second|clip/.test(blob)
+  );
+}
+
+function coversVideoEdit(input: Parameters<typeof blobOf>[0]): boolean {
+  const blob = blobOf(input);
+  if (/剪接|剪輯|剪片|video\s*edit|editing|影片/.test(blob)) return true;
+  return (input.workPackages ?? []).some((p) =>
+    /video/i.test(String(p.kind ?? ""))
+  );
+}
 function coversHours(
   signal: RequirementSignal,
   input: Parameters<typeof blobOf>[0]
@@ -126,23 +167,37 @@ function isCollapsedToEventHours(
 ): boolean {
   const hasShot = signals.some((s) => s.kind === "shot_count" && (s.value ?? 0) >= 20);
   const hasCutout = signals.some((s) => s.kind === "background_removal");
-  if (!hasShot && !hasCutout) return false;
+  const hasVideo = signals.some(
+    (s) =>
+      s.kind === "video_count" ||
+      s.kind === "clip_seconds" ||
+      s.kind === "video_edit"
+  );
+  if (!hasShot && !hasCutout && !hasVideo) return false;
 
   const items = input.suggestedItems ?? [];
   const hasLargeShotLine = items.some((it) => Number(it.quantity) >= 20);
   const hasCutoutLine = items.some((it) =>
     /去背|cut[\s-]?out|background/i.test(String(it.description ?? ""))
   );
+  const hasVideoLine = items.some((it) =>
+    /video|clip|film|reel|影片|剪接|剪輯/i.test(String(it.description ?? ""))
+  );
   const pkgHasStill = (input.workPackages ?? []).some((p) =>
     /artwork|product|background|shot/i.test(`${p.kind ?? ""} ${p.unit ?? ""}`)
+  );
+  const pkgHasVideo = (input.workPackages ?? []).some((p) =>
+    /video/i.test(`${p.kind ?? ""} ${p.unit ?? ""}`)
   );
 
   if (hasShot && !hasLargeShotLine && !pkgHasStill && !qtyClose(Number(input.shotCount), signals.find((s) => s.kind === "shot_count")?.value ?? -1)) {
     return true;
   }
   if (hasCutout && !hasCutoutLine && !coversCutout(input)) return true;
+  if (hasVideo && !hasVideoLine && !pkgHasVideo) return true;
   if (items.length > 0 && hasShot && !hasLargeShotLine) return true;
   if (items.length > 0 && hasCutout && !hasCutoutLine) return true;
+  if (items.length > 0 && hasVideo && !hasVideoLine) return true;
   return false;
 }
 
@@ -165,6 +220,9 @@ export function findComprehensionGaps(input: {
     else if (signal.kind === "background_removal") ok = coversCutout(input);
     else if (signal.kind === "event_days") ok = coversDays(signal, input);
     else if (signal.kind === "event_hours") ok = coversHours(signal, input);
+    else if (signal.kind === "video_count") ok = coversVideoCount(signal, input);
+    else if (signal.kind === "clip_seconds") ok = coversClipSeconds(signal, input);
+    else if (signal.kind === "video_edit") ok = coversVideoEdit(input);
 
     if (ok) covered.push(signal);
     else {
@@ -181,7 +239,7 @@ export function findComprehensionGaps(input: {
 
   const collapsedToEventHours = isCollapsedToEventHours(input.signals, input);
   if (collapsedToEventHours) {
-    const msg = "多範圍 RFQ 被塌成單一活動時數（作品／去背／張數消失）";
+    const msg = "多範圍 RFQ 被塌成單一活動時數（作品／去背／影片／張數消失）";
     if (!gaps.includes(msg)) gaps.push(msg);
   }
 
