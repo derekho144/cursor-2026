@@ -1492,7 +1492,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     const readyForAutoDraft = !!draftReadiness?.readyForAutoDraft;
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
-    const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}`);
+    const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}\n${attachmentText ?? ""}`);
     // High-value: pricingMid >= HK$8,000, OR video team (2+ photographers alone is not enough)
     const isHighValue =
       !isFHSource &&
@@ -1759,7 +1759,7 @@ export const emailInquiriesRouter = router({
         const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
-        const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}`);
+        const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}\n${attachmentText ?? ""}`);
         // High-value: pricingMid >= HK$8,000, OR video team (2+ photographers alone is not enough)
         const isHighValueScan =
           !isFHSrc &&
