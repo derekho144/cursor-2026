@@ -23,6 +23,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { quotePricingMode, isPricingLearningServiceType } from "@shared/quotePricingMode";
+import {
+  DURATION_PACKAGE_OPTIONS,
+  inferDurationPackageFromHours,
+  type DurationPackage,
+} from "@shared/quoteDurationPackage";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -123,6 +129,16 @@ type FormData = {
   validUntil: string;
   equipment: string;
   team: string;
+  /** Structured hours for event/time-based pricing */
+  shootHours: string;
+  /** hours | half_day | full_day | multi_day */
+  durationPackage: "" | Exclude<DurationPackage, "unknown">;
+  /** Delivered shot count for product-style pricing (張數) */
+  shotCount: string;
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
   deliveryMethod: string;
   leadSource: string;
   items: QuoteItem[];
@@ -150,6 +166,13 @@ const emptyForm: FormData = {
   validUntil: "",
   equipment: "",
   team: "",
+  shootHours: "",
+  durationPackage: "",
+  shotCount: "",
+  crewPhotographers: 0,
+  crewAssistants: 0,
+  crewVideographers: 0,
+  crewOthers: 0,
   deliveryMethod: "",
   leadSource: "",
   items: [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0 }],
@@ -158,6 +181,132 @@ const emptyForm: FormData = {
   syncToClients: true,
   emailInquiryId: undefined,
 };
+
+/** Merge saved drafts / partial payloads onto emptyForm so new fields never crash .trim(). */
+function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData {
+  const base = { ...emptyForm, items: emptyForm.items.map((i) => ({ ...i, id: crypto.randomUUID() })) };
+  if (!raw || typeof raw !== "object") return base;
+  const items = Array.isArray(raw.items)
+    ? raw.items.map((item) => ({
+        id: item?.id || crypto.randomUUID(),
+        description: item?.description ?? "",
+        quantity: Number(item?.quantity) || 0,
+        unitPrice: Number(item?.unitPrice) || 0,
+        amount: Number(item?.amount) || 0,
+        isIncluded: !!(item as any)?.isIncluded,
+      }))
+    : base.items;
+  return {
+    ...base,
+    ...raw,
+    shootHours: raw.shootHours != null ? String(raw.shootHours) : "",
+    durationPackage:
+      raw.durationPackage === "hours" ||
+      raw.durationPackage === "half_day" ||
+      raw.durationPackage === "full_day" ||
+      raw.durationPackage === "multi_day"
+        ? raw.durationPackage
+        : "",
+    shotCount: raw.shotCount != null ? String(raw.shotCount) : "",
+    equipment: raw.equipment ?? "",
+    team: raw.team ?? "",
+    deliveryMethod: raw.deliveryMethod ?? "",
+    leadSource: raw.leadSource ?? "",
+    notes: raw.notes ?? "",
+    crewPhotographers: Number(raw.crewPhotographers) || 0,
+    crewAssistants: Number(raw.crewAssistants) || 0,
+    crewVideographers: Number(raw.crewVideographers) || 0,
+    crewOthers: Number(raw.crewOthers) || 0,
+    depositMode: raw.depositMode === "fixed" ? "fixed" : "percent",
+    items: items.length > 0 ? items : base.items,
+  };
+}
+
+function buildTeamLabel(crew: {
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
+}): string {
+  const parts: string[] = [];
+  if (crew.crewPhotographers > 0) parts.push(`攝影師×${crew.crewPhotographers}`);
+  if (crew.crewVideographers > 0) parts.push(`錄影×${crew.crewVideographers}`);
+  if (crew.crewAssistants > 0) parts.push(`助理×${crew.crewAssistants}`);
+  if (crew.crewOthers > 0) parts.push(`其他×${crew.crewOthers}`);
+  return parts.join(" + ");
+}
+
+function crewHeadcount(crew: {
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
+}): number {
+  return (
+    (crew.crewPhotographers || 0) +
+    (crew.crewAssistants || 0) +
+    (crew.crewVideographers || 0) +
+    (crew.crewOthers || 0)
+  );
+}
+
+/** Sync included "Team XP" line item with structured headcount. */
+function syncTeamLineItem(
+  items: QuoteItem[],
+  headcount: number
+): QuoteItem[] {
+  if (headcount <= 0) return items;
+  const teamRe = /^team\s*\d+\s*p\b/i;
+  const idx = items.findIndex((i) => teamRe.test(i.description.trim()));
+  const label = `Team ${headcount}P`;
+  if (idx >= 0) {
+    if (items[idx].description === label) return items;
+    const next = [...items];
+    next[idx] = { ...next[idx], description: label };
+    return next;
+  }
+  return items;
+}
+
+/** Read Team XP / 人手 from item lines into structured defaults. */
+function crewFromTemplateItems(
+  items: Array<{ description: string }>,
+  templateId?: string
+): {
+  crewPhotographers: number;
+  crewAssistants: number;
+  crewVideographers: number;
+  crewOthers: number;
+} {
+  let pax = 0;
+  for (const it of items) {
+    const m = it.description.match(/team\s*(\d+)\s*p\b/i);
+    if (m) pax = Math.max(pax, Number(m[1]) || 0);
+  }
+  if (pax <= 0) pax = 1;
+  if (templateId === "video_only") {
+    return {
+      crewPhotographers: 0,
+      crewAssistants: 0,
+      crewVideographers: pax,
+      crewOthers: 0,
+    };
+  }
+  if (templateId === "photo_video" && pax >= 2) {
+    return {
+      crewPhotographers: 1,
+      crewAssistants: 0,
+      crewVideographers: Math.max(1, pax - 1),
+      crewOthers: 0,
+    };
+  }
+  return {
+    crewPhotographers: pax,
+    crewAssistants: 0,
+    crewVideographers: 0,
+    crewOthers: 0,
+  };
+}
 
 // Sortable row component for drag-and-drop reordering
 function SortableQuoteItem({
@@ -254,17 +403,19 @@ export default function QuoteForm() {
       const saved = safeLSGet('quote_draft_new');
       if (saved) {
         try {
-          const parsed = JSON.parse(saved) as FormData;
-          // Ensure items have valid ids
-          if (parsed.items && Array.isArray(parsed.items)) {
-            parsed.items = parsed.items.map(item => ({ ...item, id: item.id || crypto.randomUUID() }));
-          }
-          return parsed;
+          return normalizeFormData(JSON.parse(saved) as FormData);
         } catch { /* ignore */ }
       }
     }
-    return emptyForm;
+    return normalizeFormData(emptyForm);
   });
+
+  // Heal incomplete drafts (e.g. missing shotCount after schema upgrade)
+  useEffect(() => {
+    if (form.shotCount == null || form.shootHours == null) {
+      setForm((p) => normalizeFormData(p));
+    }
+  }, [form.shotCount, form.shootHours]);
   const [hasDraft, setHasDraft] = useState(() => !isEdit && !!safeLSGet('quote_draft_new'));
   // For edit mode: per-quote draft key
   const editDraftKey = isEdit && quoteId ? `quote_draft_edit_${quoteId}` : null;
@@ -296,6 +447,34 @@ export default function QuoteForm() {
   const { data: inquiryResults } = trpc.emailInquiries.searchForLinking.useQuery(
     { query: inquirySearch, limit: 8 },
     { enabled: showInquiryDropdown }
+  );
+
+  const pricingMode = quotePricingMode(form.serviceType);
+  const suggestHours = form.shootHours.trim() ? Number(form.shootHours) : null;
+  const suggestCrew =
+    form.crewPhotographers +
+    form.crewAssistants +
+    form.crewVideographers +
+    form.crewOthers;
+  const suggestShots = form.shotCount.trim() ? Number(form.shotCount) : null;
+  const { data: priceSuggest } = trpc.pricingLearning.suggest.useQuery(
+    {
+      serviceType: form.serviceType as any,
+      hours:
+        suggestHours != null && Number.isFinite(suggestHours)
+          ? suggestHours
+          : null,
+      crewSize: suggestCrew > 0 ? suggestCrew : null,
+      shotCount:
+        suggestShots != null && Number.isFinite(suggestShots)
+          ? suggestShots
+          : null,
+      durationPackage: form.durationPackage || null,
+    },
+    {
+      enabled: !!form.serviceType && isPricingLearningServiceType(form.serviceType),
+      refetchOnWindowFocus: false,
+    }
   );
 
   // Phone auto-lookup state
@@ -469,11 +648,8 @@ export default function QuoteForm() {
       const savedEditDraft = editDraftKey ? safeLSGet(editDraftKey) : null;
       if (savedEditDraft) {
         try {
+          setForm(normalizeFormData(JSON.parse(savedEditDraft) as FormData));
           const parsed = JSON.parse(savedEditDraft) as FormData;
-          if (parsed.items && Array.isArray(parsed.items)) {
-            parsed.items = parsed.items.map(item => ({ ...item, id: item.id || crypto.randomUUID() }));
-          }
-          setForm(parsed);
           if ((parsed as any).clientId && parsed.clientName) {
             setSelectedClientName(parsed.clientName);
           }
@@ -482,7 +658,7 @@ export default function QuoteForm() {
         } catch { /* fall through to server data */ }
       }
       // Load from server
-      setForm({
+      setForm(normalizeFormData({
         clientName: existingQuote.clientName,
         clientEmail: existingQuote.clientEmail ?? "",
         clientPhone: existingQuote.clientPhone ?? "",
@@ -502,6 +678,27 @@ export default function QuoteForm() {
         saveAsNewClient: false,
         equipment: (existingQuote as any).equipment ?? "",
         team: (existingQuote as any).team ?? "",
+        shootHours:
+          (existingQuote as any).shootHours != null &&
+          Number((existingQuote as any).shootHours) > 0
+            ? String(Number((existingQuote as any).shootHours))
+            : "",
+        durationPackage:
+          (existingQuote as any).durationPackage === "hours" ||
+          (existingQuote as any).durationPackage === "half_day" ||
+          (existingQuote as any).durationPackage === "full_day" ||
+          (existingQuote as any).durationPackage === "multi_day"
+            ? ((existingQuote as any).durationPackage as FormData["durationPackage"])
+            : "",
+        shotCount:
+          (existingQuote as any).shotCount != null &&
+          Number((existingQuote as any).shotCount) > 0
+            ? String(Number((existingQuote as any).shotCount))
+            : "",
+        crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
+        crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
+        crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
+        crewOthers: Number((existingQuote as any).crewOthers ?? 0),
         deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
         leadSource: (existingQuote as any).leadSource ?? "",
         items: existingQuote.items.map((item) => ({
@@ -511,6 +708,18 @@ export default function QuoteForm() {
           unitPrice: Number(item.unitPrice),
           amount: Number(item.amount),
         })),
+      }));
+      // Hydrate structured crew from Team XP line if DB crew empty
+      setForm((p) => {
+        if (crewHeadcount(p) > 0) return p;
+        const fromItems = crewFromTemplateItems(p.items);
+        if (crewHeadcount(fromItems) <= 0) return p;
+        const auto = buildTeamLabel(fromItems);
+        return {
+          ...p,
+          ...fromItems,
+          team: p.team.trim() || auto,
+        };
       });
       if ((existingQuote as any).clientId) {
         setSelectedClientName(existingQuote.clientName);
@@ -597,6 +806,50 @@ export default function QuoteForm() {
     if (!form.leadSource) { toast.error("請選擇詢價來源"); return; }
     if (form.items.some((i) => !i.description.trim())) { toast.error("請填寫所有服務項目說明"); return; }
 
+    const pricingMode = quotePricingMode(form.serviceType);
+    const shootHoursStr = form.shootHours ?? "";
+    const shotCountStr = form.shotCount ?? "";
+    const hoursNum = shootHoursStr.trim() ? Number(shootHoursStr) : null;
+    let shootHours =
+      hoursNum != null && Number.isFinite(hoursNum) && hoursNum > 0
+        ? hoursNum
+        : null;
+
+    const shotNum = shotCountStr.trim() ? Number(shotCountStr) : null;
+    const shotCount =
+      shotNum != null && Number.isFinite(shotNum) && shotNum > 0
+        ? Math.floor(shotNum)
+        : null;
+
+    let crew = {
+      crewPhotographers: Math.max(0, Math.floor(form.crewPhotographers) || 0),
+      crewAssistants: Math.max(0, Math.floor(form.crewAssistants) || 0),
+      crewVideographers: Math.max(0, Math.floor(form.crewVideographers) || 0),
+      crewOthers: Math.max(0, Math.floor(form.crewOthers) || 0),
+    };
+
+    // If structured crew empty, try read from Team XP line / team text
+    if (crewHeadcount(crew) <= 0) {
+      const fromItems = crewFromTemplateItems(form.items);
+      if (crewHeadcount(fromItems) > 0) crew = fromItems;
+    }
+
+    if (pricingMode === "time_crew") {
+      if (shootHours == null) {
+        toast.error("請填寫拍攝時數（服務資料）");
+        return;
+      }
+      if (crewHeadcount(crew) <= 0) {
+        toast.error("請填寫人手人數（至少一位攝影師／錄影／助理）");
+        return;
+      }
+    } else if (pricingMode === "shot_count") {
+      if (shotCount == null) {
+        toast.error("請填寫交付張數（產品／靜物報價以張數計）");
+        return;
+      }
+    }
+
     // Warn if non-included items have $0 price (data quality reminder)
     const zeroItems = form.items.filter((i) => !i.isIncluded && i.unitPrice === 0 && i.description.trim());
     if (zeroItems.length > 0) {
@@ -626,6 +879,13 @@ export default function QuoteForm() {
     const finalDepositPercent = form.depositMode === "fixed" ? 0 : form.depositPercent;
     const finalDepositFixedAmount = form.depositMode === "fixed" ? form.depositFixedAmount : undefined;
 
+    const autoTeam = buildTeamLabel(crew);
+    const team =
+      form.team.trim() ||
+      autoTeam ||
+      "";
+    const items = syncTeamLineItem(form.items, crewHeadcount(crew));
+
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
@@ -637,7 +897,12 @@ export default function QuoteForm() {
       depositFixedAmount: finalDepositFixedAmount,
       depositMode: form.depositMode,
       clientId: resolvedClientId,
-      items: form.items,
+      items,
+      shootHours,
+      shotCount,
+      durationPackage: form.durationPackage || null,
+      ...crew,
+      team,
       // For new quotes: use backend syncToClients to upsert client automatically
       syncToClients: !isEdit ? (form.syncToClients ?? true) : undefined,
       // Ensure null is not passed (use undefined to omit)
@@ -685,7 +950,7 @@ export default function QuoteForm() {
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs" style={{ color: "rgba(212,168,67,0.7)" }}>草稿已自動儲存</span>
               <button
-                onClick={() => { setForm(emptyForm); clearDraft(); setSelectedClientName(""); }}
+                onClick={() => { setForm(normalizeFormData(emptyForm)); clearDraft(); setSelectedClientName(""); }}
                 className="text-xs px-2 py-0.5 rounded hover:opacity-70 transition-opacity"
                 style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#888" }}
               >
@@ -701,7 +966,7 @@ export default function QuoteForm() {
                   if (editDraftKey) { safeLSRemove(editDraftKey); setHasEditDraft(false); }
                   if (existingQuote) {
                     editFormLoadedRef.current = false;
-                    setForm({
+                    setForm(normalizeFormData({
                       clientName: existingQuote.clientName,
                       clientEmail: existingQuote.clientEmail ?? "",
                       clientPhone: existingQuote.clientPhone ?? "",
@@ -721,6 +986,28 @@ export default function QuoteForm() {
                       saveAsNewClient: false,
                       equipment: (existingQuote as any).equipment ?? "",
                       team: (existingQuote as any).team ?? "",
+                      shootHours:
+                        (existingQuote as any).shootHours != null &&
+                        Number((existingQuote as any).shootHours) > 0
+                          ? String(Number((existingQuote as any).shootHours))
+                          : "",
+                      durationPackage:
+                        (existingQuote as any).durationPackage === "hours" ||
+                        (existingQuote as any).durationPackage === "half_day" ||
+                        (existingQuote as any).durationPackage === "full_day" ||
+                        (existingQuote as any).durationPackage === "multi_day"
+                          ? ((existingQuote as any)
+                              .durationPackage as FormData["durationPackage"])
+                          : "",
+                      shotCount:
+                        (existingQuote as any).shotCount != null &&
+                        Number((existingQuote as any).shotCount) > 0
+                          ? String(Number((existingQuote as any).shotCount))
+                          : "",
+                      crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
+                      crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
+                      crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
+                      crewOthers: Number((existingQuote as any).crewOthers ?? 0),
                       deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
                       leadSource: (existingQuote as any).leadSource ?? "",
                       items: existingQuote.items.map((item) => ({
@@ -730,7 +1017,7 @@ export default function QuoteForm() {
                         unitPrice: Number(item.unitPrice),
                         amount: Number(item.amount),
                       })),
-                    });
+                    }));
                     if ((existingQuote as any).clientId) setSelectedClientName(existingQuote.clientName);
                     editFormLoadedRef.current = true;
                   }
@@ -963,6 +1250,89 @@ export default function QuoteForm() {
                 />
               </FormField>
             )}
+            {quotePricingMode(form.serviceType) === "time_crew" && (
+              <FormField label={<span>拍攝時數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
+                <Input
+                  type="number"
+                  min={0.5}
+                  max={72}
+                  step={0.5}
+                  value={form.shootHours ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm((p) => {
+                      const n = v.trim() ? Number(v) : null;
+                      const inferred =
+                        n != null && Number.isFinite(n)
+                          ? inferDurationPackageFromHours(n)
+                          : "unknown";
+                      const nextPkg =
+                        !p.durationPackage &&
+                        inferred !== "unknown"
+                          ? (inferred as FormData["durationPackage"])
+                          : p.durationPackage;
+                      return { ...p, shootHours: v, durationPackage: nextPkg };
+                    });
+                  }}
+                  placeholder="例如 4"
+                  style={{
+                    ...inputStyle,
+                    borderColor: !(form.shootHours ?? "").trim()
+                      ? "rgba(239,68,68,0.55)"
+                      : undefined,
+                  }}
+                />
+              </FormField>
+            )}
+            {quotePricingMode(form.serviceType) === "time_crew" && (
+              <FormField label="時長套餐">
+                <Select
+                  value={form.durationPackage || ""}
+                  onValueChange={(v) =>
+                    setForm((p) => ({
+                      ...p,
+                      durationPackage: v as FormData["durationPackage"],
+                    }))
+                  }
+                >
+                  <SelectTrigger style={inputStyle}>
+                    <SelectValue placeholder="按小時／半日／全日／多日" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DURATION_PACKAGE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}（{o.hint}）
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  半日／全日／多日成功率較低；用套餐標記方便學習勝率
+                </div>
+              </FormField>
+            )}
+            {quotePricingMode(form.serviceType) === "shot_count" && (
+              <FormField label={<span>交付張數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  step={1}
+                  value={form.shotCount ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, shotCount: e.target.value }))}
+                  placeholder="例如 20"
+                  style={{
+                    ...inputStyle,
+                    borderColor: !(form.shotCount ?? "").trim()
+                      ? "rgba(239,68,68,0.55)"
+                      : undefined,
+                  }}
+                />
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  產品／靜物報價以張數計價（唔強制時數／人手）
+                </div>
+              </FormField>
+            )}
             <FormField label={<span>詢價來源 <span style={{color:'#ef4444',fontWeight:'bold'}}>*</span></span>}>
               <Select value={form.leadSource || ""} onValueChange={(v) => setForm((p) => ({ ...p, leadSource: v }))}>
                 <SelectTrigger style={{...inputStyle, borderColor: !form.leadSource ? 'rgba(239,68,68,0.6)' : undefined}}>
@@ -983,6 +1353,147 @@ export default function QuoteForm() {
                 </SelectContent>
               </Select>
             </FormField>
+
+            {quotePricingMode(form.serviceType) === "time_crew" && (
+              <div className="md:col-span-2">
+                <div
+                  className="text-xs mb-2"
+                  style={{ color: "rgba(212,168,67,0.85)", letterSpacing: "0.08em" }}
+                >
+                  人手安排 <span style={{ color: "#ef4444" }}>*</span>
+                  <span className="ml-2 text-muted-foreground normal-case tracking-normal">
+                    （會同步明細「Team XP」同 Team 欄）
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {(
+                    [
+                      ["crewPhotographers", "攝影師"],
+                      ["crewAssistants", "助理"],
+                      ["crewVideographers", "錄影"],
+                      ["crewOthers", "其他"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <FormField key={key} label={label}>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={form[key]}
+                        onChange={(e) => {
+                          const n = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
+                          setForm((p) => {
+                            const next = { ...p, [key]: n };
+                            const auto = buildTeamLabel(next);
+                            const prevAuto = buildTeamLabel(p);
+                            const team =
+                              !p.team.trim() || p.team.trim() === prevAuto
+                                ? auto
+                                : p.team;
+                            const items = syncTeamLineItem(
+                              p.items,
+                              crewHeadcount(next)
+                            );
+                            return { ...next, team, items };
+                          });
+                        }}
+                        style={inputStyle}
+                      />
+                    </FormField>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {priceSuggest?.suggestion && (
+              <div
+                className="md:col-span-2 p-3 rounded space-y-2"
+                style={{
+                  background: "rgba(212,168,67,0.06)",
+                  border: "1px solid rgba(212,168,67,0.22)",
+                }}
+              >
+                <div
+                  className="text-xs"
+                  style={{ color: "#d4a843", letterSpacing: "0.1em" }}
+                >
+                  定價參考（學習）
+                  {priceSuggest.confidenceShortLabel
+                    ? ` · ${priceSuggest.confidenceShortLabel}`
+                    : ""}
+                  {priceSuggest.winRate?.winPct != null
+                    ? ` · 同類勝率 ${priceSuggest.winRate.winPct}%（${priceSuggest.winRate.accepted}/${priceSuggest.winRate.decided}）`
+                    : ""}
+                </div>
+                {priceSuggest.confidence === "advisory" && (
+                  <div className="text-[11px]" style={{ color: "#fbbf24" }}>
+                    僅供參考 — 樣本仍少，唔好直接當開價。
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                  {priceSuggest.packages &&
+                    (
+                      [
+                        ["essential", priceSuggest.packages.essential],
+                        ["standard", priceSuggest.packages.standard],
+                        ["coverage", priceSuggest.packages.coverage],
+                      ] as const
+                    ).map(([key, pkg]) => (
+                      <div
+                        key={key}
+                        className="p-2 rounded"
+                        style={{ background: "rgba(0,0,0,0.25)" }}
+                      >
+                        <div className="text-muted-foreground">{pkg.label}</div>
+                        <div style={{ color: "#e8e0d0", fontSize: "1.05rem" }}>
+                          HK$ {pkg.mid.toLocaleString("en-HK")}
+                        </div>
+                        <div className="text-muted-foreground mt-0.5">{pkg.note}</div>
+                      </div>
+                    ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {priceSuggest.note}
+                  {" "}
+                  {priceSuggest.costFloorNote}
+                  {pricingMode === "time_crew" &&
+                  (form.durationPackage === "half_day" ||
+                    form.durationPackage === "full_day" ||
+                    form.durationPackage === "multi_day")
+                    ? " 半日／全日／多日請用套餐思維，唔好死跟 $1000×小時。"
+                    : ""}
+                </div>
+              </div>
+            )}
+
+            {priceSuggest &&
+              !priceSuggest.suggestion &&
+              form.serviceType &&
+              form.serviceType !== "other" &&
+              !DESIGN_SERVICE_TYPES.has(form.serviceType) && (
+              <div
+                className="md:col-span-2 p-3 rounded text-xs text-muted-foreground"
+                style={{
+                  background: "rgba(212,168,67,0.04)",
+                  border: "1px solid rgba(212,168,67,0.15)",
+                }}
+              >
+                <div style={{ color: "#d4a843", marginBottom: 4 }}>
+                  {priceSuggest.confidenceLabel ?? "建議價未達門檻"}
+                </div>
+                {priceSuggest.note ??
+                  `定價學習由 ${priceSuggest.learningStartLabel ?? "指定日期"}（香港時間）起計；舊報價唔作參考。`}
+                {priceSuggest.trustProgress ? (
+                  <div className="mt-1">
+                    進度：已接受 {priceSuggest.trustProgress.accepted} /{" "}
+                    {priceSuggest.trustProgress.needForShow} 筆先顯示；
+                    {priceSuggest.trustProgress.needForUsable} 筆先「可參考」；
+                    {priceSuggest.trustProgress.needForTrusted} 筆先「較可信」。
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             {/* 關聯詢盤 */}
             <FormField label="關聯詢盤（選填）">
@@ -1053,10 +1564,26 @@ export default function QuoteForm() {
                     key={tpl.id}
                     type="button"
                     onClick={() =>
-                      setForm((p) => ({
-                        ...p,
-                        items: tpl.items.map((item) => ({ id: crypto.randomUUID(), description: item.description, quantity: item.quantity, unitPrice: item.unitPrice, amount: item.quantity * item.unitPrice, isIncluded: (item as any).isIncluded ?? false })),
-                      }))
+                      setForm((p) => {
+                        const items = tpl.items.map((item) => ({
+                          id: crypto.randomUUID(),
+                          description: item.description,
+                          quantity: item.quantity,
+                          unitPrice: item.unitPrice,
+                          amount: item.quantity * item.unitPrice,
+                          isIncluded: (item as any).isIncluded ?? false,
+                        }));
+                        const crew = crewFromTemplateItems(items, tpl.id);
+                        const auto = buildTeamLabel(crew);
+                        return {
+                          ...p,
+                          items,
+                          ...crew,
+                          team: auto || p.team,
+                          // Keep existing hours if user already filled; otherwise leave blank to force fill
+                          shootHours: p.shootHours,
+                        };
+                      })
                     }
                     className="px-4 py-2 text-xs font-medium transition-all hover:opacity-80"
                     style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#d4a843", borderRadius: "2px", background: "rgba(212,168,67,0.06)" }}
@@ -1244,11 +1771,11 @@ export default function QuoteForm() {
                 style={inputStyle}
               />
             </FormField>
-            <FormField label="Team">
+            <FormField label="Team（顯示用／後備）">
               <Input
                 value={form.team}
                 onChange={(e) => setForm((p) => ({ ...p, team: e.target.value }))}
-                placeholder="e.g. 1P / 2P"
+                placeholder="人手數字會自動帶入；亦可手動改寫"
                 style={inputStyle}
               />
             </FormField>

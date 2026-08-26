@@ -329,6 +329,26 @@ export default function QuotePrintPage() {
             <div style={S.serviceType}>{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
             {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
             {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
+            {(quote as any).shotCount != null && Number((quote as any).shotCount) > 0 && (
+              <div style={S.clientDetail}>Shots: {Number((quote as any).shotCount)}</div>
+            )}
+            {(quote as any).shootHours != null && Number((quote as any).shootHours) > 0 && (
+              <div style={S.clientDetail}>Hours: {Number((quote as any).shootHours)}</div>
+            )}
+            {(() => {
+              const photogs = Number((quote as any).crewPhotographers ?? 0);
+              const asst = Number((quote as any).crewAssistants ?? 0);
+              const video = Number((quote as any).crewVideographers ?? 0);
+              const others = Number((quote as any).crewOthers ?? 0);
+              const parts: string[] = [];
+              if (photogs > 0) parts.push(`Photographer×${photogs}`);
+              if (video > 0) parts.push(`Video×${video}`);
+              if (asst > 0) parts.push(`Assistant×${asst}`);
+              if (others > 0) parts.push(`Other×${others}`);
+              const team = (quote as any).team?.trim?.() || "";
+              const label = parts.length > 0 ? parts.join(" + ") : team;
+              return label ? <div style={S.clientDetail}>Team: {label}</div> : null;
+            })()}
           </div>
         </div>
 

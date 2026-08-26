@@ -20,6 +20,14 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  /** When false, employee cannot use the admin system. */
+  isActive: boolean("is_active").notNull().default(true),
+  /** JSON array of page ids the employee may open (ignored for admin). */
+  allowedPages: json("allowed_pages").$type<string[]>().default([]),
+  /** Local login username (employees created by admin). */
+  username: varchar("username", { length: 64 }),
+  /** scrypt hash for local password login. */
+  passwordHash: varchar("password_hash", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -75,6 +83,19 @@ export const quotes = mysqlTable("quotes", {
   validUntil: varchar("validUntil", { length: 32 }),
   equipment: text("equipment"),
   team: varchar("team", { length: 128 }),
+  /** Structured shoot hours for pricing learning (preferred over free-text extract) */
+  shootHours: decimal("shootHours", { precision: 6, scale: 2 }),
+  /** Delivered photo/shot count for product-style pricing (張數) */
+  shotCount: int("shotCount"),
+  /**
+   * Event duration packaging: hours | half_day | full_day | multi_day
+   * Used for win-rate learning (flat hourly on long packages loses more).
+   */
+  durationPackage: varchar("durationPackage", { length: 16 }),
+  crewPhotographers: int("crewPhotographers").notNull().default(0),
+  crewAssistants: int("crewAssistants").notNull().default(0),
+  crewVideographers: int("crewVideographers").notNull().default(0),
+  crewOthers: int("crewOthers").notNull().default(0),
   deliveryMethod: text("deliveryMethod"),
   leadSource: varchar("leadSource", { length: 64 }),
   receiptUrl: text("receiptUrl"),
@@ -86,6 +107,10 @@ export const quotes = mysqlTable("quotes", {
   signatureData: text("signatureData"), // base64 PNG of signature
   signAttachments: text("signAttachments"), // JSON array of { name, url, key }
   rejectedReason: varchar("rejected_reason", { length: 255 }),
+  /** Client budget ceiling when rejected for price (HKD) */
+  rejectedBudgetMax: int("rejectedBudgetMax"),
+  /** Competitor quote approx when lost to another photographer (HKD) */
+  rejectedCompetitorPrice: int("rejectedCompetitorPrice"),
   reviewEmailSentAt: timestamp("reviewEmailSentAt"), // Google review invite sent timestamp
   // Payment tracking
   depositPaidAmount: decimal("depositPaidAmount", { precision: 10, scale: 2 }), // 已付訂金金額（null = 未記錄）
@@ -384,6 +409,8 @@ export const expenses = mysqlTable("expenses", {
   payee: varchar("payee", { length: 255 }),       // 收款方（人名或公司）
   receiptUrl: varchar("receipt_url", { length: 1024 }), // 收據圖片 URL
   notes: text("notes"),
+  /** Set when auto-created from a quote_costs row (收入及支出 sync). */
+  quoteCostId: int("quote_cost_id"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -48,6 +48,14 @@ const requireUser = t.middleware(async opts => {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
 
+  // Inactive employees cannot call protected APIs (admins always allowed)
+  if (ctx.user.role !== "admin" && ctx.user.isActive === false) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "帳戶已停用，請聯絡管理員",
+    });
+  }
+
   return next({
     ctx: {
       ...ctx,

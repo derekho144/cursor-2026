@@ -27,6 +27,10 @@ import { generateQuotePdfBuffer } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
+  extractQuoteShootFeatures,
+  formatTeamFromStructured,
+} from "../pricingLearningExtract";
+import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
@@ -62,6 +66,93 @@ async function generateQuotePdfMatchingDownload(
       signatureData
     );
   }
+}
+/**
+ * Fill missing structured hours/crew from free-text (Team XP lines, notes, team field).
+ * Keeps explicit structured values when already provided.
+ */
+function enrichShootFundamentals(input: {
+  shootHours?: number | string | null;
+  shotCount?: number | string | null;
+  crewPhotographers?: number | null;
+  crewAssistants?: number | null;
+  crewVideographers?: number | null;
+  crewOthers?: number | null;
+  team?: string | null;
+  notes?: string | null;
+  equipment?: string | null;
+  items?: Array<{ description?: string | null }>;
+}) {
+  const features = extractQuoteShootFeatures({
+    shootHours: input.shootHours,
+    shotCount: input.shotCount,
+    crewPhotographers: input.crewPhotographers,
+    crewAssistants: input.crewAssistants,
+    crewVideographers: input.crewVideographers,
+    crewOthers: input.crewOthers,
+    team: input.team,
+    notes: input.notes,
+    equipment: input.equipment,
+    items: input.items,
+  });
+
+  const shootHours =
+    input.shootHours != null && Number(input.shootHours) > 0
+      ? String(input.shootHours)
+      : features.hours != null
+        ? String(features.hours)
+        : null;
+
+  const shotCount =
+    input.shotCount != null && Number(input.shotCount) > 0
+      ? Math.floor(Number(input.shotCount))
+      : features.shotCount != null
+        ? features.shotCount
+        : null;
+
+  let crewPhotographers = Math.max(0, Math.floor(Number(input.crewPhotographers) || 0));
+  let crewAssistants = Math.max(0, Math.floor(Number(input.crewAssistants) || 0));
+  let crewVideographers = Math.max(0, Math.floor(Number(input.crewVideographers) || 0));
+  let crewOthers = Math.max(0, Math.floor(Number(input.crewOthers) || 0));
+  const existingCrew =
+    crewPhotographers + crewAssistants + crewVideographers + crewOthers;
+
+  if (existingCrew <= 0 && features.crew.headcount > 0) {
+    if (
+      features.crew.photographers +
+        features.crew.assistants +
+        features.crew.videographers +
+        features.crew.others >
+      0
+    ) {
+      crewPhotographers = features.crew.photographers;
+      crewAssistants = features.crew.assistants;
+      crewVideographers = features.crew.videographers;
+      crewOthers = features.crew.others;
+    } else {
+      crewPhotographers = features.crew.headcount;
+    }
+  }
+
+  const team =
+    (input.team && String(input.team).trim()) ||
+    formatTeamFromStructured({
+      photographers: crewPhotographers,
+      assistants: crewAssistants,
+      videographers: crewVideographers,
+      others: crewOthers,
+    }) ||
+    null;
+
+  return {
+    shootHours,
+    shotCount,
+    crewPhotographers,
+    crewAssistants,
+    crewVideographers,
+    crewOthers,
+    team: team ? team.slice(0, 128) : null,
+  };
 }
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
@@ -224,6 +315,16 @@ export const quotesRouter = router({
         validUntil: z.string().optional(),
         equipment: z.string().optional(),
         team: z.string().optional(),
+        shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        shotCount: z.number().int().min(1).max(5000).nullable().optional(),
+        durationPackage: z
+          .enum(["hours", "half_day", "full_day", "multi_day"])
+          .nullable()
+          .optional(),
+        crewPhotographers: z.number().int().min(0).max(20).optional(),
+        crewAssistants: z.number().int().min(0).max(20).optional(),
+        crewVideographers: z.number().int().min(0).max(20).optional(),
+        crewOthers: z.number().int().min(0).max(20).optional(),
         deliveryMethod: z.string().optional(),
         leadSource: z.string().optional(),
         items: z.array(quoteItemSchema),
@@ -232,8 +333,29 @@ export const quotesRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, ...quoteDataRest } = input;
-      const quoteData = { ...quoteDataRest, depositPercent: input.depositPercent ?? 50, depositMode: input.depositMode ?? "percent", depositFixedAmount: input.depositFixedAmount };
+      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, durationPackage, ...quoteDataRest } = input;
+      const enriched = enrichShootFundamentals({
+        shootHours,
+        shotCount,
+        crewPhotographers: input.crewPhotographers,
+        crewAssistants: input.crewAssistants,
+        crewVideographers: input.crewVideographers,
+        crewOthers: input.crewOthers,
+        team: input.team,
+        notes: input.notes,
+        equipment: input.equipment,
+        items,
+      });
+      const quoteData = {
+        ...quoteDataRest,
+        ...enriched,
+        ...(durationPackage !== undefined && {
+          durationPackage: durationPackage ?? null,
+        }),
+        depositPercent: input.depositPercent ?? 50,
+        depositMode: input.depositMode ?? "percent",
+        depositFixedAmount: input.depositFixedAmount,
+      };
 
       let clientId: number | undefined;
       if (syncToClients) {
@@ -302,22 +424,114 @@ export const quotesRouter = router({
         validUntil: z.string().optional(),
         equipment: z.string().optional(),
         team: z.string().optional(),
+        shootHours: z.number().min(0.5).max(72).nullable().optional(),
+        shotCount: z.number().int().min(1).max(5000).nullable().optional(),
+        durationPackage: z
+          .enum(["hours", "half_day", "full_day", "multi_day"])
+          .nullable()
+          .optional(),
+        crewPhotographers: z.number().int().min(0).max(20).optional(),
+        crewAssistants: z.number().int().min(0).max(20).optional(),
+        crewVideographers: z.number().int().min(0).max(20).optional(),
+        crewOthers: z.number().int().min(0).max(20).optional(),
         deliveryMethod: z.string().optional(),
         leadSource: z.string().optional(),
         rejectedReason: z.string().optional(),
+        rejectedBudgetMax: z.number().int().min(0).max(10_000_000).nullable().optional(),
+        rejectedCompetitorPrice: z
+          .number()
+          .int()
+          .min(0)
+          .max(10_000_000)
+          .nullable()
+          .optional(),
         items: z.array(quoteItemSchema).optional(),
         emailInquiryId: z.number().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {
       console.log('[Quotes.update] Input received:', JSON.stringify(input, null, 2));
-      const { id, items, subtotal, discountPercent, discountAmount, total, depositPercent, depositMode, depositFixedAmount, ...rest } = input;
+      const {
+        id,
+        items,
+        subtotal,
+        discountPercent,
+        discountAmount,
+        total,
+        depositPercent,
+        depositMode,
+        depositFixedAmount,
+        shootHours,
+        shotCount,
+        durationPackage,
+        rejectedBudgetMax,
+        rejectedCompetitorPrice,
+        ...rest
+      } = input;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
-      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "deliveryMethod", "validUntil", "notes"];
+      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
+
+      const shouldEnrich =
+        shootHours !== undefined ||
+        shotCount !== undefined ||
+        input.crewPhotographers !== undefined ||
+        input.crewAssistants !== undefined ||
+        input.crewVideographers !== undefined ||
+        input.crewOthers !== undefined ||
+        input.team !== undefined ||
+        items !== undefined ||
+        input.notes !== undefined;
+
+      let enrichedPatch: Record<string, unknown> = {};
+      if (shouldEnrich) {
+        const existing = await getQuoteById(id);
+        const existingItems = items ?? existing?.items ?? [];
+        enrichedPatch = enrichShootFundamentals({
+          shootHours:
+            shootHours !== undefined
+              ? shootHours
+              : (existing as any)?.shootHours,
+          shotCount:
+            shotCount !== undefined
+              ? shotCount
+              : (existing as any)?.shotCount,
+          crewPhotographers:
+            input.crewPhotographers ?? (existing as any)?.crewPhotographers,
+          crewAssistants:
+            input.crewAssistants ?? (existing as any)?.crewAssistants,
+          crewVideographers:
+            input.crewVideographers ?? (existing as any)?.crewVideographers,
+          crewOthers: input.crewOthers ?? (existing as any)?.crewOthers,
+          team: input.team !== undefined ? input.team : existing?.team,
+          notes: input.notes !== undefined ? input.notes : existing?.notes,
+          equipment:
+            input.equipment !== undefined ? input.equipment : existing?.equipment,
+          items: existingItems,
+        });
+      }
+
       const result = await updateQuote(id, {
         ...rest,
+        ...enrichedPatch,
+        ...(shootHours !== undefined &&
+          !("shootHours" in enrichedPatch) && {
+            shootHours: shootHours != null ? String(shootHours) : null,
+          }),
+        ...(shotCount !== undefined &&
+          !("shotCount" in enrichedPatch) && {
+            shotCount: shotCount != null ? shotCount : null,
+          }),
+        ...(durationPackage !== undefined && {
+          durationPackage: durationPackage ?? null,
+        }),
+        ...(rejectedBudgetMax !== undefined && {
+          rejectedBudgetMax: rejectedBudgetMax ?? null,
+        }),
+        ...(rejectedCompetitorPrice !== undefined && {
+          rejectedCompetitorPrice: rejectedCompetitorPrice ?? null,
+        }),
         ...(subtotal !== undefined && { subtotal: String(subtotal) }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),
         ...(discountAmount !== undefined && { discountAmount: String(discountAmount) }),

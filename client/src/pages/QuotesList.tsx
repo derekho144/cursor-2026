@@ -345,18 +345,16 @@ export default function QuotesList() {
                         >
                           <Edit className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
-                        {quote.pdfUrl && (
-                          <a
-                            href={quote.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                            title="下載PDF"
-                          >
-                            <Download className="h-3.5 w-3.5" style={{ color: "#d4a843" }} />
-                          </a>
-                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/print/quote/${quote.id}`, "_blank");
+                          }}
+                          className="p-1.5 rounded hover:bg-white/10 transition-colors"
+                          title="下載PDF"
+                        >
+                          <Download className="h-3.5 w-3.5" style={{ color: "#d4a843" }} />
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeliverPhotos(quote); }}
                           className="p-1.5 rounded hover:bg-amber-500/10 transition-colors"
@@ -463,18 +461,16 @@ export default function QuotesList() {
                   >
                     <ImageIcon className="h-3 w-3" />交付
                   </button>
-                  {quote.pdfUrl && (
-                    <a
-                      href={quote.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-white/10 transition-colors"
-                      style={{ border: "1px solid rgba(212,168,67,0.2)", color: "#d4a843" }}
-                    >
-                      <Download className="h-3 w-3" />PDF
-                    </a>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(`/print/quote/${quote.id}`, "_blank");
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-white/10 transition-colors"
+                    style={{ border: "1px solid rgba(212,168,67,0.2)", color: "#d4a843" }}
+                  >
+                    <Download className="h-3 w-3" />PDF
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

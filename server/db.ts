@@ -1,7 +1,12 @@
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNotNull, isNull, like, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
+import {
+  mapQuoteCostCategoryToExpense,
+  formatQuoteCostExpenseDescription,
+  resolveExpenseDateFromQuote,
+} from "./quoteCostExpenseSync";
 import {
   adExpenses,
   adPlatformConfigs,
@@ -125,6 +130,156 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function listUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users).orderBy(desc(users.lastSignedIn));
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return row;
+}
+
+export async function getUserByUsername(username: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const normalized = username.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, normalized))
+    .limit(1);
+  return row;
+}
+
+export async function createLocalEmployee(params: {
+  username: string;
+  passwordHash: string;
+  openId: string;
+  name?: string | null;
+  email?: string | null;
+  isActive?: boolean;
+  allowedPages?: string[];
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const username = params.username.trim().toLowerCase();
+  await db.insert(users).values({
+    openId: params.openId,
+    username,
+    passwordHash: params.passwordHash,
+    name: params.name ?? username,
+    email: params.email ?? null,
+    loginMethod: "password",
+    role: params.role ?? "user",
+    isActive: params.isActive !== false,
+    allowedPages: params.allowedPages ?? [],
+    lastSignedIn: new Date(),
+  });
+  return getUserByUsername(username);
+}
+
+export async function updateUserPassword(params: {
+  id: number;
+  passwordHash: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db
+    .update(users)
+    .set({ passwordHash: params.passwordHash })
+    .where(eq(users.id, params.id));
+  return getUserById(params.id);
+}
+
+export async function deleteUserById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.delete(users).where(eq(users.id, id));
+}
+
+export async function updateUserAccess(params: {
+  id: number;
+  isActive?: boolean;
+  allowedPages?: string[];
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const set: Record<string, unknown> = {};
+  if (params.isActive !== undefined) set.isActive = params.isActive;
+  if (params.allowedPages !== undefined) set.allowedPages = params.allowedPages;
+  if (params.role !== undefined) set.role = params.role;
+  if (Object.keys(set).length === 0) return getUserById(params.id);
+  await db.update(users).set(set).where(eq(users.id, params.id));
+  return getUserById(params.id);
+}
+
+export async function upsertUserByOpenIdAccess(params: {
+  openId: string;
+  name?: string | null;
+  email?: string | null;
+  loginMethod?: string | null;
+  role: "user" | "admin";
+  isActive: boolean;
+  allowedPages?: string[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  await db
+    .insert(users)
+    .values({
+      openId: params.openId,
+      name: params.name ?? null,
+      email: params.email ?? null,
+      loginMethod: params.loginMethod ?? null,
+      role: params.role,
+      isActive: params.isActive,
+      allowedPages: params.allowedPages ?? [],
+      lastSignedIn: new Date(),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        name: params.name ?? null,
+        email: params.email ?? null,
+        loginMethod: params.loginMethod ?? null,
+        role: params.role,
+        isActive: params.isActive,
+        allowedPages: params.allowedPages ?? [],
+        lastSignedIn: new Date(),
+      },
+    });
+}
+
+export async function deleteUsersExceptOpenIds(params: {
+  excludeOpenIds: string[];
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const id of params.excludeOpenIds.filter(Boolean)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+  if (unique.length === 0) return 0;
+
+  const conditions = unique.map((id) => ne(users.openId, id));
+  const whereClause = and(...conditions);
+  const res = await db.delete(users).where(whereClause);
+  // mysql2/drizzle returns different shapes depending on driver; ignore.
+  // Callers can just re-list.
+  return (res as any)?.affectedRows ?? 0;
 }
 
 // ─── Quotes ───────────────────────────────────────────────────────
@@ -492,14 +647,15 @@ export async function getDashboardStatsQuick(year?: number, month?: number) {
       .select({ total: sql<number>`SUM(amount)` })
       .from(adExpenses)
       .where(and(eq(adExpenses.year, targetYear), eq(adExpenses.month, targetMonth))),
-    // Monthly business expenses for selected month
+    // Monthly business expenses (exclude rows synced from quote_costs — those are projectCosts)
     db
       .select({ total: sql<number>`SUM(amount)` })
       .from(expenses)
       .where(
         and(
           sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`
+          sql`MONTH(date) = ${targetMonth}`,
+          isNull(expenses.quoteCostId)
         )
       ),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
@@ -681,14 +837,15 @@ export async function getDashboardStats(year?: number, month?: number) {
         )
       )
       .groupBy(quotes.leadSource),
-    // Monthly business expenses for selected month
+    // Monthly business expenses (exclude quote-cost sync rows — counted as projectCosts)
     db
       .select({ total: sql<number>`SUM(amount)` })
       .from(expenses)
       .where(
         and(
           sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`
+          sql`MONTH(date) = ${targetMonth}`,
+          isNull(expenses.quoteCostId)
         )
       ),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
@@ -2986,9 +3143,56 @@ export async function createQuoteCost(data: InsertQuoteCost) {
   return created;
 }
 
+/** Auto-create 收入及支出 expense row linked to a quote_costs id. */
+export async function createExpenseFromQuoteCost(params: {
+  quoteCostId: number;
+  quoteNumber: string;
+  clientName?: string | null;
+  shootingDate?: string | null;
+  category: string;
+  description: string;
+  amount: string | number;
+  payee?: string | null;
+  notes?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+
+  const expenseCategory = mapQuoteCostCategoryToExpense(params.category);
+  const description = formatQuoteCostExpenseDescription(
+    params.quoteNumber,
+    params.clientName,
+    params.description
+  );
+  const date = resolveExpenseDateFromQuote(params.shootingDate);
+  const noteParts = [
+    "自動由報價成本同步",
+    params.notes?.trim() || null,
+  ].filter(Boolean);
+
+  const [result] = await db.insert(expenses).values({
+    date,
+    category: expenseCategory,
+    description,
+    amount: String(params.amount),
+    payee: params.payee ?? null,
+    notes: noteParts.join(" · "),
+    quoteCostId: params.quoteCostId,
+  });
+  return { id: (result as { insertId?: number }).insertId };
+}
+
+export async function deleteExpenseByQuoteCostId(quoteCostId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(expenses).where(eq(expenses.quoteCostId, quoteCostId));
+}
+
 export async function deleteQuoteCost(id: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  // Remove linked 收入及支出 row first (if any)
+  await deleteExpenseByQuoteCostId(id);
   await db.delete(quoteCosts).where(eq(quoteCosts.id, id));
 }
 

@@ -400,6 +400,41 @@
       "when": 1785060000000,
       "tag": "0056_airwallex_payment_links",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "5",
+      "when": 1787527800000,
+      "tag": "0057_expense_quote_cost_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "5",
+      "when": 1787529000000,
+      "tag": "0058_user_page_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1787562000000,
+      "tag": "0059_user_password_login",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1787600000000,
+      "tag": "0060_quote_shoot_fundamentals",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1787610000000,
+      "tag": "0061_quote_shot_count",
+      "breakpoints": true
     }
   ]
 }

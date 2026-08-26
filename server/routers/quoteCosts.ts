@@ -5,6 +5,8 @@ import {
   createQuoteCost,
   deleteQuoteCost,
   getQuoteCostSummary,
+  getQuoteById,
+  createExpenseFromQuoteCost,
 } from "../db";
 
 const COST_CATEGORY_LABELS: Record<string, string> = {
@@ -46,7 +48,7 @@ export const quoteCostsRouter = router({
       };
     }),
 
-  // 新增成本項目
+  // 新增成本項目 → 同步寫入「收入及支出」支出欄並自動儲存
   create: protectedProcedure
     .input(
       z.object({
@@ -76,14 +78,41 @@ export const quoteCostsRouter = router({
         payee: input.payee ?? null,
         notes: input.notes ?? null,
       });
+
+      let expenseId: number | undefined;
+      try {
+        const quote = await getQuoteById(input.quoteId);
+        if (quote && cost?.id) {
+          const expense = await createExpenseFromQuoteCost({
+            quoteCostId: cost.id,
+            quoteNumber: quote.quoteNumber,
+            clientName: quote.clientName,
+            shootingDate: quote.shootingDate,
+            category: input.category,
+            description: input.description,
+            amount: input.amount,
+            payee: input.payee ?? null,
+            notes: input.notes ?? null,
+          });
+          expenseId = expense.id;
+        }
+      } catch (err) {
+        console.error(
+          `[quoteCosts.create] Failed to sync expense for cost #${cost?.id}:`,
+          err
+        );
+      }
+
       return {
         ...cost,
         amount: Number(cost.amount),
         categoryLabel: COST_CATEGORY_LABELS[cost.category] ?? cost.category,
+        expenseId,
+        syncedToExpense: Boolean(expenseId),
       };
     }),
 
-  // 刪除成本項目
+  // 刪除成本項目（同時刪除已同步的支出）
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {

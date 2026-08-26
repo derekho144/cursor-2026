@@ -105,6 +105,12 @@ export function generateQuotePdfHtml(
     .join("");
 
   const extraRowDefs = [
+    (quote as any).shotCount != null && Number((quote as any).shotCount) > 0
+      ? { label: "SHOT<br>COUNT", value: `${Number((quote as any).shotCount)} shots` }
+      : null,
+    (quote as any).shootHours != null && Number((quote as any).shootHours) > 0
+      ? { label: "SHOOT<br>HOURS", value: `${Number((quote as any).shootHours)} hours` }
+      : null,
     quote.equipment ? { label: "LIGHTING &amp;<br>EQUIPMENT", value: quote.equipment } : null,
     quote.team ? { label: "TEAM", value: quote.team } : null,
     quote.deliveryMethod ? { label: "PHOTO<br>DELIVERY<br>METHOD", value: quote.deliveryMethod } : null,
@@ -319,6 +325,26 @@ export function generateQuotePdfHtml(
       ${termsItems}
     </ul>
   </div>
+  ${docType !== "RECEIPT" ? `
+  <!-- GOOGLE REVIEW — matches /print/quote -->
+  <div style="margin:0 32px 10px 32px;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="width:36px;vertical-align:top;font-size:24px;line-height:1;padding-top:1px;">⭐</td>
+      <td style="vertical-align:top;">
+        <div style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#e8d5a0;margin-bottom:5px;letter-spacing:0.02em;">Google Review</div>
+        <div style="font-size:10px;color:#cccccc;line-height:1.7;margin-bottom:2px;">
+          Leave us a Google review &amp; follow our Instagram <span style="color:#c9a84c;font-style:italic;">@jdstudiohk</span> to enjoy a special discount on this shoot.
+        </div>
+        <div style="font-size:8.5px;color:#777777;line-height:1.7;margin-bottom:9px;">
+          於 Google 留下您的真實評價，並追蹤我們的 Instagram <span style="color:#a07830;font-style:italic;">@jdstudiohk</span>，即可於本次攝影服務中享有特別折扣。
+        </div>
+        <div style="background:#1a1a1a;border:1px solid #3a2e14;border-radius:4px;padding:7px 14px;display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <div style="font-size:10px;color:#c9a84c;letter-spacing:0.06em;margin-bottom:1px;">Google Review + Follow IG &nbsp;→&nbsp; 10% Discount</div>
+          <div style="font-size:8.5px;color:#a07830;letter-spacing:0.04em;">Google 好評 + Follow IG &nbsp;→&nbsp; 10% 折扣優惠</div>
+        </div>
+      </td>
+    </tr></table>
+  </div>` : ""}
   ${signatureData ? `
   <!-- SIGNATURE BLOCK -->
   <div style="padding:8px 32px 10px 32px;border-top:1px solid #e8e8e8;page-break-inside:avoid;break-inside:avoid;">
