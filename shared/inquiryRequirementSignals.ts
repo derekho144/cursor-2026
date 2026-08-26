@@ -15,7 +15,8 @@ export type RequirementSignalKind =
   | "background_removal"
   | "video_count"
   | "clip_seconds"
-  | "video_edit";
+  | "video_edit"
+  | "crew_1p1v";
 
 export type RequirementSignal = {
   kind: RequirementSignalKind;
@@ -97,6 +98,29 @@ function parseHourRange(startH: number, startMin: number, startMer: string, endH
   const hours = b - a;
   if (hours < 1 || hours > 16) return null;
   return Math.round(hours * 2) / 2;
+}
+
+const PHOTO_NEED_RE = /攝影|photograph|photos?\b|影相|照片|相片/i;
+const VIDEO_NEED_RE =
+  /攝像|錄影|攝錄|videograph|\bvideos?\b|影片拍攝|拍片|精選視頻|精選影片|影片|視頻|reels?|highlight\s*video/i;
+
+/** On-site stills / photography is in scope. */
+export function briefNeedsPhotography(text: string): boolean {
+  return PHOTO_NEED_RE.test(text ?? "");
+}
+
+/** Video capture or a video deliverable is in scope. */
+export function briefNeedsVideo(text: string): boolean {
+  return VIDEO_NEED_RE.test(text ?? "");
+}
+
+/**
+ * Studio rule: photography + video in the same brief → on-site crew is 1P+1V.
+ * Not one person dual-role. Explicit 2P still satisfies the 1P minimum later.
+ */
+export function briefNeedsCrew1p1v(text: string): boolean {
+  const t = text ?? "";
+  return briefNeedsPhotography(t) && briefNeedsVideo(t);
 }
 
 export function extractRequirementSignals(raw: string): RequirementSignal[] {
@@ -330,6 +354,20 @@ export function extractRequirementSignals(raw: string): RequirementSignal[] {
   collapseByMax("video_count");
   collapseByMax("clip_seconds");
 
+  if (briefNeedsCrew1p1v(text)) {
+    const ev =
+      text.match(
+        /.{0,10}(?:攝影攝像|攝影.{0,16}(?:攝像|影片|視頻|video)|photograph.{0,24}video).{0,12}/i
+      )?.[0] ?? "攝影 + 影片";
+    push({
+      kind: "crew_1p1v",
+      label: "現場人手 1 攝影師 + 1 攝像師（影相兼拍片，唔可以一人包辦）",
+      value: 2,
+      unit: "people",
+      evidence: ev.replace(/\s+/g, " ").trim(),
+    });
+  }
+
   void rangeHours;
   return signals;
 }
@@ -353,13 +391,14 @@ export function isMultiScopeSignals(signals: RequirementSignal[]): boolean {
     ) {
       families.add("video");
     }
+    if (s.kind === "crew_1p1v") families.add("crew");
   }
   return families.size >= 2;
 }
 
 export function formatSignalsForPrompt(signals: RequirementSignal[]): string {
   if (!signals.length) {
-    return "（機械抽取：無明確數量／去背／影片／天數訊號。唔好發明時數或張數。）";
+    return "（機械抽取：無明確數量／去背／影片／天數／人手訊號。唔好發明時數或張數。）";
   }
   return signals
     .map(

@@ -718,6 +718,8 @@ async function parseInquiryWithAI(subject: string, body: string, fromEmail?: str
       notes: facts.notes,
       shotCount: facts.shotCount,
       shootHours: facts.shootHours,
+      crewPhotographers: facts.crewPhotographers,
+      crewVideographers: facts.crewVideographers,
     });
     if (factsCoverage.missed.length > 0) {
       const retried = await understandInquiryFacts({
@@ -920,7 +922,7 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
 9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
-10. MULTI-SCOPE: If frozen workPackages (or the email/PDF) contain both event coverage AND artwork/product stills AND/OR 去背/cutout AND/OR N video clips (e.g. 三條影片每條20秒) AND/OR a 1-minute highlight AND/OR explicit 精修 N 張, emit a separate suggestedItems line for EACH package. Never collapse to a single Event Photography hours line. Event "retouching included" does NOT cover explicit 去背 / 作品特寫 / 剪片 / 精選視頻 / 精修 N 張. "N days" is not N hours. Job-board 「N日內」is a deadline. "N 條影片" and "1分鐘精選" are not event hours.
+10. MULTI-SCOPE: If frozen workPackages (or the email/PDF) contain both event coverage AND artwork/product stills AND/OR 去背/cutout AND/OR N video clips (e.g. 三條影片每條20秒) AND/OR a 1-minute highlight AND/OR explicit 精修 N 張 AND/OR 1P+1V crew, emit a separate suggestedItems line for EACH package. Never collapse to a single Event Photography hours line. Event "retouching included" does NOT cover explicit 去背 / 作品特寫 / 剪片 / 精選視頻 / 精修 N 張. Event Photography does NOT include the videographer: photography + video = 1 photographer + 1 videographer. "N days" is not N hours. Job-board 「N日內」is a deadline. "N 條影片" and "1分鐘精選" are not event hours.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
@@ -1033,8 +1035,8 @@ Extract and return a JSON object with these fields:
 - shootHours: number (hours clearly stated or 0 if unknown; half-day ≈ 4–5, full-day ≈ 6–10)
 - shotCount: number (delivered image/piece count clearly stated, or 0 if unknown)
 - durationPackage: one of ["hours","half_day","full_day","multi_day","unknown"]
-- crewPhotographers: number (photographers if stated, else 0)
-- crewVideographers: number (videographers if stated, else 0)
+- crewPhotographers: number (photographers on site. If the brief needs both photography AND video, this is 1)
+- crewVideographers: number (videographers on site. If the brief needs both photography AND video, this is 1 — never 0. Event Photography is not the videographer.)
 - quantitySource: "explicit" | "assumed" | "unknown"
   (explicit = email clearly states hours or shot count; assumed = you used a default; unknown = cannot tell)
 - assumptions: string[] (Traditional Chinese list of assumptions you made, empty array if none)
@@ -1203,8 +1205,22 @@ Extract and return a JSON object with these fields:
       notes: parsed.notes,
       shotCount: parsed.shotCount,
       shootHours: parsed.shootHours,
+      crewPhotographers: parsed.crewPhotographers,
+      crewVideographers: parsed.crewVideographers,
     });
     Object.assign(parsed, applyComprehensionToParsed(parsed, coverage, signals));
+    if (signals.some((s) => s.kind === "crew_1p1v")) {
+      parsed.crewPhotographers = Math.max(
+        Number(parsed.crewPhotographers) || 0,
+        Number(facts?.crewPhotographers) || 0,
+        1
+      );
+      parsed.crewVideographers = Math.max(
+        Number(parsed.crewVideographers) || 0,
+        Number(facts?.crewVideographers) || 0,
+        1
+      );
+    }
     parsed.draftReadiness = evaluateInquiryDraftReadiness(parsed);
 
     return parsed;

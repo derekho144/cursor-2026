@@ -99,6 +99,24 @@ describe("extractRequirementSignals", () => {
     ).toBe(true);
     expect(signals.some((s) => s.kind === "video_edit")).toBe(true);
     expect(signals.some((s) => s.kind === "event_days")).toBe(false);
+    expect(signals.some((s) => s.kind === "crew_1p1v")).toBe(true);
     expect(isMultiScopeSignals(signals)).toBe(true);
+  });
+
+  it("photo-only briefs do not invent a videographer", () => {
+    expect(
+      extractRequirementSignals(HKSEA_FIXTURE).some((s) => s.kind === "crew_1p1v")
+    ).toBe(false);
+    expect(
+      extractRequirementSignals(HA_FIXTURE).some((s) => s.kind === "crew_1p1v")
+    ).toBe(false);
+    expect(
+      extractRequirementSignals(HKRC_FIXTURE).some((s) => s.kind === "crew_1p1v")
+    ).toBe(false);
+  });
+
+  it("活動攝影 + 剪片 is photography and video → 1P+1V", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    expect(signals.some((s) => s.kind === "crew_1p1v")).toBe(true);
   });
 });

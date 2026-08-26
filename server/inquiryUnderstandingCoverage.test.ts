@@ -164,7 +164,7 @@ describe("findComprehensionGaps — 3 clips × 20s", () => {
     expect(coverage.collapsedToEventHours).toBe(true);
   });
 
-  it("passes when a video package has 3 clips × 20s", () => {
+  it("passes when a video package has 3 clips × 20s and 1P+1V", () => {
     const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
     const coverage = findComprehensionGaps({
       signals,
@@ -176,13 +176,22 @@ describe("findComprehensionGaps — 3 clips × 20s", () => {
           quantity: 3,
           unit: "clips",
         },
+        {
+          kind: "crew",
+          summary: "現場 1 攝影師 + 1 攝像師",
+          quantity: 2,
+          unit: "people",
+        },
       ],
       suggestedItems: [
         { description: "Event Photography", quantity: 5 },
+        { description: "Videographer (1V)", quantity: 5 },
         { description: "Video Editing (3 clips × 20s)", quantity: 3 },
         { description: "Transportation Fee", quantity: 1 },
       ],
       shootHours: 5,
+      crewPhotographers: 1,
+      crewVideographers: 1,
     });
     expect(coverage.gaps).toEqual([]);
     expect(coverage.collapsedToEventHours).toBe(false);
@@ -225,6 +234,7 @@ describe("findComprehensionGaps — CITIC meeting #12480003", () => {
     expect(coverage.gaps.some((g) => /30/.test(g) && /精修/.test(g))).toBe(true);
     expect(coverage.gaps.some((g) => /分鐘|60/.test(g))).toBe(true);
     expect(coverage.gaps.some((g) => /剪接/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /1P\+1V|攝像師/.test(g))).toBe(true);
     expect(
       quoteSendBlocker({
         comprehensionGaps: coverage.gaps,
@@ -262,9 +272,16 @@ describe("findComprehensionGaps — CITIC meeting #12480003", () => {
           quantity: 1,
           unit: "clips",
         },
+        {
+          kind: "crew",
+          summary: "現場 1 攝影師 + 1 攝像師",
+          quantity: 2,
+          unit: "people",
+        },
       ],
       suggestedItems: [
         { description: "Event Photography", quantity: 4 },
+        { description: "Videographer (1V)", quantity: 4 },
         { description: "Photo delivery 200 shots", quantity: 200 },
         { description: "Photo Retouching (3 rounds)", quantity: 30 },
         { description: "1-minute highlight video edit", quantity: 1 },
@@ -272,8 +289,54 @@ describe("findComprehensionGaps — CITIC meeting #12480003", () => {
       ],
       shootHours: 4,
       shotCount: 200,
+      crewPhotographers: 1,
+      crewVideographers: 1,
     });
     expect(coverage.gaps).toEqual([]);
     expect(coverage.collapsedToEventHours).toBe(false);
+  });
+
+  it("still gaps if deliverables are listed but crew is 1 photographer only", () => {
+    const signals = extractRequirementSignals(CITIC_MEETING_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        {
+          kind: "event",
+          summary: "酒店會議廳 下午1點到5點 攝影攝像",
+          quantity: 4,
+          unit: "hours",
+        },
+        {
+          kind: "event",
+          summary: "不少於200張合格照片",
+          quantity: 200,
+          unit: "shots",
+        },
+        {
+          kind: "retouch",
+          summary: "三次精修不少於30張照片",
+          quantity: 30,
+          unit: "shots",
+        },
+        {
+          kind: "video",
+          summary: "1分鐘精選視頻及影片剪接",
+          quantity: 1,
+          unit: "clips",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 4 },
+        { description: "Photo delivery 200 shots", quantity: 200 },
+        { description: "Photo Retouching (3 rounds)", quantity: 30 },
+        { description: "1-minute highlight video edit", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 200,
+      crewPhotographers: 1,
+      crewVideographers: 0,
+    });
+    expect(coverage.gaps.some((g) => /1P\+1V|攝像師/.test(g))).toBe(true);
   });
 });

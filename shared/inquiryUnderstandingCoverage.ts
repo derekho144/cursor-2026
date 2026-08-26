@@ -30,6 +30,16 @@ export type ComprehensionCoverage = {
   collapsedToEventHours: boolean;
 };
 
+type CoverageInput = {
+  workPackages?: CoverageWorkPackage[] | null;
+  suggestedItems?: CoverageLineItem[] | null;
+  notes?: string | null;
+  shotCount?: number | null;
+  shootHours?: number | null;
+  crewPhotographers?: number | null;
+  crewVideographers?: number | null;
+};
+
 function qtyClose(a: number, b: number): boolean {
   if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return false;
   const lo = Math.min(a, b);
@@ -37,13 +47,7 @@ function qtyClose(a: number, b: number): boolean {
   return hi / lo <= 1.25 || Math.abs(a - b) <= 2;
 }
 
-function blobOf(input: {
-  workPackages?: CoverageWorkPackage[] | null;
-  suggestedItems?: CoverageLineItem[] | null;
-  notes?: string | null;
-  shotCount?: number | null;
-  shootHours?: number | null;
-}): string {
+function blobOf(input: CoverageInput): string {
   const pkgs = (input.workPackages ?? [])
     .map((p) => `${p.kind ?? ""} ${p.summary ?? ""} ${p.quantity ?? ""} ${p.unit ?? ""}`)
     .join(" | ");
@@ -55,7 +59,7 @@ function blobOf(input: {
 
 function coversShotCount(
   signal: RequirementSignal,
-  input: Parameters<typeof blobOf>[0]
+  input: CoverageInput
 ): boolean {
   const v = signal.value;
   if (v == null) return false;
@@ -75,7 +79,7 @@ function coversShotCount(
   return blob.includes(String(v)) && /件|張|artwork|product|photo|shot/.test(blob);
 }
 
-function coversCutout(input: Parameters<typeof blobOf>[0]): boolean {
+function coversCutout(input: CoverageInput): boolean {
   const blob = blobOf(input);
   if (/去背|cut[\s-]?out|background\s*remov/.test(blob)) return true;
   return (input.workPackages ?? []).some(
@@ -85,7 +89,7 @@ function coversCutout(input: Parameters<typeof blobOf>[0]): boolean {
 
 function coversDays(
   signal: RequirementSignal,
-  input: Parameters<typeof blobOf>[0]
+  input: CoverageInput
 ): boolean {
   const v = signal.value;
   if (v == null) return false;
@@ -101,7 +105,7 @@ function coversDays(
 
 function coversVideoCount(
   signal: RequirementSignal,
-  input: Parameters<typeof blobOf>[0]
+  input: CoverageInput
 ): boolean {
   const v = signal.value;
   if (v == null) return false;
@@ -123,7 +127,7 @@ function coversVideoCount(
 
 function coversClipSeconds(
   signal: RequirementSignal,
-  input: Parameters<typeof blobOf>[0]
+  input: CoverageInput
 ): boolean {
   const v = signal.value;
   if (v == null) return false;
@@ -214,6 +218,32 @@ function coversHours(
   return false;
 }
 
+/**
+ * 1P is implied by Event Photography / 攝影師.
+ * 1V requires an actual videographer — not 攝影攝像 wording, not highlight edit.
+ */
+function coversCrew1p1v(input: CoverageInput): boolean {
+  const pCrew = Number(input.crewPhotographers) >= 1;
+  const vCrew = Number(input.crewVideographers) >= 1;
+  const blob = blobOf(input);
+  const pText = /攝影師|photographer|\b1\s*p\b/i.test(blob);
+  const vText = /攝像師|錄影師|videographer|\b1\s*v\b|video\s*crew/i.test(blob);
+  const photoLine = (input.suggestedItems ?? []).some((it) =>
+    /photograph|攝影師|活動攝影/i.test(String(it.description ?? ""))
+  );
+  const crewPkg = (input.workPackages ?? []).some((p) => {
+    const t = `${p.kind ?? ""} ${p.summary ?? ""}`;
+    return (
+      String(p.kind ?? "") === "crew" ||
+      (/1\s*p/i.test(t) && /1\s*v/i.test(t)) ||
+      ( /攝影師/.test(t) && /攝像師|錄影師/.test(t) )
+    );
+  });
+  const hasP = pCrew || pText || photoLine || crewPkg;
+  const hasV = vCrew || vText || crewPkg;
+  return hasP && hasV;
+}
+
 function isCollapsedToEventHours(
   signals: RequirementSignal[],
   input: Parameters<typeof blobOf>[0]
@@ -269,6 +299,8 @@ export function findComprehensionGaps(input: {
   notes?: string | null;
   shotCount?: number | null;
   shootHours?: number | null;
+  crewPhotographers?: number | null;
+  crewVideographers?: number | null;
 }): ComprehensionCoverage {
   const covered: RequirementSignal[] = [];
   const missed: RequirementSignal[] = [];
@@ -286,6 +318,7 @@ export function findComprehensionGaps(input: {
     else if (signal.kind === "video_count") ok = coversVideoCount(signal, input);
     else if (signal.kind === "clip_seconds") ok = coversClipSeconds(signal, input);
     else if (signal.kind === "video_edit") ok = coversVideoEdit(input);
+    else if (signal.kind === "crew_1p1v") ok = coversCrew1p1v(input);
 
     if (ok) covered.push(signal);
     else {
@@ -293,6 +326,10 @@ export function findComprehensionGaps(input: {
       if (signal.kind === "event_days" && Number(input.shootHours) === signal.value) {
         gaps.push(
           `原文係 ${signal.value} 天拍攝，解析當成 ${input.shootHours} 小時（${signal.evidence}）`
+        );
+      } else if (signal.kind === "crew_1p1v") {
+        gaps.push(
+          `原文要影相兼拍片，現場人手應為 1 攝影師 + 1 攝像師（1P+1V），解析未覆蓋（${signal.evidence}）`
         );
       } else {
         gaps.push(`原文有「${signal.label}」，解析未覆蓋（${signal.evidence}）`);
@@ -319,6 +356,8 @@ export function applyComprehensionToParsed<
     shootHours?: number | null;
     suggestedItems?: CoverageLineItem[] | null;
     workPackages?: CoverageWorkPackage[] | null;
+    crewPhotographers?: number | null;
+    crewVideographers?: number | null;
   },
 >(
   parsed: T,
