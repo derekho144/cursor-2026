@@ -29,6 +29,19 @@ describe("evaluateInquiryDraftReadiness", () => {
     ).toBe(false);
   });
 
+  it("blocks drone from AI auto-quote scope", () => {
+    const r = evaluateInquiryDraftReadiness({
+      serviceType: "drone",
+      isInquiry: true,
+      confidence: "high",
+      quantitySource: "explicit",
+      shootHours: 2,
+      suggestedItems: [{ quantity: 2, unitPrice: 2500 }],
+    });
+    expect(r.readyForAutoDraft).toBe(false);
+    expect(r.blockers.some((b) => b.includes("航拍"))).toBe(true);
+  });
+
   it("requires explicit hours for events", () => {
     const assumed = evaluateInquiryDraftReadiness({
       serviceType: "corporate_event",

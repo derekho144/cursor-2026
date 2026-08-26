@@ -40,8 +40,9 @@ describe("reject reasons", () => {
 });
 
 describe("pricing learning exclusions", () => {
-  it("excludes other service type", () => {
+  it("excludes other and drone from AI pricing scope", () => {
     expect(isPricingLearningServiceType("other")).toBe(false);
+    expect(isPricingLearningServiceType("drone")).toBe(false);
     expect(isPricingLearningServiceType("corporate_event")).toBe(true);
     expect(isPricingLearningServiceType("product")).toBe(true);
   });

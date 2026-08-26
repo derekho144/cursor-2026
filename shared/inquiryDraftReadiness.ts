@@ -2,7 +2,11 @@
  * Email inquiry → draft quote readiness.
  * Prefer accurate understanding over auto-creating shaky drafts.
  */
-import { quotePricingMode, type QuotePricingMode } from "./quotePricingMode";
+import {
+  isAiAutoQuoteExcludedServiceType,
+  quotePricingMode,
+  type QuotePricingMode,
+} from "./quotePricingMode";
 
 export type QuantitySource = "explicit" | "assumed" | "unknown";
 
@@ -90,6 +94,17 @@ export function evaluateInquiryDraftReadiness(parsed: {
   if (serviceType === "other") {
     blockers.push("服務類型為「其他」，太雜唔宜自動草稿");
     if (!missingFields.includes("serviceType")) missingFields.push("serviceType");
+  }
+  if (serviceType === "drone") {
+    blockers.push("航拍拍攝不納入 AI 報價範圍，需人手報價");
+  }
+  // Future excluded types (besides other/drone messaging above)
+  if (
+    isAiAutoQuoteExcludedServiceType(serviceType) &&
+    serviceType !== "other" &&
+    serviceType !== "drone"
+  ) {
+    blockers.push("此服務類型不納入 AI 自動報價");
   }
 
   if (pricingMode === "time_crew") {
