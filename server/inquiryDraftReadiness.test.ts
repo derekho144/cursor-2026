@@ -100,6 +100,22 @@ describe("evaluateInquiryDraftReadiness", () => {
     expect(r.readyForAutoDraft).toBe(false);
     expect(r.blockers.some((b) => b.includes("定價學習"))).toBe(true);
   });
+
+  it("blocks when attachmentStatus is missing", () => {
+    const r = evaluateInquiryDraftReadiness({
+      serviceType: "corporate_event",
+      isInquiry: true,
+      confidence: "high",
+      quantitySource: "explicit",
+      shootHours: 5,
+      durationPackage: "half_day",
+      suggestedItems: [{ quantity: 5, unitPrice: 950 }],
+      attachmentStatus: "missing",
+      learningReady: true,
+    });
+    expect(r.readyForAutoDraft).toBe(false);
+    expect(r.missingFields).toContain("attachmentText");
+  });
 });
 
 describe("formatInquiryDraftNotes", () => {
