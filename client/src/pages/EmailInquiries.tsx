@@ -244,6 +244,23 @@ Web: https://jdstudiohk.com/`);
                   已讀 PDF
                 </span>
               )}
+              {Array.isArray(aiParsed?.comprehensionGaps) &&
+                aiParsed.comprehensionGaps.length > 0 && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(229,57,53,0.15)", color: "#ef5350", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(229,57,53,0.35)" }}
+                >
+                  理解缺口
+                </span>
+              )}
+              {aiParsed?.multiScope && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(156,39,176,0.12)", color: "#ce93d8", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(156,39,176,0.3)" }}
+                >
+                  多範圍 RFQ
+                </span>
+              )}
               {aiParsed?.draftReadiness &&
                 !aiParsed.draftReadiness.readyForAutoDraft &&
                 (inquiry.status === "pending" || inquiry.status === "pending_send") && (
@@ -396,6 +413,61 @@ Web: https://jdstudiohk.com/`);
                         <span>{value as string}</span>
                       </div>
                     ))}
+                    {Array.isArray(aiParsed.comprehensionGaps) &&
+                      aiParsed.comprehensionGaps.length > 0 && (
+                        <div
+                          className="mt-2 pt-2 rounded p-2"
+                          style={{
+                            background: "rgba(229,57,53,0.08)",
+                            border: "1px solid rgba(229,57,53,0.28)",
+                          }}
+                        >
+                          <div className="mb-1" style={{ color: "#ef5350" }}>
+                            閱讀理解缺口（原文有、解析未覆蓋）
+                          </div>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {aiParsed.comprehensionGaps.map((g: string, i: number) => (
+                              <li key={i}>{g}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    {Array.isArray(aiParsed.workPackages) &&
+                      aiParsed.workPackages.length > 0 && (
+                        <div
+                          className="mt-2 pt-2"
+                          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          <div className="text-muted-foreground mb-1">
+                            工作範圍（先理解、後報價）
+                          </div>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {aiParsed.workPackages.map(
+                              (
+                                p: {
+                                  kind?: string;
+                                  summary?: string;
+                                  quantity?: number;
+                                  unit?: string;
+                                  date?: string;
+                                  location?: string;
+                                },
+                                i: number
+                              ) => (
+                                <li key={i}>
+                                  {p.kind ? `[${p.kind}] ` : ""}
+                                  {p.summary || "（無摘要）"}
+                                  {p.quantity
+                                    ? ` · ${p.quantity}${p.unit ? ` ${p.unit}` : ""}`
+                                    : ""}
+                                  {p.date ? ` · ${p.date}` : ""}
+                                  {p.location ? ` · ${p.location}` : ""}
+                                </li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                      )}
                     {aiParsed.draftReadiness && (
                       <div
                         className="mt-2 pt-2 rounded p-2 text-xs"

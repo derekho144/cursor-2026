@@ -18,6 +18,9 @@ export type InquiryParseExtras = {
   missingFields?: string[] | null;
   /** none = plain body OK; used = PDF text read; missing = referenced/unread attachment */
   attachmentStatus?: "none" | "used" | "missing" | string | null;
+  /** Reading-comprehension misses vs machine-extracted signals (200件 / 去背 / N天). */
+  comprehensionGaps?: string[] | null;
+  multiScope?: boolean | null;
 };
 
 export type InquiryDraftReadiness = {
@@ -107,6 +110,13 @@ export function evaluateInquiryDraftReadiness(parsed: {
       missingFields.push("attachmentText");
     }
   }
+  const comprehensionGaps = Array.isArray(parsed.comprehensionGaps)
+    ? parsed.comprehensionGaps.map((g) => String(g).trim()).filter(Boolean)
+    : [];
+  if (comprehensionGaps.length > 0) {
+    blockers.push(`閱讀理解缺口：${comprehensionGaps.join("；")}`);
+    if (!missingFields.includes("workPackages")) missingFields.push("workPackages");
+  }
 
   if (pricingMode === "time_crew") {
     const hasHours = shootHours != null;
@@ -187,6 +197,10 @@ export function formatInquiryDraftNotes(input: {
   if (input.readiness?.missingFields?.length) {
     lines.push("");
     lines.push(`【缺欄】${input.readiness.missingFields.join("、")}`);
+  }
+  if (input.readiness?.blockers?.some((b) => b.includes("閱讀理解缺口"))) {
+    lines.push("");
+    lines.push("【閱讀理解缺口】原文工作範圍未完全進入解析，請人手核對後再開草稿。");
   }
   return lines.join("\n");
 }

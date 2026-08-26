@@ -42,6 +42,19 @@ import {
   applyAttachmentUnderstandingToParsed,
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
+import {
+  extractRequirementSignals,
+  formatSignalsForPrompt,
+} from "../../shared/inquiryRequirementSignals";
+import {
+  applyComprehensionToParsed,
+  findComprehensionGaps,
+} from "../../shared/inquiryUnderstandingCoverage";
+import {
+  formatFrozenFactsForPricing,
+  understandInquiryFacts,
+  type InquiryFacts,
+} from "../inquiryUnderstandFacts";
 
 /** After AI parse: annotate attachment status (none/used/missing) and gate confidence. */
 function enrichParsedWithAttachmentGate(
@@ -682,23 +695,54 @@ const HK_MARKET_PRICING: Record<string, { low: number; mid: number; high: number
 
 // ─── AI parse inquiry email ────────────────────────────────────────
 async function parseInquiryWithAI(subject: string, body: string, fromEmail?: string) {
-  // Step 1: 快速解析服務類型（用於查詢歷史數據）
-  const quickParsePrompt = `Identify the photography service type from this email inquiry. Return only the serviceType value.
-Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, other
-Email Subject: ${subject}\nEmail Body (first 300 chars): ${body.substring(0, 300)}`;
+  const validTypes = ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"];
+  const signals = extractRequirementSignals(`${subject}\n${body}`);
 
-  let detectedServiceType = "other";
-  try {
-    const quickResult = await invokeLLM({
-      messages: [
-        { role: "system", content: "Return only the service type string, nothing else." },
-        { role: "user", content: quickParsePrompt },
-      ],
+  // Pass 1: facts only (no billing). Retry once if machine signals were dropped.
+  let facts: InquiryFacts | null = await understandInquiryFacts({
+    subject,
+    body,
+    signals,
+  });
+  if (facts) {
+    const factsCoverage = findComprehensionGaps({
+      signals,
+      workPackages: facts.workPackages,
+      notes: facts.notes,
+      shotCount: facts.shotCount,
+      shootHours: facts.shootHours,
     });
-    const raw = (quickResult.choices?.[0]?.message?.content as string ?? "").trim().toLowerCase();
-    const validTypes = ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"];
-    if (validTypes.includes(raw)) detectedServiceType = raw;
-  } catch {}
+    if (factsCoverage.missed.length > 0) {
+      const retried = await understandInquiryFacts({
+        subject,
+        body,
+        signals,
+        retryGaps: factsCoverage.gaps,
+      });
+      if (retried) facts = retried;
+    }
+  }
+
+  let detectedServiceType = (facts?.primaryServiceType ?? "other").trim().toLowerCase();
+  if (!validTypes.includes(detectedServiceType)) detectedServiceType = "other";
+
+  // Fallback type guess uses enough body to include PDF text (not first 300 chars).
+  if (detectedServiceType === "other") {
+    const quickParsePrompt = `Identify the photography service type from this email inquiry. Return only the serviceType value.
+Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, other
+If the brief has both an event AND product/artwork/cutout packages, still return the PRIMARY type (usually corporate_event) — pricing will use frozen work packages.
+Email Subject: ${subject}\nEmail Body:\n${body.substring(0, 8000)}`;
+    try {
+      const quickResult = await invokeLLM({
+        messages: [
+          { role: "system", content: "Return only the service type string, nothing else." },
+          { role: "user", content: quickParsePrompt },
+        ],
+      });
+      const raw = (quickResult.choices?.[0]?.message?.content as string ?? "").trim().toLowerCase();
+      if (validTypes.includes(raw)) detectedServiceType = raw;
+    } catch {}
+  }
 
   // Step 2: 查詢歷史成交數據（並行查詢所有四種 context）
   const [historicalData, frequentItems, winRateData, timeWeightedData, deviationFactor] = await Promise.all([
@@ -869,6 +913,7 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
 9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
+10. MULTI-SCOPE: If frozen workPackages (or the email/PDF) contain both event coverage AND artwork/product stills AND/OR 去背/cutout, emit a separate suggestedItems line for EACH package. Never collapse to a single Event Photography hours line. Event "retouching included" does NOT cover explicit 去背 / 作品特寫. "N days" is not N hours.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
@@ -945,6 +990,13 @@ D. Never apply volume discount to Transportation Fee (always fixed HKD 320).
 E. If client mentions a range (e.g. "about 20-30 products"), use the HIGHER end of the range for the tier calculation (gives client best value, increases conversion).
 `;
 
+  if (facts?.multiScope) {
+    pricingContext += `
+=== MULTI-SCOPE RFQ WARNING ===
+This inquiry has multiple work packages. Historical ${detectedServiceType} totals MUST NOT drop artwork / product / cutout lines or force the quote toward a cheap event average. Price EACH frozen work package with the matching TIERED rule.
+`;
+  }
+
   const prompt = `You are an assistant for JD Studio HK, a professional photography studio in Hong Kong.
 Analyze the following email inquiry and extract structured information for creating a quotation.
 
@@ -954,6 +1006,9 @@ ${body}
 
 IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF attachments. Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the PDF.
 
+MACHINE-EXTRACTED SIGNALS (must appear in suggestedItems / work packages unless justified in missingFields):
+${formatSignalsForPrompt(signals)}
+${formatFrozenFactsForPricing(facts)}
 ${pricingContext}
 
 ${BILLING_RULES}
@@ -1116,6 +1171,33 @@ Extract and return a JSON object with these fields:
       );
       parsed.quantitySource = assumedFromItems ? "assumed" : "unknown";
     }
+    if (facts?.workPackages?.length) {
+      parsed.workPackages = facts.workPackages;
+      parsed.multiScope = !!facts.multiScope;
+      if (!parsed.eventName && facts.eventName) parsed.eventName = facts.eventName;
+      if (!parsed.shootingDate && facts.shootingDate) parsed.shootingDate = facts.shootingDate;
+      if (!parsed.shootingLocation && facts.shootingLocation) {
+        parsed.shootingLocation = facts.shootingLocation;
+      }
+      if (!(Number(parsed.shotCount) > 0) && Number(facts.shotCount) > 0) {
+        parsed.shotCount = facts.shotCount;
+      }
+      if (!(Number(parsed.shootHours) > 0) && Number(facts.shootHours) > 0) {
+        parsed.shootHours = facts.shootHours;
+      }
+      if (facts.durationPackage && (!parsed.durationPackage || parsed.durationPackage === "unknown")) {
+        parsed.durationPackage = facts.durationPackage;
+      }
+    }
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: parsed.workPackages,
+      suggestedItems: parsed.suggestedItems,
+      notes: parsed.notes,
+      shotCount: parsed.shotCount,
+      shootHours: parsed.shootHours,
+    });
+    Object.assign(parsed, applyComprehensionToParsed(parsed, coverage, signals));
     parsed.draftReadiness = evaluateInquiryDraftReadiness(parsed);
 
     return parsed;
