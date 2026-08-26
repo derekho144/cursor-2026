@@ -698,8 +698,8 @@ VALIDATION RULE:
 `;
   }
 
-  // B: Win-rate context（成交率分析）
-  if (winRateData) {
+  // B: Win-rate context（成交率分析）— skip for out-of-scope types (e.g. drone)
+  if (detectedServiceType !== "drone" && winRateData) {
     pricingContext += `
 === WIN RATE ANALYSIS (${winRateData.totalQuotes} total quotes, ${winRateData.overallWinRate}% overall win rate) ===
 - Low tier (≤HKD ${winRateData.lowTier.maxPrice}): ${winRateData.lowTier.winRate}% win rate (${winRateData.lowTier.count} quotes)
@@ -710,7 +710,11 @@ IMPORTANT: Prefer the price tier with the highest win rate unless the inquiry si
   }
 
   // E: Deviation correction factor context
-  if (deviationFactor && deviationFactor.correctionFactor !== 1.0) {
+  if (
+    detectedServiceType !== "drone" &&
+    deviationFactor &&
+    deviationFactor.correctionFactor !== 1.0
+  ) {
     const dir = deviationFactor.avgDeviation > 0 ? "UNDERESTIMATING" : "OVERESTIMATING";
     pricingContext += `
 === AI SELF-CORRECTION FACTOR (${deviationFactor.confidence} confidence, ${deviationFactor.sampleCount} samples) ===
@@ -721,7 +725,7 @@ INSTRUCTION: The pricingMid you output will be multiplied by ${deviationFactor.c
 `;
   }
   // A: Item-level frequency context（最常用項目）
-  if (frequentItems && frequentItems.length > 0) {
+  if (detectedServiceType !== "drone" && frequentItems && frequentItems.length > 0) {
     pricingContext += `
 === MOST FREQUENTLY USED ITEMS IN ACCEPTED QUOTES (use for item naming reference only) ===
 ${frequentItems.map(item => `- "${item.description}": historical avg HKD ${item.avgUnitPrice} (range ${item.minUnitPrice}–${item.maxUnitPrice}), used ${item.usageCount}x`).join("\n")}
