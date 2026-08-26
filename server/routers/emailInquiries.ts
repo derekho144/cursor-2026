@@ -38,6 +38,13 @@ import {
   mergeEmailBodyWithPdfText,
 } from "../emailPdfAttachments";
 
+/**
+ * INTERNAL TEST (temporary): skip draft-readiness gate so inquiries still
+ * auto-create drafts even when quantity is assumed/missing.
+ * Default ON. Set BYPASS_DRAFT_READINESS_GATE=0 to re-enable the gate.
+ */
+const BYPASS_DRAFT_READINESS_GATE = process.env.BYPASS_DRAFT_READINESS_GATE !== "0";
+
 // ─── FH Notification email detection ─────────────────────────────────────────
 // FH 系統通知郵件的識別方式：subject 包含「【Freehunter】」或「[Freehunter]」
 // 真實郵件格式：subject = 「【Freehunter】新工作邀請：婚禮攝影及錄影服務」
@@ -1489,7 +1496,8 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     const draftReadiness =
       aiResult?.draftReadiness ??
       (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
-    const readyForAutoDraft = !!draftReadiness?.readyForAutoDraft;
+    const readyForAutoDraft =
+      BYPASS_DRAFT_READINESS_GATE || !!draftReadiness?.readyForAutoDraft;
     const HIGH_VALUE_THRESHOLD = 8000;
     const estimatedTotal = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
     const crewSignal = detectCrewHighValue(`${subject}\n${bodyText}\n${attachmentText ?? ""}`);
@@ -1756,7 +1764,9 @@ export const emailInquiriesRouter = router({
         const draftReadinessScan =
           aiResult?.draftReadiness ??
           (aiResult ? evaluateInquiryDraftReadiness(aiResult) : null);
-        const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
+        const readyForAutoDraftScan =
+          BYPASS_DRAFT_READINESS_GATE ||
+          !!draftReadinessScan?.readyForAutoDraft;
         const HIGH_VALUE_THRESHOLD_SCAN = 8000;
         const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
         const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}\n${attachmentText ?? ""}`);
