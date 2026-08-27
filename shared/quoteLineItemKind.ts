@@ -11,11 +11,51 @@ export type QuoteLineItemKind =
   | "included_meta"
   | "other";
 
+/** Stored / explicit categories (same as kinds). */
+export type QuoteLineItemCategory = QuoteLineItemKind;
+
+export const QUOTE_LINE_ITEM_CATEGORY_OPTIONS: Array<{
+  value: QuoteLineItemCategory;
+  label: string;
+}> = [
+  { value: "photographer_crew", label: "攝影師" },
+  { value: "photobooth", label: "Photobooth" },
+  { value: "video", label: "錄影" },
+  { value: "transport", label: "交通" },
+  { value: "included_meta", label: "附註／包含" },
+  { value: "other", label: "其他服務" },
+];
+
+export const QUOTE_LINE_ITEM_KINDS = QUOTE_LINE_ITEM_CATEGORY_OPTIONS.map(
+  (o) => o.value
+) as QuoteLineItemCategory[];
+
+export function isQuoteLineItemCategory(
+  raw: unknown
+): raw is QuoteLineItemCategory {
+  return (
+    typeof raw === "string" &&
+    (QUOTE_LINE_ITEM_KINDS as string[]).includes(raw)
+  );
+}
+
+export function quoteLineItemCategoryLabel(
+  kind: QuoteLineItemKind | null | undefined
+): string {
+  if (!kind) return "自動";
+  return (
+    QUOTE_LINE_ITEM_CATEGORY_OPTIONS.find((o) => o.value === kind)?.label ??
+    kind
+  );
+}
+
 export type QuoteLineAmountInput = {
   description?: string | null;
   quantity?: number | string | null;
   unitPrice?: number | string | null;
   amount?: number | string | null;
+  /** Explicit category from UI; when set, overrides keyword inference */
+  category?: QuoteLineItemCategory | string | null;
 };
 
 function lineAmount(item: QuoteLineAmountInput): number {
@@ -30,7 +70,9 @@ function lineAmount(item: QuoteLineAmountInput): number {
 }
 
 /** Normalize description for keyword matching. */
-export function normalizeLineDescription(description: string | null | undefined): string {
+export function normalizeLineDescription(
+  description: string | null | undefined
+): string {
   return String(description ?? "")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -47,7 +89,6 @@ export function classifyQuoteLineItem(
   const d = normalizeLineDescription(description);
   if (!d) return "other";
 
-  // Photobooth / instant print booth (NOT event photographer coverage)
   if (
     /photo\s*-?\s*booth|photobooth|photo booth|即影即有|照相亭|相片亭/.test(d) ||
     (/無限相紙|拍照道具/.test(d) && /打印|道具|相紙/.test(d))
@@ -70,7 +111,6 @@ export function classifyQuoteLineItem(
     return "video";
   }
 
-  // $0 meta / included lines (Team XP, lighting list, delivery method)
   if (
     /^team\s*\d*\s*p\b/.test(d) ||
     /^team\s+\d+p\b/.test(d) ||
@@ -82,16 +122,14 @@ export function classifyQuoteLineItem(
     return "included_meta";
   }
 
-  // Photographer / event stills coverage (incl. extra photographer)
   if (
-    /event\s*photoshoot|photoshoot|photo\s*shoot|photography|photographer|extra\s*photographer|additional\s*photographer|攝影師|攝影服務|活動攝影|跟拍/.test(
+    /event\s*photoshoot|photoshoot|photo\s*shoot|photography|photographer|extra\s*photographer|additional\s*photographer|攝影師|攝影服務|活動攝影|跟拍|extra\s*hour|extra\s*photos?|合照|細節圖/.test(
       d
     )
   ) {
     return "photographer_crew";
   }
 
-  // Chinese / EN product stills still count as photo crew money for learning
   if (/product\s*photo|白底|食物攝影|珠寶攝影|artwork\s*photo|作品特寫/.test(d)) {
     return "photographer_crew";
   }
@@ -99,20 +137,23 @@ export function classifyQuoteLineItem(
   return "other";
 }
 
+/** Prefer explicit category; fall back to keyword classification. */
+export function resolveQuoteLineItemKind(input: {
+  description?: string | null;
+  category?: QuoteLineItemCategory | string | null;
+}): QuoteLineItemKind {
+  if (isQuoteLineItemCategory(input.category)) return input.category;
+  return classifyQuoteLineItem(input.description);
+}
+
 export type QuoteMoneySplit = {
-  /** Sum of photographer_crew line amounts */
   photographerCrewSubtotal: number;
   photoboothSubtotal: number;
   videoSubtotal: number;
   transportSubtotal: number;
   otherBillableSubtotal: number;
   includedMetaSubtotal: number;
-  /** Full sum of all line amounts */
   itemsTotal: number;
-  /**
-   * Money used for crew/time learning:
-   * photographer crew when present, else full items total.
-   */
   learningTotal: number;
   learningTotalSource: "photographer_crew" | "items_total";
   hasPhotographerCrewLines: boolean;
@@ -134,7 +175,7 @@ export function splitQuoteLineItemMoney(
   for (const item of list) {
     const amount = lineAmount(item);
     itemsTotal += amount;
-    const kind = classifyQuoteLineItem(item.description);
+    const kind = resolveQuoteLineItemKind(item);
     switch (kind) {
       case "photographer_crew":
         photographerCrewSubtotal += amount;

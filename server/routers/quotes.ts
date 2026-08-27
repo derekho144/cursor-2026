@@ -209,6 +209,17 @@ const quoteItemSchema = z.object({
   unitPrice: z.number(),
   amount: z.number(),
   isIncluded: z.boolean().optional(),
+  category: z
+    .enum([
+      "photographer_crew",
+      "photobooth",
+      "video",
+      "transport",
+      "included_meta",
+      "other",
+    ])
+    .nullable()
+    .optional(),
 });
 
 const serviceTypeEnum = z.enum([
@@ -385,10 +396,12 @@ export const quotesRouter = router({
         depositMode: quoteData.depositMode ?? "percent",
         depositFixedAmount: quoteData.depositFixedAmount != null ? String(quoteData.depositFixedAmount) : null,
         items: items.map((item) => ({
-          ...item,
+          description: item.description,
           quantity: String(item.quantity),
+          unit: item.unit,
           unitPrice: String(item.unitPrice),
           amount: String(item.amount),
+          category: item.category ?? null,
         })),
       });
       // Fire-and-forget: pre-generate PDF in background
@@ -542,10 +555,12 @@ export const quotesRouter = router({
         ...(depositFixedAmount !== undefined && { depositFixedAmount: depositFixedAmount != null ? String(depositFixedAmount) : null }),
         ...(items && {
           items: items.map((item) => ({
-            ...item,
+            description: item.description,
             quantity: String(item.quantity),
+            unit: item.unit,
             unitPrice: String(item.unitPrice),
             amount: String(item.amount),
+            category: item.category ?? null,
           })),
         }),
         // Auto-invalidate cached PDF when content changes

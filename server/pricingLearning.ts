@@ -166,6 +166,7 @@ async function loadLearningQuotesWithItems(opts?: {
       quantity: quoteItems.quantity,
       unitPrice: quoteItems.unitPrice,
       amount: quoteItems.amount,
+      category: quoteItems.category,
     })
     .from(quoteItems)
     .where(inArray(quoteItems.quoteId, ids));

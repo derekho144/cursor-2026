@@ -146,6 +146,15 @@ export const quoteItems = mysqlTable("quote_items", {
   unit: varchar("unit", { length: 32 }).default("次"),
   unitPrice: decimal("unitPrice", { precision: 10, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  /** photographer_crew | photobooth | video | transport | included_meta | other */
+  category: mysqlEnum("category", [
+    "photographer_crew",
+    "photobooth",
+    "video",
+    "transport",
+    "included_meta",
+    "other",
+  ]),
   sortOrder: int("sortOrder").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

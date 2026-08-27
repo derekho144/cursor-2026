@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyQuoteLineItem,
   resolveLearningTotal,
+  resolveQuoteLineItemKind,
   splitQuoteLineItemMoney,
 } from "../shared/quoteLineItemKind";
 
@@ -16,6 +17,38 @@ describe("classifyQuoteLineItem", () => {
     expect(classifyQuoteLineItem("Photobooth (3 hours)")).toBe("photobooth");
     expect(classifyQuoteLineItem("Transportation Fee")).toBe("transport");
     expect(classifyQuoteLineItem("Team 2P")).toBe("included_meta");
+  });
+});
+
+describe("resolveQuoteLineItemKind", () => {
+  it("prefers explicit category over keyword inference", () => {
+    expect(
+      resolveQuoteLineItemKind({
+        description: "Photobooth (3 hours)",
+        category: "photographer_crew",
+      })
+    ).toBe("photographer_crew");
+    expect(
+      resolveQuoteLineItemKind({
+        description: "Event Photoshoot",
+        category: "other",
+      })
+    ).toBe("other");
+  });
+
+  it("falls back to keywords when category empty", () => {
+    expect(
+      resolveQuoteLineItemKind({
+        description: "Transportation Fee",
+        category: null,
+      })
+    ).toBe("transport");
+    expect(
+      resolveQuoteLineItemKind({
+        description: "extra hour",
+        category: "",
+      })
+    ).toBe("photographer_crew");
   });
 });
 

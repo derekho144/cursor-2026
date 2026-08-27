@@ -435,6 +435,20 @@
       "when": 1787610000000,
       "tag": "0061_quote_shot_count",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1787620000000,
+      "tag": "0062_quote_reject_duration",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "5",
+      "when": 1787810000000,
+      "tag": "0063_quote_item_category",
+      "breakpoints": true
     }
   ]
 }

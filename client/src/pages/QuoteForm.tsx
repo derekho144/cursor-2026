@@ -30,6 +30,12 @@ import {
   type DurationPackage,
 } from "@shared/quoteDurationPackage";
 import { splitQuoteLineItemMoney } from "@shared/quoteLineItemKind";
+import {
+  classifyQuoteLineItem,
+  isQuoteLineItemCategory,
+  QUOTE_LINE_ITEM_CATEGORY_OPTIONS,
+  type QuoteLineItemCategory,
+} from "@shared/quoteLineItemKind";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -110,6 +116,8 @@ type QuoteItem = {
   unitPrice: number;
   amount: number;
   isIncluded?: boolean;
+  /** Explicit split category; empty = auto-detect from description */
+  category: "" | QuoteLineItemCategory;
 };
 
 type FormData = {
@@ -176,7 +184,7 @@ const emptyForm: FormData = {
   crewOthers: 0,
   deliveryMethod: "",
   leadSource: "",
-  items: [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0 }],
+  items: [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0, category: "" }],
   clientId: undefined,
   saveAsNewClient: false,
   syncToClients: true,
@@ -188,14 +196,22 @@ function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData 
   const base = { ...emptyForm, items: emptyForm.items.map((i) => ({ ...i, id: crypto.randomUUID() })) };
   if (!raw || typeof raw !== "object") return base;
   const items = Array.isArray(raw.items)
-    ? raw.items.map((item) => ({
-        id: item?.id || crypto.randomUUID(),
-        description: item?.description ?? "",
-        quantity: Number(item?.quantity) || 0,
-        unitPrice: Number(item?.unitPrice) || 0,
-        amount: Number(item?.amount) || 0,
-        isIncluded: !!(item as any)?.isIncluded,
-      }))
+    ? raw.items.map((item) => {
+        const desc = item?.description ?? "";
+        const rawCat = (item as any)?.category;
+        const category: "" | QuoteLineItemCategory = isQuoteLineItemCategory(rawCat)
+          ? rawCat
+          : "";
+        return {
+          id: item?.id || crypto.randomUUID(),
+          description: desc,
+          quantity: Number(item?.quantity) || 0,
+          unitPrice: Number(item?.unitPrice) || 0,
+          amount: Number(item?.amount) || 0,
+          isIncluded: !!(item as any)?.isIncluded,
+          category,
+        };
+      })
     : base.items;
   return {
     ...base,
@@ -321,7 +337,11 @@ function SortableQuoteItem({
   item: QuoteItem;
   idx: number;
   inputStyle: React.CSSProperties;
-  onUpdate: (idx: number, field: keyof QuoteItem, value: string | number) => void;
+  onUpdate: (
+    idx: number,
+    field: keyof QuoteItem,
+    value: string | number | boolean
+  ) => void;
   onRemove: (idx: number) => void;
   canRemove: boolean;
 }) {
@@ -332,14 +352,36 @@ function SortableQuoteItem({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
   };
+  const inferred = classifyQuoteLineItem(item.description);
+  const categoryValue = item.category || "auto";
   return (
     <div ref={setNodeRef} style={style}>
       {/* Desktop layout */}
-      <div className="hidden md:grid gap-2 items-center" style={{ gridTemplateColumns: "20px 1fr 80px 110px 110px 36px" }}>
+      <div className="hidden md:grid gap-2 items-center" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 100px 36px" }}>
         <div {...attributes} {...listeners} className="flex items-center justify-center cursor-grab active:cursor-grabbing" style={{ color: "rgba(212,168,67,0.4)", touchAction: "none" }}>
           <GripVertical className="h-4 w-4" />
         </div>
         <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
+        <Select
+          value={categoryValue}
+          onValueChange={(v) =>
+            onUpdate(idx, "category", v === "auto" ? "" : v)
+          }
+        >
+          <SelectTrigger style={{ ...inputStyle, height: "36px" }}>
+            <SelectValue placeholder="類別" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">
+              自動（{QUOTE_LINE_ITEM_CATEGORY_OPTIONS.find((o) => o.value === inferred)?.label ?? inferred}）
+            </SelectItem>
+            {QUOTE_LINE_ITEM_CATEGORY_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
         <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
         <div className="text-sm font-medium text-right pr-2" style={{ color: "#d4a843" }}>{item.amount.toLocaleString()}</div>
@@ -361,6 +403,29 @@ function SortableQuoteItem({
           <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20 flex-shrink-0">
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </button>
+        </div>
+        <div>
+          <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>項目類別</div>
+          <Select
+            value={categoryValue}
+            onValueChange={(v) =>
+              onUpdate(idx, "category", v === "auto" ? "" : v)
+            }
+          >
+            <SelectTrigger style={{ ...inputStyle, height: "36px" }}>
+              <SelectValue placeholder="類別" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                自動（{QUOTE_LINE_ITEM_CATEGORY_OPTIONS.find((o) => o.value === inferred)?.label ?? inferred}）
+              </SelectItem>
+              {QUOTE_LINE_ITEM_CATEGORY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -708,6 +773,9 @@ export default function QuoteForm() {
           quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice),
           amount: Number(item.amount),
+          category: isQuoteLineItemCategory((item as any).category)
+            ? ((item as any).category as QuoteLineItemCategory)
+            : ("" as const),
         })),
       }));
       // Hydrate structured crew from Team XP line if DB crew empty
@@ -775,10 +843,14 @@ export default function QuoteForm() {
   const discountAmount = Math.round(discountableSubtotal * (form.discountPercent || 0) / 100);
   const total = Math.max(0, subtotal - discountAmount);
 
-  const updateItem = (idx: number, field: keyof QuoteItem, value: string | number) => {
+  const updateItem = (
+    idx: number,
+    field: keyof QuoteItem,
+    value: string | number | boolean
+  ) => {
     setForm((prev) => {
       const items = [...prev.items];
-      const item = { ...items[idx], [field]: value };
+      const item = { ...items[idx], [field]: value } as QuoteItem;
       if (field === "quantity" || field === "unitPrice") {
         item.amount = Number(item.quantity) * Number(item.unitPrice);
       }
@@ -790,7 +862,17 @@ export default function QuoteForm() {
   const addItem = () => {
     setForm((prev) => ({
       ...prev,
-      items: [...prev.items, { id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0 }],
+      items: [
+        ...prev.items,
+        {
+          id: crypto.randomUUID(),
+          description: "",
+          quantity: 1,
+          unitPrice: 0,
+          amount: 0,
+          category: "",
+        },
+      ],
     }));
   };
 
@@ -889,7 +971,16 @@ export default function QuoteForm() {
       form.team.trim() ||
       autoTeam ||
       "";
-    const items = syncTeamLineItem(form.items, crewHeadcount(crew));
+    const items = syncTeamLineItem(form.items, crewHeadcount(crew)).map(
+      (item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        amount: item.amount,
+        isIncluded: item.isIncluded,
+        category: item.category ? item.category : null,
+      })
+    );
 
     const payload = {
       ...form,
@@ -1021,6 +1112,9 @@ export default function QuoteForm() {
                         quantity: Number(item.quantity),
                         unitPrice: Number(item.unitPrice),
                         amount: Number(item.amount),
+                        category: isQuoteLineItemCategory((item as any).category)
+                          ? ((item as any).category as QuoteLineItemCategory)
+                          : ("" as const),
                       })),
                     }));
                     if ((existingQuote as any).clientId) setSelectedClientName(existingQuote.clientName);
@@ -1577,6 +1671,7 @@ export default function QuoteForm() {
                           unitPrice: item.unitPrice,
                           amount: item.quantity * item.unitPrice,
                           isIncluded: (item as any).isIncluded ?? false,
+                          category: "" as const,
                         }));
                         const crew = crewFromTemplateItems(items, tpl.id);
                         const auto = buildTeamLabel(crew);
@@ -1602,8 +1697,8 @@ export default function QuoteForm() {
 
           <div className="space-y-3">
             {/* Header - desktop only */}
-            <div className="hidden md:grid gap-2" style={{ gridTemplateColumns: "20px 1fr 80px 110px 110px 36px" }}>
-              {["", "服務項目說明", "數量", "單價 (HKD)", "金額 (HKD)", ""].map((h, i) => (
+            <div className="hidden md:grid gap-2" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 100px 36px" }}>
+              {["", "服務項目說明", "類別", "數量", "單價 (HKD)", "金額 (HKD)", ""].map((h, i) => (
                 <div key={i} style={{ fontSize: "0.6rem", letterSpacing: "0.12em", color: "#d4a843", textTransform: "uppercase" }}>
                   {h}
                 </div>
