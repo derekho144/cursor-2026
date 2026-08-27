@@ -312,11 +312,12 @@ function crewFromTemplateItems(
       crewOthers: 0,
     };
   }
-  if (templateId === "photo_video" && pax >= 2) {
+  // 攝影加錄影：固定 1 攝影師 + 1 錄影
+  if (templateId === "photo_video") {
     return {
       crewPhotographers: 1,
       crewAssistants: 0,
-      crewVideographers: Math.max(1, pax - 1),
+      crewVideographers: 1,
       crewOthers: 0,
     };
   }
