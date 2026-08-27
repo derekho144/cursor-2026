@@ -29,11 +29,11 @@ import {
   inferDurationPackageFromHours,
   type DurationPackage,
 } from "@shared/quoteDurationPackage";
-import { splitQuoteLineItemMoney } from "@shared/quoteLineItemKind";
 import {
   classifyQuoteLineItem,
   isQuoteLineItemCategory,
   QUOTE_LINE_ITEM_CATEGORY_OPTIONS,
+  splitQuoteLineItemMoney,
   type QuoteLineItemCategory,
 } from "@shared/quoteLineItemKind";
 
