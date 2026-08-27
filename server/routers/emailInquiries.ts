@@ -39,6 +39,12 @@ import {
   mergeEmailBodyWithPdfText,
 } from "../emailPdfAttachments";
 import {
+  buildInquiryClassifyText,
+  hintServiceTypeFromText,
+  isInquiryServiceType,
+  refineInquiryParseWithExtractors,
+} from "../inquiryParseRefine";
+import {
   applyAttachmentUnderstandingToParsed,
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
@@ -682,12 +688,17 @@ const HK_MARKET_PRICING: Record<string, { low: number; mid: number; high: number
 
 // ─── AI parse inquiry email ────────────────────────────────────────
 async function parseInquiryWithAI(subject: string, body: string, fromEmail?: string) {
-  // Step 1: 快速解析服務類型（用於查詢歷史數據）
-  const quickParsePrompt = `Identify the photography service type from this email inquiry. Return only the serviceType value.
-Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, other
-Email Subject: ${subject}\nEmail Body (first 300 chars): ${body.substring(0, 300)}`;
+  // Step 1: 快速解析服務類型（用於查詢歷史數據）— 用較長文本，唔好只睇前 300 字
+  const classifyText = buildInquiryClassifyText(subject, body);
+  const keywordHint = hintServiceTypeFromText(`${subject}\n${body}`);
+  const quickParsePrompt = `Identify the photography/design service type from this email inquiry. Return only the serviceType value.
+Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, kol_mi, other
+Use kol_mi for KOL/influencer/MI social promotions.
+Prefer signals from the subject, body, AND any PDF attachment text section.
+Email:
+${classifyText}`;
 
-  let detectedServiceType = "other";
+  let detectedServiceType = keywordHint ?? "other";
   try {
     const quickResult = await invokeLLM({
       messages: [
@@ -696,8 +707,13 @@ Email Subject: ${subject}\nEmail Body (first 300 chars): ${body.substring(0, 300
       ],
     });
     const raw = (quickResult.choices?.[0]?.message?.content as string ?? "").trim().toLowerCase();
-    const validTypes = ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"];
-    if (validTypes.includes(raw)) detectedServiceType = raw;
+    if (isInquiryServiceType(raw)) {
+      // Prefer LLM when specific; keep keyword hint if LLM says vague "other"
+      detectedServiceType =
+        raw === "other" && keywordHint && keywordHint !== "other"
+          ? keywordHint
+          : raw;
+    }
   } catch {}
 
   // Step 2: 查詢歷史成交數據（並行查詢所有四種 context）
@@ -861,8 +877,8 @@ RETOUCHING SUMMARY (CRITICAL):
 
 IMPORTANT RULES FOR ALL SERVICE TYPES:
 1. ALWAYS extract quantity signals from the email: number of items/products/dishes/hours/rooms/pieces mentioned.
-2. If no quantity is mentioned, use the DEFAULT VALUE above, set quantitySource="assumed", list the assumption in assumptions[], and append "(assumed X - please confirm)" to the item description.
-3. If quantity IS clearly stated in the email, set quantitySource="explicit".
+2. If no quantity is mentioned: use the DEFAULT VALUE above ONLY for suggestedItems pricing estimates; set quantitySource="assumed"; list the assumption in assumptions[]; append "(assumed X - please confirm)" to the item description. CRITICAL: set structured shootHours=0 and shotCount=0 (do NOT copy the default into those fields — defaults are for pricing lines only).
+3. If quantity IS clearly stated in the email, set quantitySource="explicit" and fill shootHours / shotCount / durationPackage from that signal.
 4. Transportation Fee is ALWAYS HKD 320 (fixed). Never change this amount.
 5. pricingMid MUST equal the exact sum of (quantity x unitPrice) across all suggestedItems.
 6. pricingLow = pricingMid x 0.7 (rounded to nearest 100). pricingHigh = pricingMid x 1.35 (rounded to nearest 100).
@@ -968,13 +984,13 @@ Extract and return a JSON object with these fields:
 - eventName: string (event / project name if mentioned, else empty string)
 - shootingDate: string (date mentioned, YYYY-MM-DD format, or empty string — do NOT invent)
 - shootingLocation: string (location mentioned, or empty string)
-- shootHours: number (hours clearly stated or 0 if unknown; half-day ≈ 4–5, full-day ≈ 6–10)
-- shotCount: number (delivered image/piece count clearly stated, or 0 if unknown)
-- durationPackage: one of ["hours","half_day","full_day","multi_day","unknown"]
+- shootHours: number (hours CLEARLY stated in the email/PDF, or 0 if unknown — NEVER copy billing defaults like 5 into this field)
+- shotCount: number (delivered image/piece count CLEARLY stated, or 0 if unknown — NEVER copy billing defaults like 20 into this field)
+- durationPackage: one of ["hours","half_day","full_day","multi_day","unknown"] (only when email signals duration; otherwise "unknown")
 - crewPhotographers: number (photographers if stated, else 0)
 - crewVideographers: number (videographers if stated, else 0)
 - quantitySource: "explicit" | "assumed" | "unknown"
-  (explicit = email clearly states hours or shot count; assumed = you used a default; unknown = cannot tell)
+  (explicit = email clearly states hours or shot count; assumed = you used a default in suggestedItems only; unknown = cannot tell)
 - assumptions: string[] (Traditional Chinese list of assumptions you made, empty array if none)
 - missingFields: string[] (field names still unclear, e.g. ["shootHours","shotCount","shootingDate"])
 - notes: string (summary of requirements in Traditional Chinese, max 280 chars; mention key needs first)
@@ -985,7 +1001,7 @@ Extract and return a JSON object with these fields:
 - pricingHigh: number (= pricingMid x 1.35, rounded to nearest 100)
 - suggestedItems: array of objects with { description: string, quantity: number, unitPrice: number }
   - MUST follow the BILLING RULES / TIERED PRICING above for the detected serviceType (tiered rates are source of truth for unit prices)
-  - Extract quantity from the email; if not mentioned, use the default, set quantitySource="assumed", and note in description + assumptions
+  - Extract quantity from the email; if not mentioned, use the default for the LINE ITEM quantity only, set quantitySource="assumed", and note in description + assumptions — keep shootHours/shotCount at 0
   - Descriptions in English (professional photography terms)
   - Transportation Fee MUST always be HKD 320 (fixed rate) - never $0, never other amounts
   - unitPrice CAN be 0 ONLY if the service is genuinely bundled/complimentary
@@ -1107,15 +1123,23 @@ Extract and return a JSON object with these fields:
       }
     }
 
-    // Normalize extras + draft readiness (understanding quality gate)
+    // Normalize extras: deterministic extractors override LLM qty guesses
+    const refined = refineInquiryParseWithExtractors({
+      subject,
+      body,
+      parsed,
+    });
+    Object.assign(parsed, refined);
+    // Keyword fallback when full parse lands on vague "other"
+    if (
+      (!parsed.serviceType || String(parsed.serviceType).trim() === "other") &&
+      keywordHint &&
+      keywordHint !== "other"
+    ) {
+      parsed.serviceType = keywordHint;
+    }
     if (!Array.isArray(parsed.assumptions)) parsed.assumptions = [];
     if (!Array.isArray(parsed.missingFields)) parsed.missingFields = [];
-    if (!parsed.quantitySource) {
-      const assumedFromItems = (parsed.suggestedItems ?? []).some((it: any) =>
-        /assumed|假設/i.test(String(it?.description ?? ""))
-      );
-      parsed.quantitySource = assumedFromItems ? "assumed" : "unknown";
-    }
     parsed.draftReadiness = evaluateInquiryDraftReadiness(parsed);
 
     return parsed;

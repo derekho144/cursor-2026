@@ -93,12 +93,13 @@ Rates (corporate / commercial, per person per hour):
   - Video shooting assistant: HKD 600–1,000/hr each
   - Transportation Fee: HKD 320 (once)
 
-Example — "2 Chief photographer + 2 拍攝助理 (video)", duration not stated → assume 4 hours:
+Example — "2 Chief photographer + 2 拍攝助理 (video)", duration not stated → price items with assumed 4 hours, but set structured shootHours=0 and quantitySource="assumed":
   2 × Chief photographer × 4h × HKD 1,000 = HKD 8,000
   2 × Video assistant × 4h × HKD 800 = HKD 6,400
   Video editing (flat) HKD 2,500
   Transport HKD 320
   TOTAL ≈ HKD 17,220
+  (Do NOT put 4 into shootHours when the email never stated duration.)
 
 HIGH-VALUE OVERRIDE (code + prompt):
   - Video team / videographer / 拍攝助理 (video) / video crew → HIGH VALUE (meeting email).
