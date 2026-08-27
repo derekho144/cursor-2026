@@ -139,3 +139,21 @@ describe("formatInquiryDraftNotes", () => {
     expect(notes).toContain("AI 自動草稿");
   });
 });
+
+describe("comprehension gap blocks auto-draft", () => {
+  it("blocks when work packages were dropped", () => {
+    const r = evaluateInquiryDraftReadiness({
+      serviceType: "corporate_event",
+      isInquiry: true,
+      confidence: "high",
+      quantitySource: "explicit",
+      shootHours: 5,
+      durationPackage: "half_day",
+      comprehensionGaps: ["原文有「約 200 件／張拍攝或交付」，解析未覆蓋"],
+      suggestedItems: [{ quantity: 5, unitPrice: 950 }],
+      learningReady: true,
+    });
+    expect(r.readyForAutoDraft).toBe(false);
+    expect(r.blockers.some((b) => b.includes("閱讀理解缺口"))).toBe(true);
+  });
+});

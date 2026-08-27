@@ -1,0 +1,413 @@
+import { describe, expect, it } from "vitest";
+import {
+  applyComprehensionToParsed,
+  findComprehensionGaps,
+  quoteSendBlocker,
+} from "../shared/inquiryUnderstandingCoverage";
+import { extractRequirementSignals } from "../shared/inquiryRequirementSignals";
+import { evaluateInquiryDraftReadiness } from "../shared/inquiryDraftReadiness";
+import { HKSEA_FIXTURE, HKRC_FIXTURE, HA_FIXTURE, VIDEO_CLIPS_FIXTURE, CITIC_MEETING_FIXTURE, AWL_FIXTURE } from "./inquiryComprehension.fixtures";
+
+describe("findComprehensionGaps — HKSEA collapse", () => {
+  it("flags the stored 4h-event parse as a comprehension miss", () => {
+    const signals = extractRequirementSignals(HKSEA_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [],
+      suggestedItems: [
+        {
+          description: "Event Photography (assumed 4 hours - please confirm)",
+          quantity: 4,
+        },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      notes: "假設活動為 4 小時",
+      shootHours: 4,
+      shotCount: 0,
+    });
+    expect(coverage.multiScope).toBe(true);
+    expect(coverage.collapsedToEventHours).toBe(true);
+    expect(coverage.gaps.some((g) => g.includes("200"))).toBe(true);
+    expect(coverage.gaps.some((g) => /去背/.test(g))).toBe(true);
+
+    const parsed = applyComprehensionToParsed(
+      {
+        serviceType: "corporate_event",
+        isInquiry: true,
+        confidence: "high",
+        quantitySource: "assumed",
+        shootHours: 4,
+        suggestedItems: [
+          { description: "Event Photography (assumed 4 hours)", quantity: 4, unitPrice: 920 },
+          { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
+        ],
+        missingFields: [],
+        assumptions: [],
+      },
+      coverage,
+      signals
+    );
+    expect(parsed.confidence).toBe("low");
+    expect(parsed.comprehensionGaps.length).toBeGreaterThan(0);
+
+    const readiness = evaluateInquiryDraftReadiness({
+      ...parsed,
+      learningReady: true,
+    });
+    expect(readiness.readyForAutoDraft).toBe(false);
+    expect(readiness.blockers.some((b) => b.includes("閱讀理解缺口"))).toBe(true);
+  });
+
+  it("passes when packages cover event + 200 artwork + cutout", () => {
+    const signals = extractRequirementSignals(HKSEA_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        {
+          kind: "event",
+          summary: "頒獎禮 大會堂 12:00-17:00",
+          quantity: 5,
+          unit: "hours",
+        },
+        {
+          kind: "artwork_shoot",
+          summary: "約200件作品特寫",
+          quantity: 200,
+          unit: "pieces",
+        },
+        {
+          kind: "background_removal",
+          summary: "作品去背",
+          quantity: 200,
+          unit: "cutouts",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 5 },
+        { description: "Artwork / Product Photography (white bg)", quantity: 200 },
+        { description: "Background Removal (Cutout)", quantity: 200 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 5,
+      shotCount: 200,
+    });
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.collapsedToEventHours).toBe(false);
+  });
+});
+
+describe("findComprehensionGaps — days vs hours", () => {
+  it("flags 3 days parsed as 3 hours", () => {
+    const signals = extractRequirementSignals(HKRC_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Portrait Photography", quantity: 3 },
+      ],
+      shootHours: 3,
+      shotCount: 0,
+    });
+    expect(coverage.gaps.some((g) => g.includes("3 天") && g.includes("小時"))).toBe(
+      true
+    );
+  });
+});
+
+describe("quoteSendBlocker", () => {
+  it("blocks HKSEA-style gaps", () => {
+    const reason = quoteSendBlocker({
+      comprehensionGaps: ["原文有「約 200 件／張拍攝或交付」，解析未覆蓋"],
+      workPackages: [{ kind: "event", quantity: 4, unit: "hours" }],
+    });
+    expect(reason).toMatch(/閱讀理解缺口/);
+  });
+
+  it("blocks old pending_send with PDF but no workPackages", () => {
+    const reason = quoteSendBlocker({
+      attachmentStatus: "used",
+      suggestedItems: [{ description: "Event Photography", quantity: 4 }],
+    } as any);
+    expect(reason).toMatch(/重讀需求/);
+  });
+
+  it("allows a complete re-read", () => {
+    expect(
+      quoteSendBlocker({
+        comprehensionGaps: [],
+        workPackages: [
+          { kind: "event", quantity: 5, unit: "hours" },
+          { kind: "artwork_shoot", quantity: 200, unit: "pieces" },
+        ],
+        attachmentStatus: "used",
+      })
+    ).toBeNull();
+  });
+});
+
+describe("findComprehensionGaps — 3 clips × 20s", () => {
+  it("flags event-hours-only parse that drops the videos", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Event Photography", quantity: 5 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 5,
+      shotCount: 0,
+    });
+    expect(coverage.multiScope).toBe(true);
+    expect(coverage.gaps.some((g) => g.includes("3") && /影片|clip/i.test(g))).toBe(
+      true
+    );
+    expect(coverage.gaps.some((g) => /20/.test(g))).toBe(true);
+    expect(coverage.collapsedToEventHours).toBe(true);
+  });
+
+  it("passes when a video package has 3 clips × 20s and 1P+1V", () => {
+    const signals = extractRequirementSignals(VIDEO_CLIPS_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        { kind: "event", summary: "活動攝影 5 小時", quantity: 5, unit: "hours" },
+        {
+          kind: "video",
+          summary: "剪接 3 條影片，每條 20 秒",
+          quantity: 3,
+          unit: "clips",
+        },
+        {
+          kind: "crew",
+          summary: "現場 1 攝影師 + 1 攝像師",
+          quantity: 2,
+          unit: "people",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 5 },
+        { description: "Videographer (1V)", quantity: 5 },
+        { description: "Video Editing (3 clips × 20s)", quantity: 3 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 5,
+      crewPhotographers: 1,
+      crewVideographers: 1,
+    });
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.collapsedToEventHours).toBe(false);
+  });
+});
+
+describe("findComprehensionGaps — clean single-scope", () => {
+  it("HA 3h + 40 photos has no collapse", () => {
+    const signals = extractRequirementSignals(HA_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Event Photography", quantity: 3 },
+        { description: "Photo Retouching", quantity: 40 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 3,
+      shotCount: 40,
+    });
+    expect(coverage.collapsedToEventHours).toBe(false);
+    expect(coverage.missed).toEqual([]);
+  });
+});
+
+describe("findComprehensionGaps — CITIC meeting #12480003", () => {
+  it("flags 4h-event-only parse that drops 200 photos, 30 retouch, 1-min video", () => {
+    const signals = extractRequirementSignals(CITIC_MEETING_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Event Photography", quantity: 4 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 0,
+    });
+    expect(coverage.multiScope).toBe(true);
+    expect(coverage.collapsedToEventHours).toBe(true);
+    expect(coverage.gaps.some((g) => /200/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /30/.test(g) && /精修/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /分鐘|60/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /剪接/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /1P\+1V|攝像/.test(g))).toBe(true);
+    expect(
+      quoteSendBlocker({
+        comprehensionGaps: coverage.gaps,
+        workPackages: [{ kind: "event", quantity: 4, unit: "hours" }],
+      })
+    ).toMatch(/閱讀理解缺口/);
+  });
+
+  it("passes when packages cover 4h + 200 photos + 30 retouch × 3 + 1-min video", () => {
+    const signals = extractRequirementSignals(CITIC_MEETING_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        {
+          kind: "event",
+          summary: "酒店會議廳 下午1點到5點 攝影攝像",
+          quantity: 4,
+          unit: "hours",
+        },
+        {
+          kind: "event",
+          summary: "不少於200張合格照片",
+          quantity: 200,
+          unit: "shots",
+        },
+        {
+          kind: "retouch",
+          summary: "三次精修不少於30張照片",
+          quantity: 30,
+          unit: "shots",
+        },
+        {
+          kind: "video",
+          summary: "1分鐘精選視頻及影片剪接",
+          quantity: 1,
+          unit: "clips",
+        },
+        {
+          kind: "crew",
+          summary: "現場 1 攝影師 + 1 攝像師",
+          quantity: 2,
+          unit: "people",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 4 },
+        { description: "Videographer (1V)", quantity: 4 },
+        { description: "Photo delivery 200 shots", quantity: 200 },
+        { description: "Photo Retouching (3 rounds)", quantity: 30 },
+        { description: "1-minute highlight video edit", quantity: 1 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 200,
+      crewPhotographers: 1,
+      crewVideographers: 1,
+    });
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.collapsedToEventHours).toBe(false);
+  });
+
+  it("still gaps if deliverables are listed but crew is 1 photographer only", () => {
+    const signals = extractRequirementSignals(CITIC_MEETING_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        {
+          kind: "event",
+          summary: "酒店會議廳 下午1點到5點 攝影攝像",
+          quantity: 4,
+          unit: "hours",
+        },
+        {
+          kind: "event",
+          summary: "不少於200張合格照片",
+          quantity: 200,
+          unit: "shots",
+        },
+        {
+          kind: "retouch",
+          summary: "三次精修不少於30張照片",
+          quantity: 30,
+          unit: "shots",
+        },
+        {
+          kind: "video",
+          summary: "1分鐘精選視頻及影片剪接",
+          quantity: 1,
+          unit: "clips",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography", quantity: 4 },
+        { description: "Photo delivery 200 shots", quantity: 200 },
+        { description: "Photo Retouching (3 rounds)", quantity: 30 },
+        { description: "1-minute highlight video edit", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 200,
+      crewPhotographers: 1,
+      crewVideographers: 0,
+    });
+    expect(coverage.gaps.some((g) => /1P\+1V|攝像/.test(g))).toBe(true);
+  });
+});
+
+describe("findComprehensionGaps — AWL #11400001", () => {
+  it("flags 1P Event Photography as missing 2P+2V, 400 shots, and 3 clips", () => {
+    const signals = extractRequirementSignals(AWL_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      suggestedItems: [
+        { description: "Event Photography (4 hours)", quantity: 4 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 0,
+      crewPhotographers: 1,
+      crewVideographers: 0,
+    });
+    expect(coverage.gaps.some((g) => /400/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /攝影師 2/.test(g))).toBe(true);
+    expect(coverage.gaps.some((g) => /視頻人手 2/.test(g))).toBe(true);
+    expect(
+      quoteSendBlocker({
+        comprehensionGaps: coverage.gaps,
+        workPackages: [{ kind: "event", quantity: 4, unit: "hours" }],
+      })
+    ).toMatch(/閱讀理解缺口/);
+  });
+
+  it("passes when 4h + 400 + 2P+2V + 3 video pieces are covered", () => {
+    const signals = extractRequirementSignals(AWL_FIXTURE);
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: [
+        {
+          kind: "event",
+          summary: "禮堂活動 0900-1300",
+          quantity: 4,
+          unit: "hours",
+        },
+        {
+          kind: "event",
+          summary: "不少於400張調色相片",
+          quantity: 400,
+          unit: "shots",
+        },
+        {
+          kind: "video",
+          summary: "2-3分鐘 highlight + 30秒 IG + 25秒即日花絮",
+          quantity: 3,
+          unit: "clips",
+        },
+        {
+          kind: "crew",
+          summary: "現場 2 攝影師 + 2 攝像／視頻人手",
+          quantity: 4,
+          unit: "people",
+        },
+      ],
+      suggestedItems: [
+        { description: "Event Photography 2P", quantity: 4 },
+        { description: "Videographer / video assistants 2V", quantity: 4 },
+        { description: "Photo delivery 400 shots", quantity: 400 },
+        { description: "Video Editing (3 clips)", quantity: 3 },
+        { description: "Transportation Fee", quantity: 1 },
+      ],
+      shootHours: 4,
+      shotCount: 400,
+      crewPhotographers: 2,
+      crewVideographers: 2,
+    });
+    expect(coverage.gaps).toEqual([]);
+  });
+});

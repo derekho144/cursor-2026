@@ -42,6 +42,20 @@ import {
   applyAttachmentUnderstandingToParsed,
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
+import {
+  extractRequirementSignals,
+  formatSignalsForPrompt,
+} from "../../shared/inquiryRequirementSignals";
+import {
+  applyComprehensionToParsed,
+  findComprehensionGaps,
+  quoteSendBlocker,
+} from "../../shared/inquiryUnderstandingCoverage";
+import {
+  formatFrozenFactsForPricing,
+  understandInquiryFacts,
+  type InquiryFacts,
+} from "../inquiryUnderstandFacts";
 
 /** After AI parse: annotate attachment status (none/used/missing) and gate confidence. */
 function enrichParsedWithAttachmentGate(
@@ -64,6 +78,12 @@ function enrichParsedWithAttachmentGate(
     pdfFileCount,
   });
   let enriched = applyAttachmentUnderstandingToParsed(aiResult, understanding);
+  if (opts.attachmentText?.trim()) {
+    enriched = {
+      ...enriched,
+      pdfTextExcerpt: opts.attachmentText.trim().slice(0, 12000),
+    };
+  }
   if (pdfFileCount > 0) {
     enriched = {
       ...enriched,
@@ -682,23 +702,56 @@ const HK_MARKET_PRICING: Record<string, { low: number; mid: number; high: number
 
 // ─── AI parse inquiry email ────────────────────────────────────────
 async function parseInquiryWithAI(subject: string, body: string, fromEmail?: string) {
-  // Step 1: 快速解析服務類型（用於查詢歷史數據）
-  const quickParsePrompt = `Identify the photography service type from this email inquiry. Return only the serviceType value.
-Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, other
-Email Subject: ${subject}\nEmail Body (first 300 chars): ${body.substring(0, 300)}`;
+  const validTypes = ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"];
+  const signals = extractRequirementSignals(`${subject}\n${body}`);
 
-  let detectedServiceType = "other";
-  try {
-    const quickResult = await invokeLLM({
-      messages: [
-        { role: "system", content: "Return only the service type string, nothing else." },
-        { role: "user", content: quickParsePrompt },
-      ],
+  // Pass 1: facts only (no billing). Retry once if machine signals were dropped.
+  let facts: InquiryFacts | null = await understandInquiryFacts({
+    subject,
+    body,
+    signals,
+  });
+  if (facts) {
+    const factsCoverage = findComprehensionGaps({
+      signals,
+      workPackages: facts.workPackages,
+      notes: facts.notes,
+      shotCount: facts.shotCount,
+      shootHours: facts.shootHours,
+      crewPhotographers: facts.crewPhotographers,
+      crewVideographers: facts.crewVideographers,
     });
-    const raw = (quickResult.choices?.[0]?.message?.content as string ?? "").trim().toLowerCase();
-    const validTypes = ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"];
-    if (validTypes.includes(raw)) detectedServiceType = raw;
-  } catch {}
+    if (factsCoverage.missed.length > 0) {
+      const retried = await understandInquiryFacts({
+        subject,
+        body,
+        signals,
+        retryGaps: factsCoverage.gaps,
+      });
+      if (retried) facts = retried;
+    }
+  }
+
+  let detectedServiceType = (facts?.primaryServiceType ?? "other").trim().toLowerCase();
+  if (!validTypes.includes(detectedServiceType)) detectedServiceType = "other";
+
+  // Fallback type guess uses enough body to include PDF text (not first 300 chars).
+  if (detectedServiceType === "other") {
+    const quickParsePrompt = `Identify the photography service type from this email inquiry. Return only the serviceType value.
+Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, other
+If the brief has both an event AND product/artwork/cutout packages, still return the PRIMARY type (usually corporate_event) — pricing will use frozen work packages.
+Email Subject: ${subject}\nEmail Body:\n${body.substring(0, 8000)}`;
+    try {
+      const quickResult = await invokeLLM({
+        messages: [
+          { role: "system", content: "Return only the service type string, nothing else." },
+          { role: "user", content: quickParsePrompt },
+        ],
+      });
+      const raw = (quickResult.choices?.[0]?.message?.content as string ?? "").trim().toLowerCase();
+      if (validTypes.includes(raw)) detectedServiceType = raw;
+    } catch {}
+  }
 
   // Step 2: 查詢歷史成交數據（並行查詢所有四種 context）
   const [historicalData, frequentItems, winRateData, timeWeightedData, deviationFactor] = await Promise.all([
@@ -869,6 +922,7 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
 9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
+10. MULTI-SCOPE: If frozen workPackages (or the email/PDF) contain both event coverage AND artwork/product stills AND/OR 去背/cutout AND/OR N video clips (e.g. 三條影片每條20秒) AND/OR a 1-minute highlight AND/OR explicit 精修 N 張 AND/OR crew (1P+1V or 2 Chief + 2 video assistants), emit a separate suggestedItems line for EACH package. Never collapse to a single Event Photography hours line. Event "retouching included" does NOT cover explicit 去背 / 作品特寫 / 剪片 / 精選視頻 / 精修 N 張. Event Photography does NOT include videographers. Copy explicit headcount; photography + video is at least 1P+1V. "N days" is not N hours. Job-board 「N日內」is a deadline. "N 條影片" and "2-3分鐘 highlight" are not event hours. "0900-1300" is a 4-hour clock range.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
@@ -945,6 +999,13 @@ D. Never apply volume discount to Transportation Fee (always fixed HKD 320).
 E. If client mentions a range (e.g. "about 20-30 products"), use the HIGHER end of the range for the tier calculation (gives client best value, increases conversion).
 `;
 
+  if (facts?.multiScope) {
+    pricingContext += `
+=== MULTI-SCOPE RFQ WARNING ===
+This inquiry has multiple work packages. Historical ${detectedServiceType} totals MUST NOT drop artwork / product / cutout lines or force the quote toward a cheap event average. Price EACH frozen work package with the matching TIERED rule.
+`;
+  }
+
   const prompt = `You are an assistant for JD Studio HK, a professional photography studio in Hong Kong.
 Analyze the following email inquiry and extract structured information for creating a quotation.
 
@@ -954,6 +1015,9 @@ ${body}
 
 IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF attachments. Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the PDF.
 
+MACHINE-EXTRACTED SIGNALS (must appear in suggestedItems / work packages unless justified in missingFields):
+${formatSignalsForPrompt(signals)}
+${formatFrozenFactsForPricing(facts)}
 ${pricingContext}
 
 ${BILLING_RULES}
@@ -971,8 +1035,8 @@ Extract and return a JSON object with these fields:
 - shootHours: number (hours clearly stated or 0 if unknown; half-day ≈ 4–5, full-day ≈ 6–10)
 - shotCount: number (delivered image/piece count clearly stated, or 0 if unknown)
 - durationPackage: one of ["hours","half_day","full_day","multi_day","unknown"]
-- crewPhotographers: number (photographers if stated, else 0)
-- crewVideographers: number (videographers if stated, else 0)
+- crewPhotographers: number (photographers on site. If the brief needs both photography AND video, this is 1)
+- crewVideographers: number (videographers on site. If the brief needs both photography AND video, this is 1 — never 0. Event Photography is not the videographer.)
 - quantitySource: "explicit" | "assumed" | "unknown"
   (explicit = email clearly states hours or shot count; assumed = you used a default; unknown = cannot tell)
 - assumptions: string[] (Traditional Chinese list of assumptions you made, empty array if none)
@@ -1115,6 +1179,55 @@ Extract and return a JSON object with these fields:
         /assumed|假設/i.test(String(it?.description ?? ""))
       );
       parsed.quantitySource = assumedFromItems ? "assumed" : "unknown";
+    }
+    if (facts?.workPackages?.length) {
+      parsed.workPackages = facts.workPackages;
+      parsed.multiScope = !!facts.multiScope;
+      if (!parsed.eventName && facts.eventName) parsed.eventName = facts.eventName;
+      if (!parsed.shootingDate && facts.shootingDate) parsed.shootingDate = facts.shootingDate;
+      if (!parsed.shootingLocation && facts.shootingLocation) {
+        parsed.shootingLocation = facts.shootingLocation;
+      }
+      if (!(Number(parsed.shotCount) > 0) && Number(facts.shotCount) > 0) {
+        parsed.shotCount = facts.shotCount;
+      }
+      if (!(Number(parsed.shootHours) > 0) && Number(facts.shootHours) > 0) {
+        parsed.shootHours = facts.shootHours;
+      }
+      if (facts.durationPackage && (!parsed.durationPackage || parsed.durationPackage === "unknown")) {
+        parsed.durationPackage = facts.durationPackage;
+      }
+    }
+    const coverage = findComprehensionGaps({
+      signals,
+      workPackages: parsed.workPackages,
+      suggestedItems: parsed.suggestedItems,
+      notes: parsed.notes,
+      shotCount: parsed.shotCount,
+      shootHours: parsed.shootHours,
+      crewPhotographers: parsed.crewPhotographers,
+      crewVideographers: parsed.crewVideographers,
+    });
+    Object.assign(parsed, applyComprehensionToParsed(parsed, coverage, signals));
+    const pNeed = Math.max(
+      Number(signals.find((s) => s.kind === "crew_photographers")?.value) || 0,
+      signals.some((s) => s.kind === "crew_1p1v") ? 1 : 0
+    );
+    const vNeed = Math.max(
+      Number(signals.find((s) => s.kind === "crew_videographers")?.value) || 0,
+      signals.some((s) => s.kind === "crew_1p1v") ? 1 : 0
+    );
+    if (pNeed > 0 || vNeed > 0) {
+      parsed.crewPhotographers = Math.max(
+        Number(parsed.crewPhotographers) || 0,
+        Number(facts?.crewPhotographers) || 0,
+        pNeed
+      );
+      parsed.crewVideographers = Math.max(
+        Number(parsed.crewVideographers) || 0,
+        Number(facts?.crewVideographers) || 0,
+        vNeed
+      );
     }
     parsed.draftReadiness = evaluateInquiryDraftReadiness(parsed);
 
@@ -2110,6 +2223,17 @@ export const emailInquiriesRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "尚未建立草稿報價單，請先建立報價單" });
       }
 
+      let aiParsed: Record<string, unknown> | null = null;
+      try {
+        aiParsed = inquiryRows.aiParsed ? JSON.parse(inquiryRows.aiParsed) : null;
+      } catch {
+        aiParsed = null;
+      }
+      const sendBlock = quoteSendBlocker(aiParsed);
+      if (sendBlock) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: sendBlock });
+      }
+
       // Get quote details
       const quote = await getQuoteById(inquiryRows.quoteId);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
@@ -2388,6 +2512,96 @@ Do NOT include a subject line. Start directly with "Dear ${clientName},". Output
         nextScanAt,
         withinActiveHours,
         lastResult: lastGmailScanResult,
+      };
+    }),
+
+  // Re-read body + stored/pasted PDF so old collapsed parses (HKSEA 4h) get work packages.
+  reparseInquiry: protectedProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        extraText: z.string().max(16000).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const existing = await getEmailInquiryById(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Inquiry not found" });
+      if (existing.status === "approved" || existing.status === "rejected") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "已批核／已拒絕嘅詢價唔好重讀覆蓋",
+        });
+      }
+
+      let prev: Record<string, unknown> = {};
+      try {
+        prev = existing.aiParsed ? JSON.parse(existing.aiParsed) : {};
+      } catch {
+        prev = {};
+      }
+      const excerpt =
+        (input.extraText ?? "").trim() ||
+        String(prev.pdfTextExcerpt ?? "").trim();
+      const parseBody = mergeEmailBodyWithPdfText(
+        existing.bodyText || "",
+        excerpt
+      );
+      let aiResult = await parseInquiryWithAI(
+        existing.subject || "",
+        parseBody.slice(0, 16000),
+        existing.fromEmail
+      );
+      aiResult = enrichParsedWithAttachmentGate(aiResult, {
+        subject: existing.subject || "",
+        bodyText: existing.bodyText || "",
+        attachmentText: excerpt,
+        attachmentMeta: Array.isArray(prev.pdfAttachments)
+          ? (prev.pdfAttachments as Array<{ filename: string; chars?: number; error?: string }>)
+          : excerpt
+            ? [{ filename: "reparse.txt", chars: excerpt.length }]
+            : [],
+      }) as typeof aiResult;
+
+      const draftReadiness = aiResult
+        ? evaluateInquiryDraftReadiness({
+            ...aiResult,
+            learningReady: (
+              await getLearningAutoDraftGate(aiResult.serviceType ?? "other")
+            ).ready,
+          })
+        : null;
+      if (aiResult && draftReadiness) {
+        aiResult.draftReadiness = draftReadiness;
+      }
+
+      const sendBlock = quoteSendBlocker(aiResult);
+      const estimatedTotal = aiResult?.pricingMid
+        ? Number(aiResult.pricingMid)
+        : 0;
+      const patch: Record<string, unknown> = {
+        aiParsed: aiResult ? JSON.stringify(aiResult) : existing.aiParsed,
+        aiConfidence: aiResult?.confidence ?? "low",
+        estimatedTotal: estimatedTotal > 0 ? estimatedTotal : existing.estimatedTotal,
+      };
+      let demotedToPending = false;
+      if (existing.status === "pending_send" && sendBlock) {
+        patch.status = "pending";
+        demotedToPending = true;
+      }
+      await updateEmailInquiry(input.id, patch as any);
+
+      return {
+        id: input.id,
+        sendBlocked: !!sendBlock,
+        sendBlockReason: sendBlock,
+        demotedToPending,
+        confidence: aiResult?.confidence ?? null,
+        comprehensionGaps: Array.isArray(aiResult?.comprehensionGaps)
+          ? aiResult.comprehensionGaps
+          : [],
+        workPackageCount: Array.isArray(aiResult?.workPackages)
+          ? aiResult.workPackages.length
+          : 0,
       };
     }),
 
