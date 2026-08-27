@@ -29,6 +29,7 @@ import {
   inferDurationPackageFromHours,
   type DurationPackage,
 } from "@shared/quoteDurationPackage";
+import { splitQuoteLineItemMoney } from "@shared/quoteLineItemKind";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -755,6 +756,10 @@ export default function QuoteForm() {
 
   const subtotal = useMemo(
     () => form.items.reduce((sum, item) => sum + item.amount, 0),
+    [form.items]
+  );
+  const moneySplit = useMemo(
+    () => splitQuoteLineItemMoney(form.items),
     [form.items]
   );
   // Items excluded from discount: transportation / 車費, expedited fee / 加急費用
@@ -1637,6 +1642,47 @@ export default function QuoteForm() {
               <span className="text-muted-foreground">小計</span>
               <span>HKD {subtotal.toLocaleString()}</span>
             </div>
+            {moneySplit.hasPhotographerCrewLines && (
+              <div
+                className="rounded px-2 py-1.5 space-y-1 text-xs"
+                style={{
+                  background: "rgba(212,168,67,0.08)",
+                  border: "1px solid rgba(212,168,67,0.25)",
+                }}
+              >
+                <div className="flex justify-between" style={{ color: "#d4a843" }}>
+                  <span>攝影師項目小計</span>
+                  <span>
+                    HKD {moneySplit.photographerCrewSubtotal.toLocaleString()}
+                  </span>
+                </div>
+                {moneySplit.photoboothSubtotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Photobooth（另計）</span>
+                    <span>
+                      HKD {moneySplit.photoboothSubtotal.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {moneySplit.videoSubtotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>錄影項目（另計）</span>
+                    <span>HKD {moneySplit.videoSubtotal.toLocaleString()}</span>
+                  </div>
+                )}
+                {moneySplit.transportSubtotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>交通（另計）</span>
+                    <span>
+                      HKD {moneySplit.transportSubtotal.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                <div className="text-muted-foreground leading-snug pt-0.5">
+                  定價學習用攝影師小計，唔會同 Photobooth／其他服務混合。
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center text-sm">
               <div className="flex flex-col gap-0.5">
                 <span className="text-muted-foreground">折扣</span>

@@ -405,6 +405,20 @@ export default function PricingLearning() {
                       </td>
                       <td className="py-1.5 text-right text-muted-foreground">
                         {money(r.total)}
+                        {"quoteTotal" in r &&
+                          typeof (r as { quoteTotal?: number }).quoteTotal ===
+                            "number" &&
+                          Number((r as { quoteTotal?: number }).quoteTotal) >
+                            Number(r.total) + 1 && (
+                            <div className="text-[10px] opacity-70">
+                              全單{" "}
+                              {money(
+                                Number(
+                                  (r as { quoteTotal?: number }).quoteTotal
+                                )
+                              )}
+                            </div>
+                          )}
                       </td>
                       <td className="py-1.5 text-muted-foreground">
                         {[
@@ -949,6 +963,20 @@ export default function PricingLearning() {
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           {money(r.total)}
+                          {"quoteTotal" in r &&
+                            typeof (r as { quoteTotal?: number }).quoteTotal ===
+                              "number" &&
+                            Number((r as { quoteTotal?: number }).quoteTotal) >
+                              Number(r.total) + 1 && (
+                              <div className="text-[10px] text-muted-foreground">
+                                全單{" "}
+                                {money(
+                                  Number(
+                                    (r as { quoteTotal?: number }).quoteTotal
+                                  )
+                                )}
+                              </div>
+                            )}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
                           {r.hours != null ? `${r.hours}h` : r.hoursLabel}
