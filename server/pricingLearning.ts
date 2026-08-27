@@ -59,7 +59,12 @@ export interface PricingLearningQuoteRow {
   clientCompany: string | null;
   serviceType: string;
   status: "accepted" | "rejected";
+  /** Learning money (photographer crew when split available) */
   total: number;
+  /** Full quote total including photobooth / other add-ons */
+  quoteTotal: number;
+  photographerCrewSubtotal: number | null;
+  learningTotalSource: "photographer_crew" | "quote_total" | null;
   shootingDate: string | null;
   createdAt: Date | null;
   team: string | null;
@@ -192,7 +197,7 @@ async function loadLearningQuotesWithItems(opts?: {
 
   return qRows.map((q) => {
     const qItems = itemsByQuote.get(q.id) ?? [];
-    const total = Number(q.total);
+    const quoteTotal = Number(q.total);
     const features = extractQuoteShootFeatures({
       shootHours: q.shootHours,
       shotCount: q.shotCount,
@@ -204,15 +209,20 @@ async function loadLearningQuotesWithItems(opts?: {
       notes: q.notes,
       equipment: q.equipment,
       items: qItems,
-      total,
+      total: quoteTotal,
     });
+    // Crew/time learning uses photographer-only money when photobooth/etc. are mixed in.
+    const total =
+      features.learningTotal != null && features.learningTotal > 0
+        ? features.learningTotal
+        : quoteTotal;
     const estimatedTotal =
       q.emailInquiryId != null
         ? estimateByInquiry.get(q.emailInquiryId) ?? null
         : null;
     const accuracyPct =
-      estimatedTotal != null && estimatedTotal > 0 && total > 0
-        ? Math.round(((total - estimatedTotal) / estimatedTotal) * 1000) / 10
+      estimatedTotal != null && estimatedTotal > 0 && quoteTotal > 0
+        ? Math.round(((quoteTotal - estimatedTotal) / estimatedTotal) * 1000) / 10
         : null;
 
     const hasStructuredHours =
@@ -241,7 +251,12 @@ async function loadLearningQuotesWithItems(opts?: {
       clientCompany: q.clientCompany,
       serviceType: q.serviceType,
       status,
+      /** Learning money: photographer crew only when split is available */
       total,
+      /** Full quote total (may include photobooth / other add-ons) */
+      quoteTotal,
+      photographerCrewSubtotal: features.photographerCrewSubtotal,
+      learningTotalSource: features.learningTotalSource,
       shootingDate: q.shootingDate,
       createdAt: q.createdAt,
       team: q.team,
@@ -478,6 +493,7 @@ export async function getPricingLearningOverview() {
       serviceType: r.serviceType,
       status: r.status,
       total: r.total,
+      quoteTotal: r.quoteTotal,
       missingHours:
         quotePricingMode(r.serviceType) === "time_crew" &&
         r.features.hoursBucket === "unknown",
@@ -715,6 +731,7 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       clientName: r.clientCompany || r.clientName,
       status: r.status,
       total: r.total,
+      quoteTotal: r.quoteTotal,
       shootingDate: r.shootingDate,
       hours: r.features.hours,
       hoursLabel: hoursBucketLabel(r.features.hoursBucket),

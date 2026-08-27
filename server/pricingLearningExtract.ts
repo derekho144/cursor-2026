@@ -7,6 +7,7 @@ import {
   shotCountBucket,
   type ShotCountBucket,
 } from "../shared/quotePricingMode";
+import { resolveLearningTotal } from "../shared/quoteLineItemKind";
 
 export type HoursBucket = "unknown" | "lte_2" | "h2_4" | "h4_8" | "gt_8";
 export type CrewBucket = "unknown" | "solo" | "pair" | "team";
@@ -33,10 +34,17 @@ export interface QuoteShootFeatures {
   shotCount: number | null;
   shotCountBucket: ShotCountBucket;
   shotCountSource: "structured" | "items" | "notes" | null;
-  /** Price-per-hour when hours known; caller may attach total later */
+  /** Price-per-hour when hours known; uses photographer-crew money when split available */
   pricePerHour: number | null;
   /** Price per delivered shot when shotCount known */
   pricePerShot: number | null;
+  /** Photographer-only subtotal when line items classify cleanly */
+  photographerCrewSubtotal: number | null;
+  /** Full quote / items total passed in */
+  quoteTotal: number | null;
+  /** Money used for learning rates (crew photo ≠ photobooth mix) */
+  learningTotal: number | null;
+  learningTotalSource: "photographer_crew" | "quote_total" | null;
 }
 
 function hoursBucket(h: number | null): HoursBucket {
@@ -363,7 +371,12 @@ export function extractQuoteShootFeatures(input: {
   team?: string | null;
   notes?: string | null;
   equipment?: string | null;
-  items?: Array<{ description?: string | null; quantity?: number | string | null }>;
+  items?: Array<{
+    description?: string | null;
+    quantity?: number | string | null;
+    unitPrice?: number | string | null;
+    amount?: number | string | null;
+  }>;
   total?: number | null;
 }): QuoteShootFeatures {
   const itemText = (input.items ?? [])
@@ -428,17 +441,24 @@ export function extractQuoteShootFeatures(input: {
     };
   }
 
-  const total =
-    input.total != null && Number.isFinite(Number(input.total))
-      ? Number(input.total)
-      : null;
+  const money = resolveLearningTotal({
+    items: input.items,
+    quoteTotal: input.total,
+  });
+  const learningTotal =
+    money.learningTotal > 0 ? money.learningTotal : null;
+  const quoteTotal = money.quoteTotal > 0 ? money.quoteTotal : null;
+  const photographerCrewSubtotal = money.split.hasPhotographerCrewLines
+    ? money.split.photographerCrewSubtotal
+    : null;
+  const rateBase = learningTotal;
   const pricePerHour =
-    hours != null && hours > 0 && total != null && total > 0
-      ? Math.round(total / hours)
+    hours != null && hours > 0 && rateBase != null && rateBase > 0
+      ? Math.round(rateBase / hours)
       : null;
   const pricePerShot =
-    shotCount != null && shotCount > 0 && total != null && total > 0
-      ? Math.round(total / shotCount)
+    shotCount != null && shotCount > 0 && rateBase != null && rateBase > 0
+      ? Math.round(rateBase / shotCount)
       : null;
 
   return {
@@ -454,6 +474,14 @@ export function extractQuoteShootFeatures(input: {
     shotCountSource,
     pricePerHour,
     pricePerShot,
+    photographerCrewSubtotal,
+    quoteTotal,
+    learningTotal,
+    learningTotalSource: learningTotal != null
+      ? money.split.hasPhotographerCrewLines
+        ? "photographer_crew"
+        : "quote_total"
+      : null,
   };
 }
 

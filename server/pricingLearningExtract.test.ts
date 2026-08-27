@@ -118,6 +118,26 @@ describe("extractQuoteShootFeatures", () => {
     expect(f.crewSource).toBe("items");
   });
 
+  it("C3YV: photographer learning total excludes photobooth", () => {
+    const f = extractQuoteShootFeatures({
+      shootHours: 3,
+      crewPhotographers: 2,
+      items: [
+        { description: "Event Photoshoot (3 hours)", quantity: 1, unitPrice: 3000, amount: 3000 },
+        { description: "extra photographer", quantity: 1, unitPrice: 2000, amount: 2000 },
+        { description: "Photobooth (3 hours)", quantity: 1, unitPrice: 6300, amount: 6300 },
+        { description: "Transportation Fee", quantity: 1, unitPrice: 320, amount: 320 },
+      ],
+      total: 11620,
+    });
+    expect(f.photographerCrewSubtotal).toBe(5000);
+    expect(f.learningTotal).toBe(5000);
+    expect(f.quoteTotal).toBe(11620);
+    expect(f.learningTotalSource).toBe("photographer_crew");
+    expect(f.pricePerHour).toBe(Math.round(5000 / 3));
+    expect(f.crewBucket).toBe("pair");
+  });
+
   it("prefers structured hours and crew over free text", () => {
     const f = extractQuoteShootFeatures({
       shootHours: 6,
