@@ -64,45 +64,48 @@ const SERVICE_OPTIONS = [
   { value: "other", label: "其他服務" },
 ];
 
-// Two universal quote templates
+/** Default extras for quote templates → 「額外資訊」fields (not line items). */
+const TEMPLATE_DEFAULT_EQUIPMENT =
+  "CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2";
+const TEMPLATE_DEFAULT_PHOTO_DELIVERY = "BY LINKS  5-10 DAY";
+const TEMPLATE_DEFAULT_VIDEO_DELIVERY =
+  "Video first cut BY LINKS  7-10 DAY";
+
+// Universal quote templates — billable lines only; Team / Equipment / Delivery go to 額外資訊
 export const QUOTE_TEMPLATES = [
   {
     id: "photoshoot",
     label: "攝影 Photoshoot",
+    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
+    deliveryMethod: TEMPLATE_DEFAULT_PHOTO_DELIVERY,
     items: [
       { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
       { description: "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)", quantity: 1, unitPrice: 0 },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-      { description: "Team 1P", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Lighting & Equipment  CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Photo delivery method  BY LINKS  5-10 DAY", quantity: 1, unitPrice: 0, isIncluded: true },
     ],
   },
   {
     id: "photo_video",
     label: "攝影加錄影 Photo + Video",
+    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
+    deliveryMethod: `Photo: ${TEMPLATE_DEFAULT_PHOTO_DELIVERY} | ${TEMPLATE_DEFAULT_VIDEO_DELIVERY}`,
     items: [
       { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
       { description: "Post-Production (Video Editing 1min, Color Grading, Background Mixing)", quantity: 1, unitPrice: 0 },
       { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
       { description: "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)", quantity: 1, unitPrice: 0 },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-      { description: "Team 1P", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Lighting & Equipment  CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Photo delivery method  BY LINKS  5-10 DAY", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Video first cut delivery method  BY LINKS  7-10 DAY", quantity: 1, unitPrice: 0, isIncluded: true },
     ],
   },
   {
     id: "video_only",
     label: "純錄影 Video Only",
+    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
+    deliveryMethod: TEMPLATE_DEFAULT_VIDEO_DELIVERY,
     items: [
       { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
       { description: "Post-Production (Video Editing 1min, Color Grading, Background Mixing)", quantity: 1, unitPrice: 0 },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-      { description: "Team 1P", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Lighting & Equipment  CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2", quantity: 1, unitPrice: 0, isIncluded: true },
-      { description: "Video first cut delivery method  BY LINKS  7-10 DAY", quantity: 1, unitPrice: 0, isIncluded: true },
     ],
   },
 ];
@@ -1673,13 +1676,17 @@ export default function QuoteForm() {
                           isIncluded: (item as any).isIncluded ?? false,
                           category: "" as const,
                         }));
-                        const crew = crewFromTemplateItems(items, tpl.id);
+                        // Templates put Team/Equipment/Delivery in 額外資訊, not line items
+                        const crew = crewFromTemplateItems([], tpl.id);
                         const auto = buildTeamLabel(crew);
                         return {
                           ...p,
                           items,
                           ...crew,
                           team: auto || p.team,
+                          equipment: tpl.equipment || p.equipment,
+                          deliveryMethod:
+                            tpl.deliveryMethod || p.deliveryMethod,
                           // Keep existing hours if user already filled; otherwise leave blank to force fill
                           shootHours: p.shootHours,
                         };
@@ -1920,7 +1927,7 @@ export default function QuoteForm() {
                 style={inputStyle}
               />
             </FormField>
-            <FormField label="Photo Delivery Method">
+            <FormField label="Delivery Method（相片／影片）">
               <Input
                 value={form.deliveryMethod}
                 onChange={(e) => setForm((p) => ({ ...p, deliveryMethod: e.target.value }))}
