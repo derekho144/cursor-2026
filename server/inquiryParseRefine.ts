@@ -11,6 +11,13 @@ import {
   type DurationPackage,
 } from "../shared/quoteDurationPackage";
 import {
+  ARW_RAW_DELIVERY_UNIT_PRICE,
+  buildArwRawDeliveryLineItem,
+  hasArwRawDeliverySignal,
+  suggestedItemsIncludeArwRaw,
+  syncInquiryPricingFromItems,
+} from "../shared/arwRawDeliveryPricing";
+import {
   extractCrewHighConfidence,
   extractHoursFromText,
   extractShotCountFromText,
@@ -402,6 +409,26 @@ export function refineInquiryParseWithExtractors(input: {
     )
   ) {
     quantitySource = "assumed";
+  }
+
+  // ── RAW / ARW file delivery (paid add-on) ─────────────────────
+  const arwText = [
+    input.subject ?? "",
+    input.body ?? "",
+    String(parsed.notes ?? ""),
+    ...assumptions,
+  ].join("\n");
+  if (
+    hasArwRawDeliverySignal(arwText) &&
+    !suggestedItemsIncludeArwRaw(parsed.suggestedItems)
+  ) {
+    if (!Array.isArray(parsed.suggestedItems)) parsed.suggestedItems = [];
+    parsed.suggestedItems.push(buildArwRawDeliveryLineItem());
+    pushUnique(
+      assumptions,
+      `客人要求交付 RAW/ARW 原檔（額外收費 HKD ${ARW_RAW_DELIVERY_UNIT_PRICE}）`
+    );
+    syncInquiryPricingFromItems(parsed);
   }
 
   parsed.quantitySource = quantitySource;

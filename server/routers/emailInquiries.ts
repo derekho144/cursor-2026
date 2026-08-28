@@ -38,6 +38,7 @@ import {
   extractTextFromEmailAttachments,
   mergeEmailBodyWithPdfText,
 } from "../emailPdfAttachments";
+import { arwRawDeliveryBillingRulesText } from "../../shared/arwRawDeliveryPricing";
 import {
   buildInquiryClassifyText,
   hintServiceTypeFromText,
@@ -857,6 +858,8 @@ corporate_event photography
   - If videography also requested, add "Event Videography" per hour HKD 1,500-2,500 + "Video Editing" flat HKD 2,000-4,000.
   - Example (corporate, 4 hrs): 4 x HKD 1,000 + transport HKD 320 = HKD 4,320.
   - Example (personal, 3 hrs): 3 x HKD 700 + transport HKD 320 = HKD 2,420.
+
+${arwRawDeliveryBillingRulesText()}
 
 interior photography
   - Main item: "Interior Photography" - billed PER HOUR. Extract hours or number of rooms from email. Default: 3 hours.
