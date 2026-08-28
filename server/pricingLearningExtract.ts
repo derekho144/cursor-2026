@@ -136,13 +136,30 @@ function countRole(text: string, patterns: RegExp[]): number {
   return total;
 }
 
-/** English word quantities for crew, e.g. "ONE photographer". */
+/** English word quantities for crew, e.g. "ONE photographer", "two photographers". */
 function countWordPhotographers(text: string): number {
+  const wordToN: Record<string, number> = {
+    one: 1,
+    a: 1,
+    an: 1,
+    single: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+  };
   let total = 0;
-  const re = /\b(one|a|an|single)\s+photographers?\b/gi;
+  const re =
+    /\b(one|a|an|single|two|three|four|five|six|seven|eight|nine|ten)\s+photographers?\b/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    total += 1;
+    const n = wordToN[m[1].toLowerCase()];
+    if (n) total += n;
   }
   return total;
 }

@@ -32,6 +32,18 @@ describe("extractCrewHighConfidence", () => {
       1
     );
   });
+
+  it("accepts two/three English word photographer counts", () => {
+    expect(extractCrewHighConfidence("two photographers on site")?.photographers).toBe(
+      2
+    );
+    expect(extractCrewHighConfidence("TWO photographers needed")?.photographers).toBe(
+      2
+    );
+    expect(
+      extractCrewHighConfidence("three photographers for the gala")?.photographers
+    ).toBe(3);
+  });
 });
 
 describe("extractHoursFromText", () => {

@@ -188,4 +188,13 @@ describe("resolveInquiryCrewCounts", () => {
     });
     expect(resolved.crewPhotographers).toBe(2);
   });
+
+  it("extracts two photographers from English words over wrong LLM count", () => {
+    const resolved = resolveInquiryCrewCounts({
+      subject: "Event coverage",
+      body: "We need two photographers for a 4-hour corporate event.",
+      aiParsed: { crewPhotographers: 1, shootHours: 4 },
+    });
+    expect(resolved.crewPhotographers).toBe(2);
+  });
 });
