@@ -3,6 +3,7 @@ import {
   buildInquiryClassifyText,
   hintServiceTypeFromText,
   refineInquiryParseWithExtractors,
+  resolveInquiryCrewCounts,
 } from "./inquiryParseRefine";
 
 describe("buildInquiryClassifyText", () => {
@@ -153,5 +154,38 @@ Time: 10:00 am - 12:00 pm
     });
     expect(refined.crewPhotographers).toBe(1);
     expect(refined.suggestedItems[0].quantity).toBe(1);
+  });
+});
+
+describe("resolveInquiryCrewCounts", () => {
+  it("clamps LLM crew=4 when email says ONE photographer", () => {
+    const resolved = resolveInquiryCrewCounts({
+      subject: "Photography RFQ",
+      body: "* ONE photographer to take standard individual and group photos",
+      aiParsed: {
+        crewPhotographers: 4,
+        shootHours: 3,
+        assumptions: ["派遣1名攝影師"],
+      },
+    });
+    expect(resolved.crewPhotographers).toBe(1);
+  });
+
+  it("fixes crew=hours confusion (3h → 3 photographers)", () => {
+    const resolved = resolveInquiryCrewCounts({
+      subject: "Event photo",
+      body: "ONE photographer for approx. 3 hours",
+      aiParsed: { crewPhotographers: 3, shootHours: 3 },
+    });
+    expect(resolved.crewPhotographers).toBe(1);
+  });
+
+  it("keeps explicit multi-photographer requests", () => {
+    const resolved = resolveInquiryCrewCounts({
+      subject: "活動攝影",
+      body: "需要兩位攝影師，拍攝約 4 小時",
+      aiParsed: { crewPhotographers: 2, shootHours: 4 },
+    });
+    expect(resolved.crewPhotographers).toBe(2);
   });
 });

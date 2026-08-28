@@ -43,6 +43,7 @@ import {
   hintServiceTypeFromText,
   isInquiryServiceType,
   refineInquiryParseWithExtractors,
+  resolveInquiryCrewCounts,
 } from "../inquiryParseRefine";
 import {
   applyAttachmentUnderstandingToParsed,
@@ -98,6 +99,16 @@ function enrichParsedWithAttachmentGate(
     }
   }
   return enriched;
+}
+
+/** Re-resolve crew from email text when creating a quote (safety net vs LLM hallucination). */
+function inquiryCrewFieldsForQuote(
+  aiParsed: Record<string, any> | null | undefined,
+  subject: string,
+  bodyText: string
+) {
+  if (!aiParsed) return {};
+  return resolveInquiryCrewCounts({ subject, body: bodyText, aiParsed });
 }
 
 // ─── FH Notification email detection ─────────────────────────────────────────
@@ -1715,14 +1726,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
             aiResult?.durationPackage === "multi_day"
               ? aiResult.durationPackage
               : undefined,
-          crewPhotographers:
-            aiResult?.crewPhotographers != null
-              ? Number(aiResult.crewPhotographers) || 0
-              : undefined,
-          crewVideographers:
-            aiResult?.crewVideographers != null
-              ? Number(aiResult.crewVideographers) || 0
-              : undefined,
+          ...inquiryCrewFieldsForQuote(aiResult, subject, bodyText),
           leadSource: resolveQuoteLeadSource({
             fromEmail,
             htmlBody,
@@ -1984,14 +1988,7 @@ export const emailInquiriesRouter = router({
                 aiResult?.durationPackage === "multi_day"
                   ? aiResult.durationPackage
                   : undefined,
-              crewPhotographers:
-                aiResult?.crewPhotographers != null
-                  ? Number(aiResult.crewPhotographers) || 0
-                  : undefined,
-              crewVideographers:
-                aiResult?.crewVideographers != null
-                  ? Number(aiResult.crewVideographers) || 0
-                  : undefined,
+              ...inquiryCrewFieldsForQuote(aiResult, subject, bodyText),
               leadSource: resolveQuoteLeadSource({
                 fromEmail,
                 htmlBody,
@@ -2100,14 +2097,11 @@ export const emailInquiriesRouter = router({
               aiParsed?.durationPackage === "multi_day"
                 ? aiParsed.durationPackage
                 : undefined,
-            crewPhotographers:
-              aiParsed?.crewPhotographers != null
-                ? Number(aiParsed.crewPhotographers) || 0
-                : undefined,
-            crewVideographers:
-              aiParsed?.crewVideographers != null
-                ? Number(aiParsed.crewVideographers) || 0
-                : undefined,
+            ...inquiryCrewFieldsForQuote(
+              aiParsed,
+              existing.subject || "",
+              existing.bodyText || ""
+            ),
             leadSource: resolveQuoteLeadSource({
               fromEmail: existing.fromEmail,
               bodyText: existing.bodyText,

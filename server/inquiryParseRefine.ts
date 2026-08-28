@@ -147,6 +147,111 @@ function asPositive(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function buildInquiryCrewText(input: {
+  subject?: string;
+  body?: string;
+  aiParsed?: Record<string, any>;
+}): string {
+  const assumptions = Array.isArray(input.aiParsed?.assumptions)
+    ? input.aiParsed.assumptions
+    : [];
+  return normalizeChineseCounts(
+    [
+      input.subject ?? "",
+      input.body ?? "",
+      String(input.aiParsed?.notes ?? ""),
+      ...assumptions,
+    ]
+      .filter(Boolean)
+      .join("\n")
+  );
+}
+
+/** True when text clearly requests a single photographer. */
+export function hasSingularPhotographerSignal(text: string): boolean {
+  const t = normalizeChineseCounts(text);
+  if (/\b(one|a|an|single)\s+photographers?\b/i.test(t)) return true;
+  if (/(?:^|[^\d])1\s*(?:位|名)\s*攝影師/m.test(t)) return true;
+  if (/派遣\s*1\s*(?:位|名)\s*攝影師/.test(t)) return true;
+  if (/需\s*1\s*名\s*攝影師/.test(t)) return true;
+  return false;
+}
+
+/** True when text clearly requests multiple photographers. */
+export function hasMultiPhotographerSignal(text: string): boolean {
+  const t = normalizeChineseCounts(text);
+  if (/(?:^|[^\d])[2-9]\d*\s*(?:位|名)\s*攝影師/.test(t)) return true;
+  if (/\b(?:two|three|four|five|six|[2-9]\d*)\s+photographers?\b/i.test(t)) {
+    return true;
+  }
+  if (/Team\s*[2-9]\d*\s*P\b/i.test(t)) return true;
+  if (/[2-9]\d*\s*位\s*攝影師/.test(t)) return true;
+  if (/兩位攝影師|两位摄影師|雙攝|双摄/.test(t)) return true;
+  return false;
+}
+
+export interface ResolvedInquiryCrew {
+  crewPhotographers?: number;
+  crewVideographers?: number;
+  crewAssistants?: number;
+  crewOthers?: number;
+}
+
+/**
+ * Final crew counts for quotes — re-extract from email text and clamp LLM hallucinations
+ * (e.g. crew=4 while notes say ONE photographer, or crew=hours).
+ */
+export function resolveInquiryCrewCounts(input: {
+  subject?: string;
+  body?: string;
+  aiParsed: Record<string, any>;
+}): ResolvedInquiryCrew {
+  const text = buildInquiryCrewText(input);
+  const crew = extractCrewHighConfidence(text);
+  const shootHours = asPositive(input.aiParsed?.shootHours) ?? 0;
+
+  let photographers = Math.max(0, Math.floor(Number(input.aiParsed?.crewPhotographers) || 0));
+  let videographers = Math.max(0, Math.floor(Number(input.aiParsed?.crewVideographers) || 0));
+  let assistants = Math.max(0, Math.floor(Number(input.aiParsed?.crewAssistants) || 0));
+  let others = Math.max(0, Math.floor(Number(input.aiParsed?.crewOthers) || 0));
+
+  if (crew) {
+    if (crew.photographers > 0) photographers = crew.photographers;
+    if (crew.videographers > 0) videographers = crew.videographers;
+    if (crew.assistants > 0) assistants = crew.assistants;
+    if (crew.others > 0) others = crew.others;
+  }
+
+  const singular = hasSingularPhotographerSignal(text);
+  const multi = hasMultiPhotographerSignal(text);
+
+  if (singular && !multi && photographers > 1) {
+    photographers = 1;
+  }
+
+  // Common LLM mistake: headcount = hours (3h → 3 photographers)
+  if (
+    shootHours >= 2 &&
+    shootHours <= 8 &&
+    photographers === shootHours &&
+    !multi
+  ) {
+    photographers = singular ? 1 : crew?.photographers ?? 1;
+  }
+
+  // No crew signal in text — don't trust LLM inventing 2+ photographers
+  if (!crew && !singular && !multi && photographers > 1) {
+    photographers = 0;
+  }
+
+  return {
+    crewPhotographers: photographers > 0 ? photographers : undefined,
+    crewVideographers: videographers > 0 ? videographers : undefined,
+    crewAssistants: assistants > 0 ? assistants : undefined,
+    crewOthers: others > 0 ? others : undefined,
+  };
+}
+
 /**
  * Refine LLM parse: structured qty must match extractable signals.
  * Billing defaults may remain in suggestedItems; shootHours/shotCount stay 0 if not explicit.
@@ -194,14 +299,6 @@ export function refineInquiryParseWithExtractors(input: {
   const durationFromText = extractDurationPackageFromText(text);
   const hoursSignal = hasHighConfidenceHoursSignal(text);
   const shotsSignal = hasHighConfidenceShotCountSignal(text);
-  const crewText = normalizeChineseCounts(
-    [
-      text,
-      String(parsed.notes ?? ""),
-      ...assumptions,
-    ].join("\n")
-  );
-  const crew = extractCrewHighConfidence(crewText);
 
   let quantitySource = String(parsed.quantitySource ?? "")
     .trim()
@@ -279,13 +376,22 @@ export function refineInquiryParseWithExtractors(input: {
   }
 
   // ── Crew (high-confidence numeric only) ───────────────────────
-  if (crew) {
-    if (crew.photographers > 0) {
-      parsed.crewPhotographers = crew.photographers;
-    }
-    if (crew.videographers > 0) {
-      parsed.crewVideographers = crew.videographers;
-    }
+  const resolvedCrew = resolveInquiryCrewCounts({
+    subject: input.subject,
+    body: input.body,
+    aiParsed: parsed,
+  });
+  if (resolvedCrew.crewPhotographers != null) {
+    parsed.crewPhotographers = resolvedCrew.crewPhotographers;
+  }
+  if (resolvedCrew.crewVideographers != null) {
+    parsed.crewVideographers = resolvedCrew.crewVideographers;
+  }
+  if (resolvedCrew.crewAssistants != null) {
+    parsed.crewAssistants = resolvedCrew.crewAssistants;
+  }
+  if (resolvedCrew.crewOthers != null) {
+    parsed.crewOthers = resolvedCrew.crewOthers;
   }
 
   // If items look assumed but quantitySource still unknown
