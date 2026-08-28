@@ -42,13 +42,17 @@ export function resolveAttachmentUnderstanding(input: {
   subject?: string | null;
   bodyText?: string | null;
   attachmentText?: string | null;
-  /** Count of PDF attachments on the message (0 if unknown/none) */
+  /** Count of PDF/image attachments we attempted to read */
   pdfFileCount?: number | null;
+  /** Alias for pdfFileCount — total readable attachments */
+  attachmentFileCount?: number | null;
 }): AttachmentUnderstanding {
   const blob = `${input.subject ?? ""}\n${input.bodyText ?? ""}`;
   const mentionsAttachment = mentionsRequirementsAttachment(blob);
   const hasExtractedText = Boolean((input.attachmentText ?? "").trim());
-  const hasPdfFiles = (input.pdfFileCount ?? 0) > 0;
+  const fileCount =
+    input.attachmentFileCount ?? input.pdfFileCount ?? 0;
+  const hasPdfFiles = fileCount > 0;
 
   if (hasExtractedText) {
     return {
@@ -65,9 +69,13 @@ export function resolveAttachmentUnderstanding(input: {
   if (mentionsAttachment || hasPdfFiles) {
     const blockers: string[] = [];
     if (mentionsAttachment && !hasPdfFiles) {
-      blockers.push("正文指明詳見附件，但未讀到可用附件文字（可能係 Word／掃描圖／未夾上）");
+      blockers.push(
+        "正文指明詳見附件，但未讀到可用附件文字（可能係 Word／未夾上／不支援格式）"
+      );
     } else if (hasPdfFiles) {
-      blockers.push("有 PDF 附件但抽唔到文字（可能係掃描圖／無文字層）");
+      blockers.push(
+        "有附件但抽唔到文字（可能係掃描圖 OCR 失敗／無文字層／圖片太模糊）"
+      );
     } else {
       blockers.push("附件需求未能讀取");
     }

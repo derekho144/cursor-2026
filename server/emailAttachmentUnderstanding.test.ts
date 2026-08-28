@@ -45,9 +45,21 @@ describe("resolveAttachmentUnderstanding", () => {
       subject: "攝影報價",
       bodyText: "擬向貴司查詢攝影報價，詳情請見附件。",
       attachmentText: "",
-      pdfFileCount: 0,
+      attachmentFileCount: 0,
     });
     expect(r.status).toBe("missing");
+    expect(r.blockers[0]).toContain("未讀到");
+  });
+
+  it("marks missing when PDF present but OCR/text empty", () => {
+    const r = resolveAttachmentUnderstanding({
+      subject: "Brief",
+      bodyText: "See attached",
+      attachmentText: "",
+      attachmentFileCount: 1,
+    });
+    expect(r.status).toBe("missing");
+    expect(r.blockers[0]).toContain("OCR");
     expect(r.missingFields).toContain("attachmentText");
   });
 

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   extractTextFromPdfBuffer,
   mergeEmailBodyWithPdfText,
-  extractTextFromPdfAttachments,
+  extractTextFromEmailAttachments,
 } from "./emailPdfAttachments";
 import PDFDocument from "pdfkit";
+import { createCanvas } from "@napi-rs/canvas";
 
 async function makeSimplePdf(text: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -16,6 +17,18 @@ async function makeSimplePdf(text: string): Promise<Buffer> {
     doc.font("Helvetica").fontSize(12).text(text);
     doc.end();
   });
+}
+
+/** Minimal PNG with text-like pattern for OCR smoke test (optional). */
+async function makeTextPng(text: string): Promise<Buffer> {
+  const canvas = createCanvas(400, 120);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, 400, 120);
+  ctx.fillStyle = "#000000";
+  ctx.font = "24px sans-serif";
+  ctx.fillText(text, 10, 60);
+  return canvas.toBuffer("image/png");
 }
 
 describe("mergeEmailBodyWithPdfText", () => {
@@ -39,15 +52,16 @@ describe("extractTextFromPdfBuffer", () => {
     const result = await extractTextFromPdfBuffer(buf);
     expect(result.text.toLowerCase()).toContain("photography");
     expect(result.text.toLowerCase()).toContain("5 hours");
+    expect(result.source).toBe("pdf_text");
   });
 });
 
-describe("extractTextFromPdfAttachments", () => {
+describe("extractTextFromEmailAttachments", () => {
   it("skips non-pdf and extracts pdf", async () => {
     const buf = await makeSimplePdf(
       "Need product shoot 30 SKUs white background"
     );
-    const out = await extractTextFromPdfAttachments([
+    const out = await extractTextFromEmailAttachments([
       {
         filename: "note.txt",
         contentType: "text/plain",
@@ -63,4 +77,19 @@ describe("extractTextFromPdfAttachments", () => {
     expect(out.combinedText).toContain("brief.pdf");
     expect(out.combinedText.toLowerCase()).toContain("product");
   });
+
+  it("OCRs image attachments", async () => {
+    const png = await makeTextPng("Product shoot 25 photos");
+    const out = await extractTextFromEmailAttachments([
+      {
+        filename: "brief.png",
+        contentType: "image/png",
+        content: png,
+      },
+    ]);
+    expect(out.imageCount).toBe(1);
+    expect(out.texts[0].source).toBe("image_ocr");
+    // OCR may misread slightly — check for key tokens
+    expect(out.combinedText.toLowerCase()).toMatch(/product|shoot|25|photo/);
+  }, 60_000);
 });

@@ -35,7 +35,7 @@ import {
 } from "../../shared/inquiryDraftReadiness";
 import { getLearningAutoDraftGate } from "../pricingLearning";
 import {
-  extractTextFromPdfAttachments,
+  extractTextFromEmailAttachments,
   mergeEmailBodyWithPdfText,
 } from "../emailPdfAttachments";
 import {
@@ -56,21 +56,26 @@ function enrichParsedWithAttachmentGate(
     subject: string;
     bodyText: string;
     attachmentText?: string | null;
-    attachmentMeta?: Array<{ filename: string; chars?: number; error?: string }> | null;
+    attachmentMeta?: Array<{
+      filename: string;
+      chars?: number;
+      error?: string;
+      source?: string;
+    }> | null;
   }
 ): Record<string, unknown> | null {
   if (!aiResult) return null;
-  const pdfFileCount = Array.isArray(opts.attachmentMeta)
+  const attachmentFileCount = Array.isArray(opts.attachmentMeta)
     ? opts.attachmentMeta.length
     : 0;
   const understanding = resolveAttachmentUnderstanding({
     subject: opts.subject,
     bodyText: opts.bodyText,
     attachmentText: opts.attachmentText,
-    pdfFileCount,
+    attachmentFileCount,
   });
   let enriched = applyAttachmentUnderstandingToParsed(aiResult, understanding);
-  if (pdfFileCount > 0) {
+  if (attachmentFileCount > 0) {
     enriched = {
       ...enriched,
       pdfAttachments: opts.attachmentMeta,
@@ -78,7 +83,12 @@ function enrichParsedWithAttachmentGate(
     };
     if (understanding.status === "used") {
       const names = (opts.attachmentMeta ?? []).map((m) => m.filename).join(", ");
-      const note = `已讀取 PDF 附件：${names}`;
+      const ocrUsed = (opts.attachmentMeta ?? []).some((m) =>
+        String(m.source ?? "").includes("ocr")
+      );
+      const note = ocrUsed
+        ? `已 OCR 讀取附件：${names}`
+        : `已讀取附件：${names}`;
       const notes = String(enriched.notes ?? "");
       enriched.notes = notes.includes(note)
         ? notes
@@ -1272,7 +1282,7 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
           const bodyText: string = parsed.text ?? (htmlBody ? htmlBody.replace(/<[^>]+>/g, " ") : "");
           const receivedAt: Date = parsed.date ?? new Date();
 
-          const pdfExtract = await extractTextFromPdfAttachments(
+          const attachmentExtract = await extractTextFromEmailAttachments(
             (parsed.attachments ?? []).map((a: any) => ({
               filename: a.filename,
               contentType: a.contentType,
@@ -1281,9 +1291,9 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
                 : Buffer.from(a.content ?? []),
             }))
           );
-          if (pdfExtract.pdfCount > 0) {
+          if (attachmentExtract.attachmentCount > 0) {
             console.log(
-              `[EmailInquiry] PDF attachments: ${pdfExtract.pdfCount} on "${subject.slice(0, 40)}" chars=${pdfExtract.combinedText.length}`
+              `[EmailInquiry] Attachments: pdf=${attachmentExtract.pdfCount} img=${attachmentExtract.imageCount} on "${subject.slice(0, 40)}" chars=${attachmentExtract.combinedText.length}`
             );
           }
 
@@ -1295,13 +1305,14 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
             bodyText,
             htmlBody,
             receivedAt,
-            attachmentText: pdfExtract.combinedText,
-            attachmentMeta: pdfExtract.texts.map((t) => ({
+            attachmentText: attachmentExtract.combinedText,
+            attachmentMeta: attachmentExtract.texts.map((t) => ({
               filename: t.filename,
               pages: t.pages,
               truncated: t.truncated,
               error: t.error,
               chars: t.text.length,
+              source: t.source,
             })),
           });
         } catch (e) {
