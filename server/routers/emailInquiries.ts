@@ -978,7 +978,7 @@ Email Subject: ${subject}
 Email Body:
 ${body}
 
-IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF attachments. Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the PDF.
+IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF or image attachments (text layer or OCR). Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the attachment.
 
 ${pricingContext}
 

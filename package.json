@@ -139,7 +139,6 @@
       "tailwindcss>nanoid": "3.3.7"
     },
     "onlyBuiltDependencies": [
-      "canvas",
       "tesseract.js"
     ]
   }
