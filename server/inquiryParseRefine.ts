@@ -167,6 +167,25 @@ export function refineInquiryParseWithExtractors(input: {
     ? [...parsed.missingFields]
     : [];
 
+  // Fix line qty confused with hours, e.g. "Event Photography (3 hours)" qty=3
+  if (Array.isArray(parsed.suggestedItems)) {
+    parsed.suggestedItems = parsed.suggestedItems.map((it: any) => {
+      const desc = String(it?.description ?? "");
+      const hourMatch = desc.match(/\((\d+(?:\.\d+)?)\s*hours?\)/i);
+      if (!hourMatch) return it;
+      const hoursInDesc = Number(hourMatch[1]);
+      const qty = Number(it?.quantity);
+      if (
+        Number.isFinite(hoursInDesc) &&
+        Number.isFinite(qty) &&
+        qty === hoursInDesc
+      ) {
+        return { ...it, quantity: 1 };
+      }
+      return it;
+    });
+  }
+
   const serviceType = String(parsed.serviceType ?? "other").trim() || "other";
   const mode = quotePricingMode(serviceType);
 
@@ -175,7 +194,14 @@ export function refineInquiryParseWithExtractors(input: {
   const durationFromText = extractDurationPackageFromText(text);
   const hoursSignal = hasHighConfidenceHoursSignal(text);
   const shotsSignal = hasHighConfidenceShotCountSignal(text);
-  const crew = extractCrewHighConfidence(text);
+  const crewText = normalizeChineseCounts(
+    [
+      text,
+      String(parsed.notes ?? ""),
+      ...assumptions,
+    ].join("\n")
+  );
+  const crew = extractCrewHighConfidence(crewText);
 
   let quantitySource = String(parsed.quantitySource ?? "")
     .trim()
@@ -255,16 +281,10 @@ export function refineInquiryParseWithExtractors(input: {
   // ── Crew (high-confidence numeric only) ───────────────────────
   if (crew) {
     if (crew.photographers > 0) {
-      const llmP = Number(parsed.crewPhotographers) || 0;
-      if (llmP <= 0 || llmP !== crew.photographers) {
-        parsed.crewPhotographers = crew.photographers;
-      }
+      parsed.crewPhotographers = crew.photographers;
     }
     if (crew.videographers > 0) {
-      const llmV = Number(parsed.crewVideographers) || 0;
-      if (llmV <= 0 || llmV !== crew.videographers) {
-        parsed.crewVideographers = crew.videographers;
-      }
+      parsed.crewVideographers = crew.videographers;
     }
   }
 

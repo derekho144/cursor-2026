@@ -23,6 +23,15 @@ describe("extractCrewHighConfidence", () => {
     expect(extractCrewHighConfidence("攝影師到場")).toBeNull();
     expect(extractCrewHighConfidence("需要 assistant")).toBeNull();
   });
+
+  it("accepts ONE/a/single photographer wording", () => {
+    expect(extractCrewHighConfidence("ONE photographer on site")?.photographers).toBe(
+      1
+    );
+    expect(extractCrewHighConfidence("Need a photographer for 3 hours")?.photographers).toBe(
+      1
+    );
+  });
 });
 
 describe("extractHoursFromText", () => {

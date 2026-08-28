@@ -136,6 +136,17 @@ function countRole(text: string, patterns: RegExp[]): number {
   return total;
 }
 
+/** English word quantities for crew, e.g. "ONE photographer". */
+function countWordPhotographers(text: string): number {
+  let total = 0;
+  const re = /\b(one|a|an|single)\s+photographers?\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    total += 1;
+  }
+  return total;
+}
+
 /** Parse crew roles from team / notes / item descriptions. */
 export function extractCrewFromText(text: string): CrewBreakdown {
   const empty: CrewBreakdown = {
@@ -147,10 +158,13 @@ export function extractCrewFromText(text: string): CrewBreakdown {
   };
   if (!text?.trim()) return empty;
 
-  const photographers = countRole(text, [
-    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師|摄影师|photographers?|photogs?)/gi,
-    /(?:攝影師|摄影师|photographers?|photogs?)\s*[x×*]?\s*(\d+)/gi,
-  ]);
+  const photographers = Math.max(
+    countRole(text, [
+      /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師|摄影师|photographers?|photogs?)/gi,
+      /(?:攝影師|摄影师|photographers?|photogs?)\s*[x×*]?\s*(\d+)/gi,
+    ]),
+    countWordPhotographers(text)
+  );
   let photogs = photographers;
   if (photogs === 0 && /攝影師|摄影师|\bphotographer\b|\bphotog\b/i.test(text)) {
     photogs = 1;
@@ -215,10 +229,13 @@ export function extractCrewFromText(text: string): CrewBreakdown {
 export function extractCrewHighConfidence(text: string): CrewBreakdown | null {
   if (!text?.trim()) return null;
 
-  const photographers = countRole(text, [
-    /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師|摄影师|photographers?|photogs?)/gi,
-    /(?:攝影師|摄影师|photographers?|photogs?)\s*[x×*]?\s*(\d+)/gi,
-  ]);
+  const photographers = Math.max(
+    countRole(text, [
+      /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:攝影師|摄影师|photographers?|photogs?)/gi,
+      /(?:攝影師|摄影师|photographers?|photogs?)\s*[x×*]?\s*(\d+)/gi,
+    ]),
+    countWordPhotographers(text)
+  );
   const assistants = countRole(text, [
     /(\d+)\s*(?:位|名|x|×|\*)?\s*(?:助理|助手|assistants?)/gi,
     /(?:助理|助手|assistants?)\s*[x×*]?\s*(\d+)/gi,

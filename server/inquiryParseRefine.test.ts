@@ -131,4 +131,27 @@ describe("refineInquiryParseWithExtractors", () => {
     expect(refined.shootHours).toBe(4);
     expect(refined.quantitySource).toBe("explicit");
   });
+
+  it("overrides wrong LLM crew when email says ONE photographer", () => {
+    const refined = refineInquiryParseWithExtractors({
+      subject: "(HKCAAVQ) Request for Quotation - Photography Service",
+      body: `Duration: approx. 3 hours
+Time: 10:00 am - 12:00 pm
+* ONE photographer to take standard individual, group photos AND snapshots`,
+      parsed: {
+        serviceType: "corporate_event",
+        shootHours: 3,
+        shotCount: 0,
+        crewPhotographers: 4,
+        quantitySource: "explicit",
+        assumptions: ["派遣1名攝影師"],
+        missingFields: [],
+        suggestedItems: [
+          { description: "Event Photography (3 hours)", quantity: 3, unitPrice: 950 },
+        ],
+      },
+    });
+    expect(refined.crewPhotographers).toBe(1);
+    expect(refined.suggestedItems[0].quantity).toBe(1);
+  });
 });
