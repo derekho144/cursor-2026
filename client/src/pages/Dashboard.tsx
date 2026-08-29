@@ -24,13 +24,17 @@ export default function Dashboard() {
   // Fast initial load: fetch KPI cards first (only when authenticated)
   const { data: quickData, isLoading: quickLoading } = trpc.dashboard.quick.useQuery(
     { year: selectedYear, month: selectedMonth },
-    { refetchOnWindowFocus: false, enabled: !authLoading && !!user }
+    { refetchOnWindowFocus: true, enabled: !authLoading && !!user }
   );
   
-  // Detailed stats load in background
+  // Detailed stats (includes receivables) — refresh when returning to tab after accepting quotes
   const { data: dashData } = trpc.dashboard.all.useQuery(
     { year: selectedYear, month: selectedMonth },
-    { refetchOnWindowFocus: false, enabled: !authLoading && !!user && !quickLoading }
+    {
+      refetchOnWindowFocus: true,
+      staleTime: 30_000,
+      enabled: !authLoading && !!user && !quickLoading,
+    }
   );
   
   const isLoading = quickLoading;
@@ -139,6 +143,11 @@ export default function Dashboard() {
                   ? `${receivables.count} 張已成交未清 · 合共 ${fmt(receivables.totalOutstanding)}`
                   : "暫無未清已成交報價"}
               </p>
+              {receivables && receivables.count > 0 && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  按逾期日數排序（最舊在上）；新接受嘅未清報價喺列表下方，可向下捲動。
+                </p>
+              )}
             </div>
             {receivables && receivables.count > 0 && (
               <div className="flex gap-3 text-xs">
@@ -150,17 +159,31 @@ export default function Dashboard() {
             )}
           </div>
           {receivables && receivables.items.length > 0 ? (
-            <div className="space-y-2 max-h-56 overflow-y-auto">
-              {receivables.items.slice(0, 8).map((it) => (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {receivables.items.map((it) => (
                 <button
                   key={it.id}
                   onClick={() => setLocation(`/quotes/${it.id}`)}
                   className="w-full flex items-center justify-between gap-2 text-left px-2 py-1.5 rounded hover:opacity-80"
-                  style={{ background: "rgba(255,255,255,0.03)" }}
+                  style={{
+                    background:
+                      it.ageDays <= 7
+                        ? "rgba(76,175,80,0.08)"
+                        : "rgba(255,255,255,0.03)",
+                    border:
+                      it.ageDays <= 7
+                        ? "1px solid rgba(76,175,80,0.25)"
+                        : "1px solid transparent",
+                  }}
                 >
                   <div className="min-w-0">
                     <div className="text-sm truncate" style={{ color: "#e8e0d0" }}>
                       {it.quoteNumber} · {it.clientName}
+                      {it.ageDays <= 7 ? (
+                        <span className="ml-1.5 text-[10px]" style={{ color: "#4caf50" }}>
+                          新
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {it.paymentStatus === "deposit_paid" ? "已付訂金" : "未付款"} · {it.ageDays} 日
