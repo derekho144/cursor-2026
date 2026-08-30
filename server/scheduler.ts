@@ -318,9 +318,9 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
 
         let email = job.clientEmail || "";
         if (!email) {
-          const fetchedEmail = await fetchEmailForJob(job.jobId);
-          if (!fetchedEmail) continue;
-          email = fetchedEmail;
+          const result = await fetchEmailForJob(job.jobId);
+          if (!result.email) continue;
+          email = result.email;
           fetched++;
         } else {
           fetched++;

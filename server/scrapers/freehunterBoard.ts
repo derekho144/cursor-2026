@@ -590,16 +590,32 @@ export async function scrapeFreehunterBoard(
 
 /**
  * Fetch client email for an existing job that doesn't have one yet.
+ * Returns `{ email }` on success, or `{ email: null, error }` with a concrete reason.
  */
-export async function fetchEmailForJob(jobId: string): Promise<string | null> {
+export type FetchEmailForJobResult = {
+  email: string | null;
+  error?: string;
+};
+
+export async function fetchEmailForJob(
+  jobId: string
+): Promise<FetchEmailForJobResult> {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) return { email: null, error: "資料庫不可用" };
   try {
     // 90-second timeout to prevent hanging if Playwright gets stuck
     const contact = await Promise.race([
       fetchFreehunterJobContact(parseInt(jobId, 10)),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`fetchEmailForJob timed out after 90s for job ${jobId}`)), 90_000)
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `取得電郵逾時（90秒）— 伺服器瀏覽器可能卡住，請稍後再試或重新登入 Freehunter`
+              )
+            ),
+          90_000
+        )
       ),
     ]);
     if (contact.email) {
@@ -612,10 +628,16 @@ export async function fetchEmailForJob(jobId: string): Promise<string | null> {
           updatedAt: new Date(),
         })
         .where(eq(freehunterJobs.jobId, jobId));
-      return contact.email;
+      return { email: contact.email };
     }
+    return {
+      email: null,
+      error:
+        "Freehunter 未回傳客戶電郵（常見：工作已過期／已關閉、需要 Premium 接 JOB、或該工作不公開電郵）",
+    };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[FreehunterBoard] fetchEmailForJob(${jobId}) error:`, e);
+    return { email: null, error: msg };
   }
-  return null;
 }

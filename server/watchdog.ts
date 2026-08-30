@@ -94,7 +94,7 @@ async function checkAndRepairStuckFHJobs(): Promise<{ fixed: number; alerts: str
     for (const job of stuckJobs) {
       try {
         await new Promise((r) => setTimeout(r, 1500));
-        const email = await fetchEmailForJob(job.jobId);
+        const { email } = await fetchEmailForJob(job.jobId);
         if (email) {
           fixed++;
           const isHighConfidence = (job.aiScore ?? 0) >= 80;

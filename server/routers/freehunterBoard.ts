@@ -330,11 +330,13 @@ export const freehunterBoardRouter = router({
   fetchEmail: protectedProcedure
     .input(z.object({ jobId: z.string() }))
     .mutation(async ({ input }) => {
-      const email = await fetchEmailForJob(input.jobId);
+      const { email, error } = await fetchEmailForJob(input.jobId);
       if (!email) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "無法取得客戶電郵，可能需要 Premium 帳號或工作已過期",
+          message:
+            error ||
+            "無法取得客戶電郵，可能需要 Premium 帳號或工作已過期",
         });
       }
       return { email };
@@ -880,7 +882,7 @@ ${trackingPixel}
 
           // Case 2: job has no email yet — fetch it first
           await new Promise((r) => setTimeout(r, 1500)); // Rate limit
-          const email = await fetchEmailForJob(job.jobId);
+          const { email, error: fetchErr } = await fetchEmailForJob(job.jobId);
           if (email) {
             emailsFetched++;
             if (isHighConfidence) {
@@ -904,6 +906,8 @@ ${trackingPixel}
               }
             }
             // Low-confidence jobs already updated to email_fetched by fetchEmailForJob
+          } else if (fetchErr) {
+            errors.push(`Job ${job.jobId}: ${fetchErr}`);
           }
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
