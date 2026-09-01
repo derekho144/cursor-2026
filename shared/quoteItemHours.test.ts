@@ -48,6 +48,41 @@ describe("reconcileHourlyQuoteItems", () => {
     ]);
     expect(adjustments).toHaveLength(0);
   });
+
+  it("skips flat package lines (qty 1 @ high unit price)", () => {
+    const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
+      {
+        description: "Event Photography (8 hours)",
+        quantity: 1,
+        unitPrice: 7000,
+        amount: 7000,
+      },
+      {
+        description: "Event Videograph (8 hours)",
+        quantity: 1,
+        unitPrice: 7000,
+        amount: 7000,
+      },
+    ]);
+    expect(adjustments).toHaveLength(0);
+    expect(items[0].quantity).toBe(1);
+    expect(items[0].amount).toBe(7000);
+    expect(items[1].quantity).toBe(1);
+  });
+
+  it("still reconciles when unit price looks per-hour", () => {
+    const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
+      {
+        description: "Event Photography (8 hours)",
+        quantity: 1,
+        unitPrice: 1000,
+        amount: 1000,
+      },
+    ]);
+    expect(adjustments).toHaveLength(1);
+    expect(items[0].quantity).toBe(8);
+    expect(items[0].amount).toBe(8000);
+  });
 });
 
 describe("formatHourlyQuantityAdjustments", () => {

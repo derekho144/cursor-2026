@@ -19,6 +19,31 @@ export type HourlyQuantityAdjustment = {
 const SKIP_HOURLY_QTY_RE =
   /transportation|team\s*\d+\s*p|retouch|equipment|delivery|post[- ]?production|lighting|訂金|交通|運輸|background|styled\s*bg|免費|included/i;
 
+/** HKD: half-day / full-day package totals — qty 1 is intentional. */
+const FLAT_PACKAGE_UNIT_MIN = 3500;
+
+const PER_HOUR_SIGNAL_RE =
+  /\b(per\s*hour|per\s*hr|\/\s*hr|hourly|每小時|\/小時|按鐘|每小時計)\b/i;
+
+const FLAT_PACKAGE_SIGNAL_RE =
+  /\b(package|flat\s*fee|flat\s*rate|all[- ]?inclusive|一口價|全包|套餐)\b/i;
+
+export function looksLikeFlatPackageLineItem(
+  item: QuoteItemQuantityLike,
+  hours: number
+): boolean {
+  const qty = Number(item.quantity) || 0;
+  const unitPrice = Number(item.unitPrice) || 0;
+  if (qty !== 1 || hours <= 1) return false;
+
+  const desc = item.description?.trim() ?? "";
+  if (PER_HOUR_SIGNAL_RE.test(desc)) return false;
+  if (FLAT_PACKAGE_SIGNAL_RE.test(desc)) return true;
+
+  // e.g. Event Photography (8 hours) qty 1 @ HKD 7,000 — package total, not per-hour
+  return unitPrice >= FLAT_PACKAGE_UNIT_MIN;
+}
+
 export function shouldReconcileHourlyQuantity(description: string): boolean {
   const d = description.trim();
   if (!d || SKIP_HOURLY_QTY_RE.test(d)) return false;
@@ -47,6 +72,7 @@ export function reconcileHourlyQuoteItems<T extends QuoteItemQuantityLike>(
 
     const qty = Number(item.quantity) || 0;
     if (qty === hours) return item;
+    if (looksLikeFlatPackageLineItem(item, hours)) return item;
 
     adjustments.push({
       description: desc,
