@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ -f .env ]]; then
+if [[ ( -z "${MANUS_API_KEY:-}" || -z "${MANUS_TASK_ID:-}" ) && -f .env ]]; then
   set -a
   # shellcheck disable=SC1091
   source .env
