@@ -1334,23 +1334,21 @@ export default function QuoteForm() {
                   onChange={(e) => {
                     const newShootingDate = e.target.value;
                     setForm((p) => {
-                      // Auto-set validUntil to 14 days before shooting date
-                      // only if validUntil is empty or was previously auto-set (same as old shooting date - 14 days)
+                      // Auto-fill 報價有效期 = 拍攝日期 (same day), unless user already set a custom date
                       let newValidUntil = p.validUntil;
                       if (newShootingDate) {
-                        const shootDate = new Date(newShootingDate);
-                        const autoValid = new Date(shootDate);
-                        autoValid.setDate(autoValid.getDate() - 14);
-                        const autoValidStr = autoValid.toISOString().split('T')[0];
-                        // Check if current validUntil was auto-set from old shooting date
-                        const oldAutoValid = p.shootingDate ? (() => {
-                          const old = new Date(p.shootingDate);
-                          old.setDate(old.getDate() - 14);
-                          return old.toISOString().split('T')[0];
-                        })() : null;
-                        if (!p.validUntil || p.validUntil === p.shootingDate || p.validUntil === oldAutoValid) {
-                          newValidUntil = autoValidStr;
-                        }
+                        const oldMinus14 = p.shootingDate
+                          ? (() => {
+                              const old = new Date(p.shootingDate);
+                              old.setDate(old.getDate() - 14);
+                              return old.toISOString().split("T")[0];
+                            })()
+                          : null;
+                        const wasAuto =
+                          !p.validUntil ||
+                          p.validUntil === p.shootingDate ||
+                          p.validUntil === oldMinus14;
+                        if (wasAuto) newValidUntil = newShootingDate;
                       }
                       return { ...p, shootingDate: newShootingDate, validUntil: newValidUntil };
                     });
