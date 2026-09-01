@@ -9,7 +9,7 @@ When you finish a **bug fix** or **deployable code change** in this repo, do the
 
 1. **Verify** — run focused tests / `tsc --noEmit` for touched areas when practical.
 2. **Commit + push** to `origin/main` (`derekho144/cursor-2026`) — only the relevant files.
-3. **Deploy** — if `.env` has `MANUS_API_KEY` (+ `MANUS_TASK_ID` / `MANUS_WEBSITE_ID`), run:
+3. **Deploy** — if Cloud Agent secrets or `.env` has `MANUS_API_KEY` (+ `MANUS_TASK_ID` / `MANUS_WEBSITE_ID`), run:
 
    `bash scripts/manus-auto-deploy.sh`
 

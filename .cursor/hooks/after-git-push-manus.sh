@@ -11,6 +11,8 @@ if ! printf '%s' "$cmd" | grep -qiE 'git push'; then
 fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/manus-credentials.sh"
 SHA=$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo "")
 MSG=$(cd "$ROOT" && git log -1 --pretty=%s 2>/dev/null || echo "")
 MARKER="$ROOT/.git/manus-pending-sync"
@@ -19,8 +21,8 @@ MARKER="$ROOT/.git/manus-pending-sync"
   printf '%s\n' "$MSG"
 } > "$MARKER" 2>/dev/null || true
 
-# Fire-and-forget deploy if credentials exist
-if [[ -f "$ROOT/.env" ]] && grep -q '^MANUS_API_KEY=' "$ROOT/.env" 2>/dev/null; then
+# Fire-and-forget deploy if credentials exist (Cloud Agent secrets or .env)
+if manus_credentials_available "$ROOT"; then
   (
     cd "$ROOT"
     nohup bash scripts/manus-auto-deploy.sh >"$ROOT/.git/manus-auto-deploy.log" 2>&1 &
