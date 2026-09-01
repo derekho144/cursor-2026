@@ -13,6 +13,7 @@ export type PageId =
   | "ad-expenses"
   | "platform-efficiency"
   | "ad-sync"
+  | "google-ads-quality"
   | "reports"
   | "freehunter-board"
   | "expenses"
@@ -41,6 +42,7 @@ export const PAGE_CATALOG: PageDef[] = [
   { id: "ad-expenses", label: "廣告開支", pathPrefixes: ["/ad-expenses"] },
   { id: "platform-efficiency", label: "平台效益分析", pathPrefixes: ["/platform-efficiency"] },
   { id: "ad-sync", label: "平台同步", pathPrefixes: ["/ad-sync"] },
+  { id: "google-ads-quality", label: "Google Ads QS", pathPrefixes: ["/google-ads-quality"] },
   { id: "reports", label: "月度報表", pathPrefixes: ["/reports"] },
   { id: "freehunter-board", label: "FH 工作板", pathPrefixes: ["/freehunter-board"] },
   { id: "expenses", label: "收入及支出", pathPrefixes: ["/expenses"] },

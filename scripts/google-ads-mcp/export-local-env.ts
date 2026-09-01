@@ -82,7 +82,7 @@ async function main() {
     line("GOOGLE_ADS_REFRESH_TOKEN", refreshToken),
     line("GOOGLE_ADS_CUSTOMER_ID", loginCustomerId),
     line("GOOGLE_ADS_LOGIN_CUSTOMER_ID", loginCustomerId),
-    line("GOOGLE_ADS_AD_ACCOUNT_ID", "4839352747"),
+    line("GOOGLE_ADS_AD_ACCOUNT_ID", process.env.GOOGLE_ADS_AD_ACCOUNT_ID?.trim() || "4839352747"),
     line("GOOGLE_PROJECT_ID", projectId),
     "",
   ].join("\n");

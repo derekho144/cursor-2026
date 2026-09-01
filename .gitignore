@@ -11,4 +11,5 @@ build/
 .env.google-ads
 scripts/google-ads-mcp/google-ads.yaml
 google-ads-adc.json
+reports/
 *.traineddata
