@@ -105,6 +105,8 @@ describe("formatInquiryDraftNotes", () => {
       }),
     });
     expect(notes).toContain("假設半日 4 小時");
-    expect(notes).toContain("AI 自動草稿");
+    expect(notes).not.toContain("AI 自動草稿");
+    expect(notes).not.toContain("寄件人:");
+    expect(notes).not.toContain("主題:");
   });
 });

@@ -150,26 +150,18 @@ export function formatInquiryDraftNotes(input: {
   autoDraft: boolean;
 }): string {
   const lines: string[] = [];
-  lines.push(
-    input.autoDraft
-      ? "[AI 自動草稿 - 待確認發送]"
-      : "[AI 解析 - 人手批核建立草稿]"
-  );
-  lines.push(`寄件人: ${input.fromEmail}`);
-  lines.push(`主題: ${input.subject}`);
   if (input.aiNotes?.trim()) {
-    lines.push("");
     lines.push(input.aiNotes.trim());
   }
   if (input.readiness?.assumptions?.length) {
-    lines.push("");
+    if (lines.length) lines.push("");
     lines.push("【假設（請核實）】");
     for (const a of input.readiness.assumptions) {
       lines.push(`· ${a}`);
     }
   }
   if (input.readiness?.missingFields?.length) {
-    lines.push("");
+    if (lines.length) lines.push("");
     lines.push(`【缺欄】${input.readiness.missingFields.join("、")}`);
   }
   return lines.join("\n");
