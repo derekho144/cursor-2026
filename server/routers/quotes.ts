@@ -67,7 +67,6 @@ async function generateQuotePdfMatchingDownload(
     );
   }
 }
-
 /**
  * Fill missing structured hours/crew from free-text (Team XP lines, notes, team field).
  * Keeps explicit structured values when already provided.
@@ -670,10 +669,15 @@ ${itemsText}
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
 
-      // Same visual template as /print/quote (list/detail download button)
+      // Same layout as 「下載 PDF」(/print/quote) — HTML print template via Chromium
       const llmDescription = quote.llmDescription || "感謝您選擇 JD Studio HK 的專業攝影服務。";
       const signatureData = (quote as any).signatureData || null;
-      const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription, "QUOTATION", signatureData);
+      const pdfBuffer = await generateQuotePdfMatchingDownload(
+        quote,
+        llmDescription,
+        "QUOTATION",
+        signatureData
+      );
 
       // Pre-create email log to get the ID for tracking pixel
       const logId = await createEmailLog({

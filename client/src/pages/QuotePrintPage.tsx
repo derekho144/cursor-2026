@@ -323,6 +323,10 @@ export default function QuotePrintPage() {
             )}
             {quote.clientPhone && <div style={S.clientDetail}>{quote.clientPhone}</div>}
             {quote.clientEmail && <div style={S.clientDetail}>{quote.clientEmail}</div>}
+          </div>
+          <div style={S.serviceCol}>
+            <div style={S.sectionLabel}>SERVICE DETAILS</div>
+            <div style={S.serviceType}>{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
             {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
             {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
             {(quote as any).shotCount != null && Number((quote as any).shotCount) > 0 && (
@@ -345,10 +349,6 @@ export default function QuotePrintPage() {
               const label = parts.length > 0 ? parts.join(" + ") : team;
               return label ? <div style={S.clientDetail}>Team: {label}</div> : null;
             })()}
-          </div>
-          <div style={S.serviceCol}>
-            <div style={S.sectionLabel}>SERVICE DETAILS</div>
-            <div style={S.serviceType}>{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
           </div>
         </div>
 
@@ -394,6 +394,31 @@ export default function QuotePrintPage() {
             );
           })}
 
+          {/* Extra meta rows (equipment / team / delivery) — match email & PDFKit */}
+          {([
+            quote.equipment ? { label: "LIGHTING & EQUIPMENT", value: quote.equipment } : null,
+            (quote as any).team ? { label: "TEAM", value: (quote as any).team } : null,
+            (quote as any).deliveryMethod ? { label: "PHOTO DELIVERY METHOD", value: (quote as any).deliveryMethod } : null,
+          ].filter(Boolean) as { label: string; value: string }[]).map((row, i) => {
+            const idx = items.length + i;
+            return (
+              <div key={`extra-${i}`} style={{
+                display: "flex",
+                borderBottom: "1px solid #eeeeee",
+                padding: "7px 0",
+                background: idx % 2 === 0 ? "#ffffff" : "#f7f7f7",
+                WebkitPrintColorAdjust: "exact" as const,
+                printColorAdjust: "exact" as const,
+              }}>
+                <div style={{ flex: 1, fontSize: 7.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#888", fontWeight: 600, paddingLeft: 8 }}>
+                  {row.label}
+                </div>
+                <div style={{ flex: 1, fontSize: 10.5, color: "#333", textAlign: "right", paddingRight: 4 }}>
+                  {row.value}
+                </div>
+              </div>
+            );
+          })}
 
         </div>
 
