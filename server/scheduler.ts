@@ -770,6 +770,7 @@ async function runReviewInviteEmails(): Promise<void> {
         const serviceLabel = serviceTypeMap[quote.serviceType] || "攝影服務";
         const result = await sendEmail({
           to: quote.clientEmail!,
+          purpose: "transactional",
           subject: `感謝您選擇 JD Studio — 歡迎留下您的評價 ⭐`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
@@ -879,7 +880,7 @@ export async function runScheduledLoyaltyRemarketing(): Promise<void> {
           </div>
         </div>
       `;
-      const result = await sendEmail({ to: c.clientEmail, subject: seasonSubject, html });
+      const result = await sendEmail({ to: c.clientEmail, subject: seasonSubject, html, purpose: "outreach" });
       if (result.success) {
         await recordLoyaltyEmail({ clientId: c.clientId, emailType: seasonType as any, sentAt: new Date() });
         console.log(`[Scheduler] Seasonal (${seasonType}) email sent to ${c.clientEmail}`);
@@ -915,7 +916,7 @@ export async function runScheduledLoyaltyRemarketing(): Promise<void> {
           </div>
         </div>
       `;
-      const result = await sendEmail({ to: c.clientEmail, subject: `好久不見 有任何拍攝需要嗎`, html });
+      const result = await sendEmail({ to: c.clientEmail, subject: `好久不見 有任何拍攝需要嗎`, html, purpose: "outreach" });
       if (result.success) {
         await recordLoyaltyEmail({ clientId: c.clientId, emailType: "winback" as any, sentAt: new Date() });
         console.log(`[Scheduler] Winback email sent to ${c.clientEmail}`);

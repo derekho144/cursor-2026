@@ -1,33 +1,46 @@
 /**
  * resendEmail.ts
  * Shared email helper for JD Studio.
- * Primary: Resend API (when jdstudiohk.com domain is verified)
- * Fallback: Gmail SMTP via Nodemailer (always works)
  *
- * Resend requires a verified domain to send to external addresses.
- * Until jdstudiohk.com is verified in Resend, Gmail SMTP is used as fallback.
+ * Deliverability rules:
+ * - Never send as onboarding@resend.dev (shared domain → spam).
+ * - Default From: GMAIL_USER (info.exposurehk@gmail.com) via Gmail SMTP.
+ * - Optional RESEND_FROM_EMAIL = verified @jdstudiohk.com (better inbox).
+ * - Reply-To always prefers info.exposurehk@gmail.com so clients reply to the
+ *   public mailbox even when From is the brand domain.
+ * - Cold outreach stays on Gmail so it does not poison the brand domain.
  */
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
+import { ENV } from "./_core/env";
 
 let _resend: Resend | null = null;
 
 export function getResend(): Resend {
   if (!_resend) {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = process.env.RESEND_API_KEY ?? ENV.resendApiKey;
     if (!apiKey) throw new Error("RESEND_API_KEY is not configured");
     _resend = new Resend(apiKey);
   }
   return _resend;
 }
 
+export type EmailPurpose = "transactional" | "outreach";
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
   html?: string;
   text?: string;
-  /** Optional: from address. Defaults to JD Studio HK sender. */
+  /** Optional: from address. Defaults to GMAIL_USER (info.exposurehk@gmail.com). */
   from?: string;
+  /** Reply-To (defaults to EMAIL_REPLY_TO or Gmail user). */
+  replyTo?: string;
+  /**
+   * transactional = quotes / receipts / client follow-ups.
+   * outreach = Freehunter / pitch / cold mail.
+   */
+  purpose?: EmailPurpose;
   attachments?: Array<{
     filename: string;
     content: Buffer;
@@ -43,22 +56,71 @@ export interface SendEmailOptions {
 
 export interface SendEmailResult {
   success: boolean;
-  /** Resend message ID — used to correlate with webhook events */
+  /** Resend / Gmail message ID */
   messageId?: string;
   error?: string;
   /** Which provider was used */
   provider?: "resend" | "gmail";
 }
 
+const BLOCKED_SHARED_FROM = /@resend\.dev\b/i;
+
+function gmailMailbox(): string {
+  return process.env.GMAIL_USER || ENV.gmailUser || "info.exposurehk@gmail.com";
+}
+
+function formatGmailFrom(email: string): string {
+  if (email.includes("<")) return email;
+  return `JD Studio HK <${email}>`;
+}
+
+function isGmailFrom(from: string): boolean {
+  return /@gmail\.com\b/i.test(from);
+}
+
+/** Resolve From address — never use Resend's shared onboarding domain. */
+export function resolveFromAddress(
+  opts: Pick<SendEmailOptions, "from" | "purpose">
+): string {
+  if (opts.from && !BLOCKED_SHARED_FROM.test(opts.from)) return opts.from;
+
+  const purpose = opts.purpose ?? "transactional";
+  if (purpose === "outreach") {
+    const outreach = process.env.RESEND_FROM_OUTREACH || ENV.resendFromOutreach || "";
+    if (outreach && !BLOCKED_SHARED_FROM.test(outreach)) return outreach;
+    return formatGmailFrom(gmailMailbox());
+  }
+
+  // Quotes / transactional: prefer explicit env, else Gmail mailbox
+  const configured = process.env.RESEND_FROM_EMAIL || ENV.resendFromEmail || "";
+  if (configured && !BLOCKED_SHARED_FROM.test(configured)) return configured;
+  return formatGmailFrom(gmailMailbox());
+}
+
+/**
+ * Prefer the long-standing public mailbox for replies.
+ * When From is @jdstudiohk.com (Resend), Reply-To stays Gmail unless overridden.
+ */
+export function resolveReplyTo(
+  opts: Pick<SendEmailOptions, "replyTo" | "from" | "purpose"> = {}
+): string | undefined {
+  const explicit =
+    opts.replyTo || process.env.EMAIL_REPLY_TO || ENV.emailReplyTo || "";
+  if (explicit) return explicit;
+
+  // Public contact clients already know
+  return gmailMailbox() || undefined;
+}
+
 /**
  * Send an email via Gmail SMTP (Nodemailer).
- * Used as fallback when Resend domain is not verified.
+ * Primary path while From is info.exposurehk@gmail.com.
  */
 export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailResult> {
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
+  const gmailUser = process.env.GMAIL_USER || ENV.gmailUser;
+  const gmailPass = process.env.GMAIL_APP_PASSWORD || ENV.gmailAppPassword;
   if (!gmailUser || !gmailPass) {
-    console.error('[Gmail] Missing credentials: GMAIL_USER or GMAIL_APP_PASSWORD not set');
+    console.error("[Gmail] Missing credentials: GMAIL_USER or GMAIL_APP_PASSWORD not set");
     return { success: false, error: "Gmail credentials not configured" };
   }
   console.log(`[Gmail] Preparing to send email to: ${opts.to}`);
@@ -66,14 +128,18 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
     service: "gmail",
     auth: { user: gmailUser, pass: gmailPass },
   });
+  // Gmail SMTP must send as the authenticated mailbox (or an allowed alias)
+  const gmailFrom = formatGmailFrom(gmailUser);
+  const replyTo = resolveReplyTo(opts);
   try {
     console.log(`[Gmail] Sending email with subject: ${opts.subject}`);
     const info = await transporter.sendMail({
-      from: `"JD Studio HK" <${gmailUser}>`,
+      from: gmailFrom,
       to: opts.to,
       subject: opts.subject,
       html: opts.html ?? "<p></p>",
       ...(opts.text ? { text: opts.text } : {}),
+      ...(replyTo ? { replyTo } : {}),
       ...(opts.inReplyTo ? { inReplyTo: opts.inReplyTo } : {}),
       ...(opts.references ? { references: opts.references } : {}),
       ...(opts.attachments && opts.attachments.length > 0
@@ -91,7 +157,7 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
     process.stderr.write(`${logMsg}\n`);
     return { success: true, messageId: info.messageId, provider: "gmail" };
   } catch (err: any) {
-    const errMsg = `[Gmail] ❌ Send error to ${opts.to}: ${err?.message ?? 'Unknown error'}`;
+    const errMsg = `[Gmail] ❌ Send error to ${opts.to}: ${err?.message ?? "Unknown error"}`;
     console.error(errMsg, err);
     process.stderr.write(`${errMsg}\n`);
     return { success: false, error: err?.message ?? "Gmail send failed" };
@@ -99,20 +165,26 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
 }
 
 /**
- * Send an email via Resend API.
- * Resend automatically tracks opens when HTML emails are sent.
- * The messageId returned can be stored and matched with webhook events.
- *
- * NOTE: Resend requires a verified domain. Until jdstudiohk.com is verified,
- * this will fail for external recipients and fall back to Gmail SMTP.
+ * Send email. Uses Gmail SMTP when From is @gmail.com (current production).
+ * Uses Resend only when From is a verified custom domain.
  */
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
-  const resend = getResend();
-  const gmailUser = process.env.GMAIL_USER;
+  const purpose = opts.purpose ?? "transactional";
+  const from = resolveFromAddress({ ...opts, purpose });
+  const replyTo = resolveReplyTo(opts);
 
-  // Use verified Resend domain if available, otherwise use onboarding address
-  // Once jdstudiohk.com is verified in Resend, change this to derek@jdstudiohk.com
-  const from = opts.from ?? "JD Studio HK <onboarding@resend.dev>";
+  // Gmail From (info.exposurehk@gmail.com) → always Gmail SMTP
+  if (isGmailFrom(from) || purpose === "outreach") {
+    process.stderr.write(`[Email] Using Gmail SMTP from=${from} purpose=${purpose}\n`);
+    return sendViaGmail({ ...opts, purpose, from, replyTo });
+  }
+
+  if (!process.env.RESEND_API_KEY && !ENV.resendApiKey) {
+    process.stderr.write(`[Resend] No API key — using Gmail SMTP\n`);
+    return sendViaGmail({ ...opts, purpose, from, replyTo });
+  }
+
+  const resend = getResend();
 
   try {
     const { data, error } = await resend.emails.send({
@@ -121,6 +193,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
       subject: opts.subject,
       html: opts.html ?? "<p></p>",
       ...(opts.text ? { text: opts.text } : {}),
+      ...(replyTo ? { replyTo } : {}),
       ...(opts.tags ? { tags: opts.tags } : {}),
       ...(opts.attachments && opts.attachments.length > 0
         ? {
@@ -134,22 +207,25 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
 
     if (error) {
       const errMsg = (error as any).message ?? JSON.stringify(error);
-      // Resend domain not verified — fall back to Gmail SMTP
-      if (errMsg.includes("domain is not verified") || errMsg.includes("testing emails")) {
-        process.stderr.write(`[Resend] Domain not verified, falling back to Gmail SMTP: ${errMsg}\n`);
-        return sendViaGmail(opts);
+      if (
+        errMsg.includes("domain is not verified") ||
+        errMsg.includes("testing emails") ||
+        errMsg.includes("Invalid `from`") ||
+        errMsg.includes("not verified")
+      ) {
+        process.stderr.write(`[Resend] Domain/from not ready, falling back to Gmail SMTP: ${errMsg}\n`);
+        return sendViaGmail({ ...opts, purpose, replyTo });
       }
       console.error("[Resend] Send error:", error);
       return { success: false, error: errMsg };
     }
 
-    process.stderr.write(`[Resend] Sent to ${opts.to}: ${data?.id}\n`);
+    process.stderr.write(`[Resend] Sent to ${opts.to} from=${from}: ${data?.id}\n`);
     return { success: true, messageId: data?.id, provider: "resend" };
   } catch (err: any) {
     console.error("[Resend] Unexpected error:", err);
-    // Fallback to Gmail on unexpected errors
     process.stderr.write(`[Resend] Unexpected error, falling back to Gmail SMTP: ${err?.message}\n`);
-    return sendViaGmail(opts);
+    return sendViaGmail({ ...opts, purpose, replyTo });
   }
 }
 
@@ -161,8 +237,8 @@ export function createEmailTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.GMAIL_USER!,
-      pass: process.env.GMAIL_APP_PASSWORD!,
+      user: process.env.GMAIL_USER || ENV.gmailUser,
+      pass: process.env.GMAIL_APP_PASSWORD || ENV.gmailAppPassword,
     },
   });
 }

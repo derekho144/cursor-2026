@@ -15,6 +15,19 @@ export const ENV = {
   gmailUser: process.env.GMAIL_USER ?? "",
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
+  /**
+   * Optional custom-domain From for Resend (only after domain is verified).
+   * Leave empty to send as GMAIL_USER (info.exposurehk@gmail.com) via Gmail SMTP.
+   * Never set to *@resend.dev — shared domains land in spam.
+   */
+  resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "",
+  /**
+   * Optional separate From for Freehunter / pitch outreach.
+   * Leave empty to use GMAIL_USER.
+   */
+  resendFromOutreach: process.env.RESEND_FROM_OUTREACH ?? "",
+  /** Reply-To (defaults to GMAIL_USER / info.exposurehk@gmail.com). */
+  emailReplyTo: process.env.EMAIL_REPLY_TO ?? "",
   appBaseUrl: process.env.APP_BASE_URL ?? "https://jdsys.manus.space",
   /**
    * Public HTTPS origin Buffer can fetch without auth.

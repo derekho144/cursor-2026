@@ -809,6 +809,7 @@ ${itemsText}
         subject: input.subject,
         html: htmlBody,
         text: input.body,
+        purpose: "transactional",
         attachments: [{
           filename: `${quote.quoteNumber}.pdf`,
           content: pdfBuffer,
@@ -997,6 +998,7 @@ ${itemsText}
               to: updatedQuote.clientEmail!,
               subject: `[JD Studio HK] Quotation ${updatedQuote.quoteNumber} - Signed Confirmation`,
               html: emailBody,
+              purpose: "transactional",
               tags: [{ name: "type", value: "sign_confirmation" }],
             });
             if (signResult.success) {

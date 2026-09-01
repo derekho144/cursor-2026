@@ -2181,6 +2181,7 @@ Web: https://jdstudiohk.com/`;
         subject: emailSubject,
         html: htmlBody,
         text: emailBody,
+        purpose: "transactional",
         tags: [{ name: "type", value: "inquiry_quote" }, { name: "inquiryId", value: String(input.id) }],
       });
 
