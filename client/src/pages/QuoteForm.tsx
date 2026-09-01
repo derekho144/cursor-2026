@@ -25,6 +25,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { quotePricingMode, isPricingLearningServiceType } from "@shared/quotePricingMode";
 import {
+  formatHourlyQuantityAdjustments,
+  reconcileHourlyQuoteItems,
+} from "@shared/quoteItemHours";
+import {
   DURATION_PACKAGE_OPTIONS,
   inferDurationPackageFromHours,
   type DurationPackage,
@@ -975,7 +979,7 @@ export default function QuoteForm() {
       form.team.trim() ||
       autoTeam ||
       "";
-    const items = syncTeamLineItem(form.items, crewHeadcount(crew)).map(
+    const syncedItems = syncTeamLineItem(form.items, crewHeadcount(crew)).map(
       (item) => ({
         description: item.description,
         quantity: item.quantity,
@@ -986,13 +990,33 @@ export default function QuoteForm() {
       })
     );
 
+    const { items: reconciledItems, adjustments } = reconcileHourlyQuoteItems(
+      form.serviceType,
+      syncedItems
+    );
+    if (adjustments.length > 0) {
+      toast(
+        `已按描述內時數調整項目數量：${formatHourlyQuantityAdjustments(adjustments)}`,
+        { icon: "ℹ️", duration: 6000 }
+      );
+    }
+    const items = reconciledItems;
+
+    const reconciledSubtotal = items.reduce((sum, item) => sum + item.amount, 0);
+    const reconciledDiscountAmount =
+      form.discountPercent > 0
+        ? Math.round((reconciledSubtotal * form.discountPercent) / 100 * 100) / 100
+        : discountAmount;
+    const reconciledTotal =
+      Math.round((reconciledSubtotal - reconciledDiscountAmount) * 100) / 100;
+
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
-      subtotal,
+      subtotal: reconciledSubtotal,
       discountPercent: form.discountPercent,
-      discountAmount,
-      total,
+      discountAmount: reconciledDiscountAmount,
+      total: reconciledTotal,
       depositPercent: finalDepositPercent,
       depositFixedAmount: finalDepositFixedAmount,
       depositMode: form.depositMode,

@@ -30,6 +30,7 @@ import {
   extractQuoteShootFeatures,
   formatTeamFromStructured,
 } from "../pricingLearningExtract";
+import { reconcileHourlyQuoteItems } from "../../shared/quoteItemHours";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
@@ -153,6 +154,68 @@ function enrichShootFundamentals(input: {
     crewOthers,
     team: team ? team.slice(0, 128) : null,
   };
+}
+
+type QuoteLineItemInput = {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount?: number;
+  unit?: string;
+  category?: string | null;
+};
+
+function reconcileQuoteItemsAndTotals(
+  serviceType: string,
+  items: QuoteLineItemInput[],
+  totals: {
+    subtotal: number;
+    discountPercent: number;
+    discountAmount: number;
+    total: number;
+  }
+) {
+  const normalized = items.map((it) => {
+    const quantity = Number(it.quantity) || 0;
+    const unitPrice = Number(it.unitPrice) || 0;
+    return {
+      ...it,
+      quantity,
+      unitPrice,
+      amount: Number(it.amount ?? quantity * unitPrice),
+    };
+  });
+  const { items: reconciled, adjustments } = reconcileHourlyQuoteItems(
+    serviceType,
+    normalized
+  );
+  if (adjustments.length === 0) {
+    return { items: normalized, ...totals, adjustments };
+  }
+
+  console.log(
+    "[Quotes] Hourly quantity reconcile:",
+    adjustments
+      .map(
+        (a) =>
+          `${a.description.slice(0, 48)}: qty ${a.previousQuantity}→${a.nextQuantity}`
+      )
+      .join("; ")
+  );
+
+  const subtotal =
+    Math.round(
+      reconciled.reduce(
+        (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
+        0
+      ) * 100
+    ) / 100;
+  const discountAmount =
+    totals.discountPercent > 0
+      ? Math.round((subtotal * totals.discountPercent) / 100 * 100) / 100
+      : totals.discountAmount;
+  const total = Math.round((subtotal - discountAmount) * 100) / 100;
+  return { items: reconciled, subtotal, discountAmount, total, adjustments };
 }
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
@@ -345,6 +408,13 @@ export const quotesRouter = router({
     )
     .mutation(async ({ input }) => {
       const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, durationPackage, ...quoteDataRest } = input;
+      const reconciled = reconcileQuoteItemsAndTotals(input.serviceType, items, {
+        subtotal: input.subtotal,
+        discountPercent: input.discountPercent ?? 0,
+        discountAmount: input.discountAmount ?? 0,
+        total: input.total,
+      });
+      const finalItems = reconciled.items;
       const enriched = enrichShootFundamentals({
         shootHours,
         shotCount,
@@ -355,11 +425,14 @@ export const quotesRouter = router({
         team: input.team,
         notes: input.notes,
         equipment: input.equipment,
-        items,
+        items: finalItems,
       });
       const quoteData = {
         ...quoteDataRest,
         ...enriched,
+        subtotal: reconciled.subtotal,
+        discountAmount: reconciled.discountAmount,
+        total: reconciled.total,
         ...(durationPackage !== undefined && {
           durationPackage: durationPackage ?? null,
         }),
@@ -394,7 +467,7 @@ export const quotesRouter = router({
         depositPercent: String(quoteData.depositPercent ?? 50),
         depositMode: quoteData.depositMode ?? "percent",
         depositFixedAmount: quoteData.depositFixedAmount != null ? String(quoteData.depositFixedAmount) : null,
-        items: items.map((item) => ({
+        items: finalItems.map((item) => ({
           description: item.description,
           quantity: String(item.quantity),
           unit: item.unit,
@@ -486,6 +559,27 @@ export const quotesRouter = router({
       const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
 
+      const existingForReconcile =
+        items !== undefined ? await getQuoteById(id) : null;
+      let finalItems = items;
+      let reconciledTotals: ReturnType<typeof reconcileQuoteItemsAndTotals> | null =
+        null;
+      if (items && existingForReconcile) {
+        reconciledTotals = reconcileQuoteItemsAndTotals(
+          input.serviceType ?? existingForReconcile.serviceType,
+          items,
+          {
+            subtotal: subtotal ?? Number(existingForReconcile.subtotal) || 0,
+            discountPercent:
+              discountPercent ?? Number(existingForReconcile.discountPercent) || 0,
+            discountAmount:
+              discountAmount ?? Number(existingForReconcile.discountAmount) || 0,
+            total: total ?? Number(existingForReconcile.total) || 0,
+          }
+        );
+        finalItems = reconciledTotals.items;
+      }
+
       const shouldEnrich =
         shootHours !== undefined ||
         shotCount !== undefined ||
@@ -499,8 +593,8 @@ export const quotesRouter = router({
 
       let enrichedPatch: Record<string, unknown> = {};
       if (shouldEnrich) {
-        const existing = await getQuoteById(id);
-        const existingItems = items ?? existing?.items ?? [];
+        const existing = existingForReconcile ?? (await getQuoteById(id));
+        const existingItems = finalItems ?? existing?.items ?? [];
         enrichedPatch = enrichShootFundamentals({
           shootHours:
             shootHours !== undefined
@@ -545,15 +639,25 @@ export const quotesRouter = router({
         ...(rejectedCompetitorPrice !== undefined && {
           rejectedCompetitorPrice: rejectedCompetitorPrice ?? null,
         }),
-        ...(subtotal !== undefined && { subtotal: String(subtotal) }),
+        ...(reconciledTotals
+          ? {
+              subtotal: String(reconciledTotals.subtotal),
+              discountAmount: String(reconciledTotals.discountAmount),
+              total: String(reconciledTotals.total),
+            }
+          : {
+              ...(subtotal !== undefined && { subtotal: String(subtotal) }),
+              ...(discountAmount !== undefined && {
+                discountAmount: String(discountAmount),
+              }),
+              ...(total !== undefined && { total: String(total) }),
+            }),
         ...(discountPercent !== undefined && { discountPercent: String(discountPercent) }),
-        ...(discountAmount !== undefined && { discountAmount: String(discountAmount) }),
-        ...(total !== undefined && { total: String(total) }),
         ...(depositPercent !== undefined && { depositPercent: String(depositPercent) }),
         ...(depositMode !== undefined && { depositMode }),
         ...(depositFixedAmount !== undefined && { depositFixedAmount: depositFixedAmount != null ? String(depositFixedAmount) : null }),
-        ...(items && {
-          items: items.map((item) => ({
+        ...(finalItems && {
+          items: finalItems.map((item) => ({
             description: item.description,
             quantity: String(item.quantity),
             unit: item.unit,

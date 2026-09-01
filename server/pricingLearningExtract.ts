@@ -3,10 +3,13 @@
  * Foundations for pricing learning: hours · shoot type · crew.
  */
 
+import { extractHoursFromText } from "../shared/quoteHoursText";
 import {
   shotCountBucket,
   type ShotCountBucket,
 } from "../shared/quotePricingMode";
+
+export { extractHoursFromText };
 import { resolveLearningTotal } from "../shared/quoteLineItemKind";
 
 export type HoursBucket = "unknown" | "lte_2" | "h2_4" | "h4_8" | "gt_8";
@@ -88,38 +91,6 @@ function crewBucketFromHeadcount(n: number): CrewBucket {
   if (n === 1) return "solo";
   if (n === 2) return "pair";
   return "team";
-}
-
-/** Pull numeric hours from free text (supports 中文 + English). */
-export function extractHoursFromText(text: string): number | null {
-  if (!text?.trim()) return null;
-  const t = text.toLowerCase();
-
-  // Explicit hour counts — take the max mentioned (e.g. "4小時拍攝 + 1小時後製" → 5 if both, else largest shoot block)
-  const hourMatches: number[] = [];
-  const hourRe =
-    /(\d+(?:\.\d+)?)\s*(?:小時|小时|hrs?|hours?)(?![a-zA-Z])/gi;
-  let m: RegExpExecArray | null;
-  while ((m = hourRe.exec(text)) !== null) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n) && n > 0 && n <= 72) hourMatches.push(n);
-  }
-  if (hourMatches.length > 0) {
-    return Math.round(hourMatches.reduce((a, b) => a + b, 0) * 10) / 10;
-  }
-
-  // Half / full day shorthand
-  if (/半(?:天|日)|half\s*[- ]?day/.test(t)) return 4;
-  if (/全(?:天|日)|full\s*[- ]?day/.test(t)) return 8;
-
-  // "X-hour" compound
-  const compound = text.match(/(\d+(?:\.\d+)?)\s*[- ]?(?:hr|hour)/i);
-  if (compound) {
-    const n = Number(compound[1]);
-    if (Number.isFinite(n) && n > 0 && n <= 72) return n;
-  }
-
-  return null;
 }
 
 function countRole(text: string, patterns: RegExp[]): number {
