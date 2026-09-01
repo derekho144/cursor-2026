@@ -4,6 +4,8 @@ set -euo pipefail
 input=$(cat)
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/manus-credentials.sh"
 MARKER="$ROOT/.git/manus-pending-sync"
 
 loop_count=$(printf '%s' "$input" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d.get("loop_count") or 0))' 2>/dev/null || echo "0")
@@ -13,7 +15,7 @@ if [[ "$loop_count" != "0" ]]; then
 fi
 
 # API auto-deploy configured → no paste follow-up
-if [[ -f "$ROOT/.env" ]] && grep -q '^MANUS_API_KEY=' "$ROOT/.env" 2>/dev/null; then
+if manus_credentials_available "$ROOT"; then
   rm -f "$MARKER" 2>/dev/null || true
   echo '{}'
   exit 0

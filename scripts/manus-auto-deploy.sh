@@ -12,15 +12,22 @@ if [[ -f .env ]]; then
   set +a
 fi
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/manus-credentials.sh"
+
 API_BASE="${MANUS_API_BASE:-https://api.manus.ai}"
 KEY="${MANUS_API_KEY:-}"
 TASK_ID="${MANUS_TASK_ID:-}"
 WEBSITE_ID="${MANUS_WEBSITE_ID:-}"
 
-if [[ -z "$KEY" || -z "$TASK_ID" ]]; then
-  echo "manus-auto-deploy: missing MANUS_API_KEY or MANUS_TASK_ID" >&2
+if ! manus_credentials_available "$ROOT"; then
+  echo "manus-auto-deploy: missing MANUS_API_KEY or MANUS_TASK_ID (set Cloud Agent secrets or .env)" >&2
   exit 1
 fi
+
+KEY="${MANUS_API_KEY:-}"
+TASK_ID="${MANUS_TASK_ID:-}"
+WEBSITE_ID="${MANUS_WEBSITE_ID:-}"
 
 SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 MSG=$(git log -1 --pretty=%s 2>/dev/null || echo "")
