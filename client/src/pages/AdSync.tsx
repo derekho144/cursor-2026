@@ -446,6 +446,13 @@ export default function AdSync() {
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 同步中...</>
                 : <><RefreshCw className="h-3.5 w-3.5" /> 立即同步</>}
             </button>
+            <a
+              href="/google-ads-quality"
+              className="flex items-center justify-center gap-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-80"
+              style={{ background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.35)", color: "#d4a843" }}
+            >
+              查看 Quality Score 儀表板 →
+            </a>
           </div>
         </div>
 

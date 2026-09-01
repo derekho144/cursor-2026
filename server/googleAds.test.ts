@@ -36,6 +36,12 @@ describe("Google Ads Service", () => {
   beforeEach(() => {
     vi.resetModules();
     mockFetch.mockReset();
+    process.env.GOOGLE_ADS_DEVELOPER_TOKEN = "test-dev-token";
+    process.env.GOOGLE_ADS_CLIENT_ID = "test-client-id";
+    process.env.GOOGLE_ADS_CLIENT_SECRET = "test-client-secret";
+    process.env.GOOGLE_ADS_REFRESH_TOKEN = "test-refresh-token";
+    process.env.GOOGLE_ADS_CUSTOMER_ID = "9876630892";
+    process.env.GOOGLE_ADS_AD_ACCOUNT_ID = "4839352747";
   });
 
   it("should fetch and group costs by date", async () => {
@@ -130,5 +136,78 @@ describe("Google Ads Service", () => {
     const result = await testGoogleAdsConnection();
     expect(result.success).toBe(false);
     expect(result.error).toContain("Authentication failed");
+  });
+
+  it("should build quality dashboard from keyword rows", async () => {
+    mockFetch.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("oauth2.googleapis.com")) {
+        return mockTokenResponse();
+      }
+      if (u.includes("googleAds:search")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { query?: string };
+        const query = String(body.query ?? "");
+        if (query.includes("keyword_view")) {
+          return mockAdsSearchResponse([
+            {
+              campaign: { id: "1", name: "Brand" },
+              adGroup: { name: "Core" },
+              adGroupCriterion: {
+                keyword: { text: "studio photography", matchType: "PHRASE" },
+                qualityInfo: {
+                  qualityScore: 4,
+                  searchPredictedCtr: "BELOW_AVERAGE",
+                  creativeQualityScore: "AVERAGE",
+                  postClickQualityScore: "BELOW_AVERAGE",
+                },
+              },
+              metrics: { impressions: "100", clicks: "5", costMicros: "500000000", ctr: 0.05 },
+            },
+            {
+              campaign: { id: "1", name: "Brand" },
+              adGroup: { name: "Core" },
+              adGroupCriterion: {
+                keyword: { text: "wedding photo", matchType: "EXACT" },
+                qualityInfo: {
+                  qualityScore: 8,
+                  searchPredictedCtr: "ABOVE_AVERAGE",
+                  creativeQualityScore: "ABOVE_AVERAGE",
+                  postClickQualityScore: "AVERAGE",
+                },
+              },
+              metrics: { impressions: "200", clicks: "20", costMicros: "200000000", ctr: 0.1 },
+            },
+          ]);
+        }
+        if (query.includes("FROM campaign")) {
+          return mockAdsSearchResponse([
+            {
+              campaign: { id: "1", name: "Brand" },
+              metrics: {
+                impressions: "300",
+                clicks: "25",
+                costMicros: "700000000",
+                historicalQualityScore: 6,
+                searchImpressionShare: 0.45,
+                searchRankLostImpressionShare: 0.12,
+              },
+            },
+          ]);
+        }
+        return mockAdsSearchResponse([]);
+      }
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    const { fetchGoogleAdsQualityDashboard } = await import("./googleAds");
+    const dash = await fetchGoogleAdsQualityDashboard(30);
+
+    expect(dash.overview.keywordCount).toBe(2);
+    expect(dash.overview.avgQualityScore).toBe(6);
+    expect(dash.overview.lowQsKeywordCount).toBe(1);
+    expect(dash.topKeywords[0].keyword).toBe("studio photography");
+    expect(dash.topKeywords[0].qualityScore).toBe(4);
+    expect(dash.campaigns[0].campaignName).toBe("Brand");
+    expect(dash.distribution.some((d) => d.qualityScore === 4)).toBe(true);
   });
 });

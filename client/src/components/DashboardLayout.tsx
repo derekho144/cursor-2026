@@ -60,6 +60,7 @@ import {
   Linkedin,
   UserCog,
   GraduationCap,
+  Gauge,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -82,6 +83,7 @@ const DEFAULT_MENU_ITEMS = [
   { id: "deliveries", icon: Package, label: "相片交付", path: "/deliveries" },
   { id: "ad-expenses", icon: BarChart3, label: "廣告開支", path: "/ad-expenses" },
   { id: "platform-efficiency", icon: PieChart, label: "平台效益分析", path: "/platform-efficiency" },
+  { id: "google-ads-quality", icon: Gauge, label: "Google Ads QS", path: "/google-ads-quality" },
   { id: "ad-sync", icon: RefreshCw, label: "平台同步", path: "/ad-sync" },
   { id: "reports", icon: TrendingUp, label: "月度報表", path: "/reports" },
   { id: "freehunter-board", icon: Briefcase, label: "FH 工作板", path: "/freehunter-board" },
@@ -107,6 +109,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   deliveries: Package,
   "ad-expenses": BarChart3,
   "platform-efficiency": PieChart,
+  "google-ads-quality": Gauge,
   "ad-sync": RefreshCw,
   reports: TrendingUp,
   "email-inquiries": Mail,

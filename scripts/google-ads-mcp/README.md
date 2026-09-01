@@ -73,7 +73,21 @@ chmod 600 ~/.config/jd-studio/google-ads.env
 | `setup-cursor.sh` | 本機安裝／檢查 |
 | `export-local-env.ts` | 由 production 匯出 env |
 | `weekly-compare.sh` | 對比 `baseline-2026-07-28.json` |
+| `../google-ads-credentials.sh` | 共用憑證（gads-cli / ARBA / MCP） |
+| `../weekly-qs-review.sh` | 每週 QS audit（gads-cli 或內建 TS fallback） |
+| `../google-ads-quality-report.ts` | 內建 QS 報告（唔使裝 gads-cli） |
+| `google-ads.yaml.example` | ARBA `google-ads.yaml` 範本 |
 
 ```bash
+# 共用憑證（一次設定，全部工具共用）
+mkdir -p ~/.config/jd-studio
+cp scripts/google-ads-mcp/env.example ~/.config/jd-studio/google-ads.env
+# 填好後：
+source scripts/google-ads-credentials.sh && google_ads_write_arba_yaml
+
+# 每週 QS 報告（輸出到 reports/qs-review-YYYY-MM-DD/）
+bash scripts/weekly-qs-review.sh
+
+# 對比 baseline
 bash scripts/google-ads-mcp/weekly-compare.sh
 ```
