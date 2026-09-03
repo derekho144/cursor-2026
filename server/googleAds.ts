@@ -392,7 +392,9 @@ export async function fetchKeywordQualityScores(
 }
 
 /**
- * Campaign-level quality + impression share metrics.
+ * Campaign-level performance + impression share.
+ * Note: historical_quality_score is NOT selectable on `campaign` — avg QS is
+ * rolled up from keyword_view rows in fetchGoogleAdsQualityDashboard.
  */
 export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCampaignQuality[]> {
   checkEnvVars();
@@ -405,7 +407,6 @@ export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCa
       metrics.impressions,
       metrics.clicks,
       metrics.cost_micros,
-      metrics.historical_quality_score,
       metrics.search_impression_share,
       metrics.search_rank_lost_impression_share
     FROM campaign
@@ -416,7 +417,7 @@ export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCa
   `;
 
   const rows = await executeGaqlQuery(query);
-  const byCampaign = new Map<string, GoogleAdsCampaignQuality & { qsSum: number; qsCount: number }>();
+  const byCampaign = new Map<string, GoogleAdsCampaignQuality>();
 
   for (const row of rows) {
     const id = String(row.campaign?.id ?? "");
@@ -424,8 +425,6 @@ export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCa
     const impressions = toNumber(row.metrics?.impressions);
     const clicks = toNumber(row.metrics?.clicks);
     const costHKD = microsToHkd(row.metrics?.costMicros);
-    const qs = row.metrics?.historicalQualityScore ?? row.metrics?.historical_quality_score;
-    const qsNum = qs != null && qs !== "" ? toNumber(qs) : null;
 
     const cur =
       byCampaign.get(id) ??
@@ -438,17 +437,11 @@ export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCa
         costHKD: 0,
         searchImpressionShare: null,
         searchRankLostImpressionShare: null,
-        qsSum: 0,
-        qsCount: 0,
-      } as GoogleAdsCampaignQuality & { qsSum: number; qsCount: number });
+      });
 
     cur.impressions += impressions;
     cur.clicks += clicks;
     cur.costHKD += costHKD;
-    if (qsNum && qsNum > 0) {
-      cur.qsSum += qsNum;
-      cur.qsCount += 1;
-    }
     const is = row.metrics?.searchImpressionShare ?? row.metrics?.search_impression_share;
     const rankLost =
       row.metrics?.searchRankLostImpressionShare ?? row.metrics?.search_rank_lost_impression_share;
@@ -458,12 +451,36 @@ export async function fetchCampaignQualityScores(days = 30): Promise<GoogleAdsCa
   }
 
   return Array.from(byCampaign.values())
-    .map(({ qsSum, qsCount, ...rest }) => ({
+    .map((rest) => ({
       ...rest,
       costHKD: Math.round(rest.costHKD * 100) / 100,
-      avgQualityScore: qsCount > 0 ? Math.round((qsSum / qsCount) * 10) / 10 : null,
     }))
     .sort((a, b) => b.costHKD - a.costHKD);
+}
+
+/** Spend-weighted average QS per campaign from keyword rows. */
+export function attachCampaignAvgQualityScores(
+  campaigns: GoogleAdsCampaignQuality[],
+  keywords: GoogleAdsKeywordQuality[]
+): GoogleAdsCampaignQuality[] {
+  const qsByCampaign = new Map<string, { weighted: number; weight: number }>();
+  for (const kw of keywords) {
+    if (kw.qualityScore == null || kw.qualityScore <= 0) continue;
+    const w = Math.max(kw.costHKD, 0.01);
+    const cur = qsByCampaign.get(kw.campaignId) ?? { weighted: 0, weight: 0 };
+    cur.weighted += kw.qualityScore * w;
+    cur.weight += w;
+    qsByCampaign.set(kw.campaignId, cur);
+  }
+
+  return campaigns.map((c) => {
+    const agg = qsByCampaign.get(c.campaignId);
+    return {
+      ...c,
+      avgQualityScore:
+        agg && agg.weight > 0 ? Math.round((agg.weighted / agg.weight) * 10) / 10 : null,
+    };
+  });
 }
 
 /**
@@ -505,12 +522,13 @@ export async function fetchGoogleAdsRecommendations(limit = 20): Promise<GoogleA
  * Full QS dashboard payload for admin UI and weekly reports.
  */
 export async function fetchGoogleAdsQualityDashboard(days = 30): Promise<GoogleAdsQualityDashboard> {
-  const [topKeywords, campaigns, recommendations] = await Promise.all([
+  const [topKeywords, campaignsRaw, recommendations] = await Promise.all([
     fetchKeywordQualityScores(days, 150),
-    fetchCampaignQualityScores(days),
+    fetchCampaignQualityScores(days).catch(() => [] as GoogleAdsCampaignQuality[]),
     fetchGoogleAdsRecommendations(15).catch(() => [] as GoogleAdsRecommendationSummary[]),
   ]);
 
+  const campaigns = attachCampaignAvgQualityScores(campaignsRaw, topKeywords);
   const overview = computeOverview(topKeywords);
   const distribution = computeDistribution(topKeywords);
 

@@ -187,7 +187,6 @@ describe("Google Ads Service", () => {
                 impressions: "300",
                 clicks: "25",
                 costMicros: "700000000",
-                historicalQualityScore: 6,
                 searchImpressionShare: 0.45,
                 searchRankLostImpressionShare: 0.12,
               },
@@ -208,6 +207,59 @@ describe("Google Ads Service", () => {
     expect(dash.topKeywords[0].keyword).toBe("studio photography");
     expect(dash.topKeywords[0].qualityScore).toBe(4);
     expect(dash.campaigns[0].campaignName).toBe("Brand");
+    // spend-weighted: (4*500 + 8*200) / 700 ≈ 5.1
+    expect(dash.campaigns[0].avgQualityScore).toBeCloseTo(5.1, 1);
     expect(dash.distribution.some((d) => d.qualityScore === 4)).toBe(true);
+  });
+
+  it("should roll up campaign avg QS from keywords", async () => {
+    const { attachCampaignAvgQualityScores } = await import("./googleAds");
+    const campaigns = attachCampaignAvgQualityScores(
+      [
+        {
+          campaignId: "1",
+          campaignName: "A",
+          avgQualityScore: null,
+          impressions: 10,
+          clicks: 1,
+          costHKD: 100,
+          searchImpressionShare: null,
+          searchRankLostImpressionShare: null,
+        },
+      ],
+      [
+        {
+          campaignId: "1",
+          campaignName: "A",
+          adGroupName: "g",
+          keyword: "x",
+          matchType: "EXACT",
+          qualityScore: 3,
+          expectedCtr: null,
+          adRelevance: null,
+          landingPageExperience: null,
+          impressions: 10,
+          clicks: 1,
+          costHKD: 100,
+          ctr: 10,
+        },
+        {
+          campaignId: "1",
+          campaignName: "A",
+          adGroupName: "g",
+          keyword: "y",
+          matchType: "EXACT",
+          qualityScore: 9,
+          expectedCtr: null,
+          adRelevance: null,
+          landingPageExperience: null,
+          impressions: 10,
+          clicks: 1,
+          costHKD: 100,
+          ctr: 10,
+        },
+      ]
+    );
+    expect(campaigns[0].avgQualityScore).toBe(6);
   });
 });
