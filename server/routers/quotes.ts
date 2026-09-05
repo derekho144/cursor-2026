@@ -31,6 +31,7 @@ import {
   formatTeamFromStructured,
 } from "../pricingLearningExtract";
 import { reconcileHourlyQuoteItems } from "../../shared/quoteItemHours";
+import { computeQuoteDiscountAmount } from "../../shared/quoteLineItemKind";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
@@ -189,33 +190,45 @@ function reconcileQuoteItemsAndTotals(
     serviceType,
     normalized
   );
-  if (adjustments.length === 0) {
-    return { items: normalized, ...totals, adjustments };
-  }
+  const finalItems = adjustments.length === 0 ? normalized : reconciled;
 
-  console.log(
-    "[Quotes] Hourly quantity reconcile:",
-    adjustments
-      .map(
-        (a) =>
-          `${a.description.slice(0, 48)}: qty ${a.previousQuantity}→${a.nextQuantity}`
-      )
-      .join("; ")
-  );
+  if (adjustments.length > 0) {
+    console.log(
+      "[Quotes] Hourly quantity reconcile:",
+      adjustments
+        .map(
+          (a) =>
+            `${a.description.slice(0, 48)}: qty ${a.previousQuantity}→${a.nextQuantity}`
+        )
+        .join("; ")
+    );
+  }
 
   const subtotal =
     Math.round(
-      reconciled.reduce(
+      finalItems.reduce(
         (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
         0
       ) * 100
     ) / 100;
-  const discountAmount =
-    totals.discountPercent > 0
-      ? Math.round((subtotal * totals.discountPercent) / 100 * 100) / 100
-      : totals.discountAmount;
-  const total = Math.round((subtotal - discountAmount) * 100) / 100;
-  return { items: reconciled, subtotal, discountAmount, total, adjustments };
+
+  // Always recompute % discount from discountable lines (excludes transport / expedited)
+  if (totals.discountPercent > 0 || adjustments.length > 0) {
+    const discountAmount =
+      totals.discountPercent > 0
+        ? computeQuoteDiscountAmount(finalItems, totals.discountPercent)
+        : totals.discountAmount;
+    const total = Math.round((subtotal - discountAmount) * 100) / 100;
+    return {
+      items: finalItems,
+      subtotal,
+      discountAmount,
+      total,
+      adjustments,
+    };
+  }
+
+  return { items: finalItems, ...totals, adjustments };
 }
 
 // ─── Background PDF Pre-generation ───────────────────────────────────
