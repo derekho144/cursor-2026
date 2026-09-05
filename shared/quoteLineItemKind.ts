@@ -97,7 +97,7 @@ export function classifyQuoteLineItem(
   }
 
   if (
-    /transportation|transport fee|\btransport\b|車費|交通費|\btravel\b/.test(d)
+    /transportation|transport fee|\btransport\b|車費|交通|\btravel\b/.test(d)
   ) {
     return "transport";
   }
@@ -222,6 +222,43 @@ export function splitQuoteLineItemMoney(
     hasPhotographerCrewLines,
     hasNonCrewBillables,
   };
+}
+
+/**
+ * Lines that must not receive % discount: transport / 交通費, and expedited / 加急.
+ * Matches explicit category=transport and legacy description keywords.
+ */
+export function isNonDiscountableQuoteLine(
+  item: QuoteLineAmountInput
+): boolean {
+  if (resolveQuoteLineItemKind(item) === "transport") return true;
+  const d = normalizeLineDescription(item.description);
+  if (!d) return false;
+  return /expedited|加急|urgent\s*fee|rush\s*fee|express\s*fee/.test(d);
+}
+
+/** Subtotal used for discountPercent — excludes transport and expedited fees. */
+export function computeDiscountableSubtotal(
+  items: QuoteLineAmountInput[] | null | undefined
+): number {
+  const list = Array.isArray(items) ? items : [];
+  let sum = 0;
+  for (const item of list) {
+    if (isNonDiscountableQuoteLine(item)) continue;
+    sum += lineAmount(item);
+  }
+  return Math.round(sum * 100) / 100;
+}
+
+/** discountableSubtotal × percent / 100 (2 d.p.). */
+export function computeQuoteDiscountAmount(
+  items: QuoteLineAmountInput[] | null | undefined,
+  discountPercent: number | null | undefined
+): number {
+  const pct = Number(discountPercent) || 0;
+  if (pct <= 0) return 0;
+  const base = computeDiscountableSubtotal(items);
+  return Math.round((base * pct) / 100 * 100) / 100;
 }
 
 /** Prefer photographer-crew subtotal for learning; fall back to quote total. */
