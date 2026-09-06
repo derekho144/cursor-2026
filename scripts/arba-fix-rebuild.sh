@@ -39,16 +39,17 @@ rm -rf "$WORKDIR"
 git clone --depth 1 https://github.com/google-marketing-solutions/arba.git "$WORKDIR"
 cd "$WORKDIR"
 
-# Patch Dockerfile: drop broken in-tree garf + use bash entrypoint
+# Patch Dockerfile: drop broken in-tree garf + use bash entrypoint.
+# Avoid COPY --from=ghcr.io/astral-sh/uv (Cloud Build often hits ghcr EOF).
 cat > Dockerfile <<'DOCKER'
 FROM ghcr.io/google/garf:latest
-COPY --from=ghcr.io/astral-sh/uv:0.5.18 /uv /bin/
-ENV UV_SYSTEM_PYTHON=1
 WORKDIR /app
 # Remove broken in-tree package that shadows site-packages
 RUN rm -rf /app/garf /app/libs 2>/dev/null || true
 ADD requirements.txt .
-RUN uv pip install -r requirements.txt --require-hashes --no-deps \
+# Install deps with pip (no second ghcr image pull)
+RUN python -m pip install --upgrade pip \
+  && python -m pip install --no-cache-dir -r requirements.txt --require-hashes --no-deps \
   && python -c "import garf.core, garf.executors; print('garf ok', getattr(garf.core, '__version__', '?'))"
 ADD queries/ queries/
 ADD scripts/ scripts/
