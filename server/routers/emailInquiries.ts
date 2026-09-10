@@ -50,6 +50,10 @@ import {
   applyAttachmentUnderstandingToParsed,
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
+import {
+  backgroundRemovalBillingRulesText,
+  multiScopeBillingRulesText,
+} from "../../shared/backgroundRemovalPricing";
 
 /** After AI parse: annotate attachment status (none/used/missing) and gate confidence. */
 function enrichParsedWithAttachmentGate(
@@ -854,7 +858,8 @@ corporate_event photography
   - Main item: "Event Photography" - billed PER HOUR. Extract event duration from email. Default: 5 hours (half-day) only if duration missing — then quantitySource must be "assumed".
   - Corporate/commercial events: HKD 1,000/hr. Personal events (birthday, wedding, etc.): HKD 700/hr.
   - Half-day ≈ 4–5 hours; full-day ≈ 6–10 hours. Set durationPackage accordingly.
-  - Retouching is INCLUDED. Add "Transportation Fee" HKD 320 (fixed, always include).
+  - Basic colour/exposure retouching for event coverage is INCLUDED. However, if the client ALSO requests artwork/product close-ups (作品特寫) and/or 去背 / background removal on a piece count, those are SEPARATE billable packages — see MULTI-SCOPE and background_removal rules below. Do NOT treat 約 N 件去背 as free event retouching.
+  - Add "Transportation Fee" HKD 320 (fixed, always include).
   - If videography also requested, add "Event Videography" per hour HKD 1,500-2,500 + "Video Editing" flat HKD 2,000-4,000.
   - Example (corporate, 4 hrs): 4 x HKD 1,000 + transport HKD 320 = HKD 4,320.
   - Example (personal, 3 hrs): 3 x HKD 700 + transport HKD 320 = HKD 2,420.
@@ -889,14 +894,21 @@ menu_design (photography + design)
 
 artwork photography
   - Main item: "Artwork Photography" - billed PER PIECE. Extract number of artworks. Default: 10 pieces.
-  - unitPrice per piece: HKD 400-700. Add: "Color Calibration & Retouching" per image HKD 200-350. Add: "Studio Setup" flat HKD 800-1,500.
+  - Small jobs (<50 pieces): unitPrice per piece HKD 400-700 + optional "Color Calibration & Retouching" per image HKD 200-350 + "Studio Setup" flat HKD 800-1,500.
+  - Large exhibition / catalogue documentation (50+ pieces, e.g. 約 200 件作品特寫): use PRODUCT white-background tiered rates for the shoot line (volume discount), set shotCount to the piece count, quantitySource=explicit when stated.
+  - If 去背 / background removal is requested on those pieces, ALWAYS add "Background Removal (Cutout)" as an EXTRA per-image line (see background_removal rules) — do not fold cutout into the shoot unit price silently.
+
+${backgroundRemovalBillingRulesText()}
+
+${multiScopeBillingRulesText()}
 
 360_photography
   - Main item: "360 Photography" - billed PER LOCATION/ROOM. Extract number of locations. Default: 5 locations.
   - unitPrice per location: HKD 800-1,500. Add: "Virtual Tour Stitching & Hosting" flat HKD 1,500-3,000.
 
 RETOUCHING SUMMARY (CRITICAL):
-  - product, food_beverage, jewelry, corporate_event: retouching INCLUDED in per-image/per-hour price. Do NOT add separate retouching line.
+  - product, food_beverage, jewelry: standard retouching INCLUDED in per-image price. Do NOT add a generic retouching line — BUT still add "Background Removal (Cutout)" when 去背 is explicitly requested as a distinct deliverable.
+  - corporate_event: basic event-coverage colour/exposure INCLUDED. Explicit 去背 / artwork cutout / large piece-count product shots are NOT included — bill separately.
   - interior, portrait: retouching is SEPARATE at HKD 150/image. ALWAYS add as a line item.
 
 IMPORTANT RULES FOR ALL SERVICE TYPES:
@@ -909,6 +921,7 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
 9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
+10. If PDF/body mentions both event coverage AND a piece count with 去背/作品特寫, you MUST include cutout and artwork/product lines — never event-hours-only.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
