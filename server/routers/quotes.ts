@@ -32,10 +32,20 @@ import {
 } from "../pricingLearningExtract";
 import { reconcileHourlyQuoteItems } from "../../shared/quoteItemHours";
 import {
+  isQuoteLineItemCategory,
+  type QuoteLineItemCategory,
+} from "../../shared/quoteLineItemKind";
+import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
 } from "../airwallexPayment";
+
+function normalizeQuoteItemCategory(
+  raw: string | null | undefined
+): QuoteLineItemCategory | null {
+  return isQuoteLineItemCategory(raw) ? raw : null;
+}
 
 /**
  * Prefer print-page HTML→PDF (same layout as 「下載 PDF」/print/quote).
@@ -162,7 +172,7 @@ type QuoteLineItemInput = {
   unitPrice: number;
   amount?: number;
   unit?: string;
-  category?: string | null;
+  category?: QuoteLineItemCategory | null;
 };
 
 function reconcileQuoteItemsAndTotals(
@@ -473,7 +483,7 @@ export const quotesRouter = router({
           unit: item.unit,
           unitPrice: String(item.unitPrice),
           amount: String(item.amount),
-          category: item.category ?? null,
+          category: normalizeQuoteItemCategory(item.category),
         })),
       });
       // Fire-and-forget: pre-generate PDF in background
@@ -569,12 +579,14 @@ export const quotesRouter = router({
           input.serviceType ?? existingForReconcile.serviceType,
           items,
           {
-            subtotal: subtotal ?? Number(existingForReconcile.subtotal) || 0,
+            subtotal: (subtotal ?? Number(existingForReconcile.subtotal)) || 0,
             discountPercent:
-              discountPercent ?? Number(existingForReconcile.discountPercent) || 0,
+              (discountPercent ?? Number(existingForReconcile.discountPercent)) ||
+              0,
             discountAmount:
-              discountAmount ?? Number(existingForReconcile.discountAmount) || 0,
-            total: total ?? Number(existingForReconcile.total) || 0,
+              (discountAmount ?? Number(existingForReconcile.discountAmount)) ||
+              0,
+            total: (total ?? Number(existingForReconcile.total)) || 0,
           }
         );
         finalItems = reconciledTotals.items;
@@ -663,7 +675,7 @@ export const quotesRouter = router({
             unit: item.unit,
             unitPrice: String(item.unitPrice),
             amount: String(item.amount),
-            category: item.category ?? null,
+            category: normalizeQuoteItemCategory(item.category),
           })),
         }),
         // Auto-invalidate cached PDF when content changes
