@@ -51,6 +51,8 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path="/" component={Dashboard} />
+        {/* Alias: bookmarks / shared links to /login should show the login gate, not 404 */}
+        <Route path="/login" component={Dashboard} />
         <Route path="/quotes" component={QuotesList} />
         <Route path="/quotes/accepted-merchants" component={AcceptedMerchantsBank} />
         <Route path="/quotes/new" component={QuoteForm} />

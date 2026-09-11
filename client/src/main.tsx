@@ -5,7 +5,6 @@ import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/clien
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -42,9 +41,11 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  // Use window.top to escape iframe context (e.g. Manus preview panel)
+  // Stay on our app login gate (password + optional Manus). Do NOT bounce
+  // employees to Manus OAuth — that looks like "can't log in".
   const target = window.top ?? window;
-  target.location.href = getLoginUrl();
+  if (target.location.pathname === "/login") return;
+  target.location.href = "/login";
 };
 
 const isExpectedAuthError = (error: unknown) => {
