@@ -223,6 +223,7 @@ function SortableNavItem({
 
 function LoginScreen() {
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const loginMutation = trpc.auth.login.useMutation({
@@ -230,6 +231,10 @@ function LoginScreen() {
       utils.auth.me.setData(undefined, data as any);
       await utils.auth.me.invalidate();
       toast.success("登入成功");
+      // /login is an alias of the gate — land on dashboard after success
+      if (window.location.pathname === "/login") {
+        setLocation("/");
+      }
     },
     onError: (e) => toast.error(e.message || "登入失敗"),
   });
@@ -367,10 +372,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user, logout } = useAuth();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
     safeLocalStorageSet(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!loading && user && location === "/login") {
+      setLocation("/");
+    }
+  }, [loading, user, location, setLocation]);
 
   if (loading) return <DashboardLayoutSkeleton />;
 

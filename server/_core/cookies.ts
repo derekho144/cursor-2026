@@ -39,12 +39,15 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
-  // Browsers reject SameSite=None without Secure. Use lax on HTTP (local dev).
+  // Prefer SameSite=Lax for first-party session cookies.
+  // Lax still works for OAuth top-level redirects back to /api/oauth/callback,
+  // and avoids browsers dropping SameSite=None when Secure is mis-detected
+  // behind a proxy (login "succeeds" then immediately looks logged out).
   const secure = isSecureRequest(req);
   return {
     httpOnly: true,
     path: "/",
-    sameSite: secure ? "none" : "lax",
+    sameSite: "lax",
     secure,
   };
 }
