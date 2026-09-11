@@ -1,21 +1,27 @@
 import { execSync } from "child_process";
 
-// Skip browser downloads in production (Dockerfile sets these env vars)
-// or when explicitly told to skip
+// Default: skip browser downloads (production, Manus/CI install, most local installs).
+// Opt in explicitly for local PDF/browser work:
+//   INSTALL_BROWSER_BINARIES=1 pnpm install
+const wantBrowsers = process.env.INSTALL_BROWSER_BINARIES === "1";
+
 const skipPlaywright =
+  !wantBrowsers ||
   process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === "1" ||
   process.env.NODE_ENV === "production";
 
 const skipPuppeteer =
+  !wantBrowsers ||
   process.env.PUPPETEER_SKIP_DOWNLOAD === "true" ||
   process.env.NODE_ENV === "production";
 
 if (skipPlaywright && skipPuppeteer) {
-  console.log("[postinstall] Skipping browser downloads (production/CI mode)");
+  console.log(
+    "[postinstall] Skipping browser downloads (set INSTALL_BROWSER_BINARIES=1 to opt in)"
+  );
   process.exit(0);
 }
 
-// Development: install browsers locally
 try {
   if (!skipPuppeteer) {
     execSync("node node_modules/puppeteer/install.mjs", {
