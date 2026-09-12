@@ -51,7 +51,7 @@ import {
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
 
-/** After AI parse: annotate attachment status (none/used/missing) and gate confidence. */
+/** After AI parse: annotate attachment status (none/used/missing/unsupported) and gate confidence. */
 function enrichParsedWithAttachmentGate(
   aiResult: Record<string, unknown> | null | undefined,
   opts: {
@@ -64,23 +64,39 @@ function enrichParsedWithAttachmentGate(
       error?: string;
       source?: string;
     }> | null;
+    skippedAttachments?: Array<{
+      filename: string;
+      contentType?: string;
+      reason?: string;
+    }> | null;
   }
 ): Record<string, unknown> | null {
   if (!aiResult) return null;
   const attachmentFileCount = Array.isArray(opts.attachmentMeta)
     ? opts.attachmentMeta.length
     : 0;
+  const skipped = Array.isArray(opts.skippedAttachments)
+    ? opts.skippedAttachments
+    : [];
+  const unsupportedFiles = skipped.map((s) => s.filename).filter(Boolean);
   const understanding = resolveAttachmentUnderstanding({
     subject: opts.subject,
     bodyText: opts.bodyText,
     attachmentText: opts.attachmentText,
     attachmentFileCount,
+    unsupportedFiles,
+    unsupportedFileCount: unsupportedFiles.length,
   });
   let enriched = applyAttachmentUnderstandingToParsed(aiResult, understanding);
-  if (attachmentFileCount > 0) {
+  if (attachmentFileCount > 0 || unsupportedFiles.length > 0) {
     enriched = {
       ...enriched,
-      pdfAttachments: opts.attachmentMeta,
+      pdfAttachments: opts.attachmentMeta ?? [],
+      skippedAttachments: skipped,
+      unsupportedAttachments:
+        understanding.unsupportedFiles.length > 0
+          ? understanding.unsupportedFiles
+          : unsupportedFiles,
       pdfTextUsed: understanding.status === "used",
     };
     if (understanding.status === "used") {
@@ -88,9 +104,14 @@ function enrichParsedWithAttachmentGate(
       const ocrUsed = (opts.attachmentMeta ?? []).some((m) =>
         String(m.source ?? "").includes("ocr")
       );
+      const wordUsed = (opts.attachmentMeta ?? []).some(
+        (m) => String(m.source ?? "") === "docx"
+      );
       const note = ocrUsed
         ? `已 OCR 讀取附件：${names}`
-        : `已讀取附件：${names}`;
+        : wordUsed
+          ? `已讀取 Word 附件：${names}`
+          : `已讀取附件：${names}`;
       const notes = String(enriched.notes ?? "");
       enriched.notes = notes.includes(note)
         ? notes
@@ -1233,6 +1254,12 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
     truncated: boolean;
     error?: string;
     chars: number;
+    source?: string;
+  }>;
+  skippedAttachments: Array<{
+    filename: string;
+    contentType: string;
+    reason: string;
   }>;
 }>> {
   const gmailUser = process.env.GMAIL_USER;
@@ -1268,6 +1295,12 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
       truncated: boolean;
       error?: string;
       chars: number;
+      source?: string;
+    }>;
+    skippedAttachments: Array<{
+      filename: string;
+      contentType: string;
+      reason: string;
     }>;
   }> = [];
 
@@ -1303,11 +1336,17 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
               content: Buffer.isBuffer(a.content)
                 ? a.content
                 : Buffer.from(a.content ?? []),
+              related: a.related,
+              contentDisposition: a.contentDisposition,
+              cid: a.cid,
             }))
           );
-          if (attachmentExtract.attachmentCount > 0) {
+          if (
+            attachmentExtract.attachmentCount > 0 ||
+            attachmentExtract.skippedAttachments.length > 0
+          ) {
             console.log(
-              `[EmailInquiry] Attachments: pdf=${attachmentExtract.pdfCount} img=${attachmentExtract.imageCount} on "${subject.slice(0, 40)}" chars=${attachmentExtract.combinedText.length}`
+              `[EmailInquiry] Attachments: pdf=${attachmentExtract.pdfCount} img=${attachmentExtract.imageCount} word=${attachmentExtract.wordCount} skipped=${attachmentExtract.skippedAttachments.length} on "${subject.slice(0, 40)}" chars=${attachmentExtract.combinedText.length}`
             );
           }
 
@@ -1328,6 +1367,7 @@ async function fetchRecentEmailsViaIMAP(maxResults: number): Promise<Array<{
               chars: t.text.length,
               source: t.source,
             })),
+            skippedAttachments: attachmentExtract.skippedAttachments,
           });
         } catch (e) {
           console.error("[EmailInquiry] Failed to parse message:", e);
@@ -1505,7 +1545,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
   let skipped = 0;
 
   for (const email of emails) {
-    const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta } = email;
+    const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta, skippedAttachments } = email;
     const messageId = email.messageId.slice(0, 500);
 
     const existing = await getEmailInquiryByMessageId(messageId);
@@ -1563,6 +1603,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
       bodyText,
       attachmentText,
       attachmentMeta,
+      skippedAttachments,
     }) as typeof aiResult;
 
     // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
@@ -1776,7 +1817,7 @@ export const emailInquiriesRouter = router({
       let skipped = 0;
 
       for (const email of emails) {
-        const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta } = email;
+        const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta, skippedAttachments } = email;
         // Truncate messageId to 500 chars to fit DB column
         const messageId = email.messageId.slice(0, 500);
 
@@ -1829,6 +1870,7 @@ export const emailInquiriesRouter = router({
           bodyText,
           attachmentText,
           attachmentMeta,
+          skippedAttachments,
         }) as typeof aiResult;
 
         // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結

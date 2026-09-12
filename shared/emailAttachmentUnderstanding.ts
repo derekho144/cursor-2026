@@ -3,30 +3,37 @@
  *
  * Not every RFQ has attachments — that is normal.
  * Only block auto-draft when requirements appear to live in an attachment
- * we could not read (referenced in body, or PDF with no extractable text).
+ * we could not read (referenced in body, unsupported format, or empty extract).
  */
 
 export type AttachmentUnderstandingStatus =
   | "none" // no attachment needed / none present — OK
-  | "used" // PDF text available for AI
-  | "missing"; // requirements likely in unread attachment
+  | "used" // attachment text available for AI
+  | "missing" // requirements likely in unread attachment
+  | "unsupported"; // files present but format not extractable
 
 export type AttachmentUnderstanding = {
   status: AttachmentUnderstandingStatus;
   /** Body/subject points at an attachment for details */
   mentionsAttachment: boolean;
-  /** Non-empty extracted PDF text was available */
+  /** Non-empty extracted attachment text was available */
   hasExtractedText: boolean;
-  /** PDF files were present on the message (even if empty text) */
+  /** Readable attachments were present (PDF/image/Word), even if empty text */
   hasPdfFiles: boolean;
+  /** Non-inline files we detected but could not extract (e.g. .doc, xlsx, zip) */
+  hasUnsupportedFiles: boolean;
+  unsupportedFiles: string[];
   blockers: string[];
   missingFields: string[];
   note: string | null;
 };
 
-/** Traditional / English cues that details are in an attachment. */
+/**
+ * Traditional / English cues that details are in an attachment.
+ * Intentionally broad — false "none" is worse than a soft missing flag.
+ */
 const ATTACHMENT_MENTION_RE =
-  /詳情請見附件|詳見附件|請見附件|見附件|附件詳情|如附件|如附|請參閱附件|參考附件|附件為準|see\s+attach(?:ed|ment)|please\s+find\s+attach(?:ed|ment)|find\s+the\s+attached|attached\s+(?:file|document|pdf|brief|word)|attachment\s+(?:for|with)\s+(?:detail|requirement)|in\s+the\s+attached|as\s+per\s+(?:the\s+)?attach(?:ed|ment)|enclosed\s+(?:pdf|file|document)/i;
+  /詳情請見附件|詳見附件|請見附件|見附件|附件詳情|如附件|如附|請參閱附件|請查收附件|參考附件|附件為準|附上|附檔|附件內|見附|請見附|PFA\b|FYI\s+attach|see\s+(?:the\s+)?attach(?:ed|ment)|please\s+(?:see|find|check)\s+(?:the\s+)?attach(?:ed|ment)|i\s+have\s+attached|i'?ve\s+attached|we\s+(?:have\s+)?attached|find\s+(?:the\s+)?attached|attached\s+(?:is|are|file|document|pdf|brief|word|here|below)|attachment\s+(?:for|with|below)\s*(?:detail|requirement)?|in\s+the\s+attached|as\s+per\s+(?:the\s+)?attach(?:ed|ment)|enclosed\s+(?:pdf|file|document|please)|please\s+find\s+attach(?:ed|ment)/i;
 
 export function mentionsRequirementsAttachment(text: string): boolean {
   return ATTACHMENT_MENTION_RE.test(text ?? "");
@@ -34,25 +41,34 @@ export function mentionsRequirementsAttachment(text: string): boolean {
 
 /**
  * Resolve whether attachment content is required for understanding.
- * - No mention + no PDF → none (normal plain-body RFQ)
  * - Extracted text present → used
- * - Mentions attachment OR has PDF files, but no usable text → missing
+ * - Unsupported files present (and no text) → unsupported
+ * - Mentions attachment OR has readable files, but no usable text → missing
+ * - Else → none (normal plain-body RFQ)
  */
 export function resolveAttachmentUnderstanding(input: {
   subject?: string | null;
   bodyText?: string | null;
   attachmentText?: string | null;
-  /** Count of PDF/image attachments we attempted to read */
+  /** Count of PDF/image/Word attachments we attempted to read */
   pdfFileCount?: number | null;
   /** Alias for pdfFileCount — total readable attachments */
   attachmentFileCount?: number | null;
+  /** Non-extractable non-inline attachment filenames */
+  unsupportedFiles?: string[] | null;
+  unsupportedFileCount?: number | null;
 }): AttachmentUnderstanding {
   const blob = `${input.subject ?? ""}\n${input.bodyText ?? ""}`;
   const mentionsAttachment = mentionsRequirementsAttachment(blob);
   const hasExtractedText = Boolean((input.attachmentText ?? "").trim());
-  const fileCount =
-    input.attachmentFileCount ?? input.pdfFileCount ?? 0;
+  const fileCount = input.attachmentFileCount ?? input.pdfFileCount ?? 0;
   const hasPdfFiles = fileCount > 0;
+  const unsupportedFiles = Array.isArray(input.unsupportedFiles)
+    ? input.unsupportedFiles.map(String).filter(Boolean)
+    : [];
+  const unsupportedCount =
+    input.unsupportedFileCount ?? unsupportedFiles.length;
+  const hasUnsupportedFiles = unsupportedCount > 0;
 
   if (hasExtractedText) {
     return {
@@ -60,9 +76,32 @@ export function resolveAttachmentUnderstanding(input: {
       mentionsAttachment,
       hasExtractedText: true,
       hasPdfFiles,
+      hasUnsupportedFiles,
+      unsupportedFiles,
       blockers: [],
       missingFields: [],
       note: null,
+    };
+  }
+
+  if (hasUnsupportedFiles) {
+    const names = unsupportedFiles.slice(0, 5).join("、") || "未知檔名";
+    const blockers = [
+      `有附件但格式暫不支援抽取（${names}）。請人手打開附件，或改寄 PDF／Word(.docx)／圖片。`,
+    ];
+    if (mentionsAttachment) {
+      blockers.push("正文亦指明詳見附件，但系統未能讀取附件文字。");
+    }
+    return {
+      status: "unsupported",
+      mentionsAttachment,
+      hasExtractedText: false,
+      hasPdfFiles,
+      hasUnsupportedFiles: true,
+      unsupportedFiles,
+      blockers,
+      missingFields: ["attachmentText"],
+      note: blockers[0] ?? null,
     };
   }
 
@@ -70,7 +109,7 @@ export function resolveAttachmentUnderstanding(input: {
     const blockers: string[] = [];
     if (mentionsAttachment && !hasPdfFiles) {
       blockers.push(
-        "正文指明詳見附件，但未讀到可用附件文字（可能係 Word／未夾上／不支援格式）"
+        "正文指明詳見附件，但未讀到可用附件文字（可能未夾上／連結雲端檔／不支援格式）"
       );
     } else if (hasPdfFiles) {
       blockers.push(
@@ -84,6 +123,8 @@ export function resolveAttachmentUnderstanding(input: {
       mentionsAttachment,
       hasExtractedText: false,
       hasPdfFiles,
+      hasUnsupportedFiles: false,
+      unsupportedFiles: [],
       blockers,
       missingFields: ["attachmentText"],
       note: blockers[0] ?? null,
@@ -95,6 +136,8 @@ export function resolveAttachmentUnderstanding(input: {
     mentionsAttachment: false,
     hasExtractedText: false,
     hasPdfFiles: false,
+    hasUnsupportedFiles: false,
+    unsupportedFiles: [],
     blockers: [],
     missingFields: [],
     note: null,
@@ -102,8 +145,8 @@ export function resolveAttachmentUnderstanding(input: {
 }
 
 /**
- * Apply attachment gate onto an AI parse object (mutates a shallow copy).
- * Downgrades confidence when requirements attachment is missing.
+ * Apply attachment gate onto an AI parse object (shallow copy).
+ * Downgrades confidence when requirements attachment is missing/unsupported.
  */
 export function applyAttachmentUnderstandingToParsed<
   T extends {
@@ -121,6 +164,7 @@ export function applyAttachmentUnderstandingToParsed<
   missingFields: string[];
   assumptions: string[];
   confidence: string;
+  unsupportedAttachments?: string[];
 } {
   const missingFields = Array.isArray(parsed.missingFields)
     ? [...parsed.missingFields.map(String)]
@@ -131,7 +175,10 @@ export function applyAttachmentUnderstandingToParsed<
   let confidence = String(parsed.confidence ?? "low");
   let notes = parsed.notes ?? "";
 
-  if (understanding.status === "missing") {
+  if (
+    understanding.status === "missing" ||
+    understanding.status === "unsupported"
+  ) {
     for (const f of understanding.missingFields) {
       if (!missingFields.includes(f)) missingFields.push(f);
     }
@@ -139,7 +186,10 @@ export function applyAttachmentUnderstandingToParsed<
       assumptions.push(understanding.note);
     }
     if (confidence === "high") confidence = "medium";
-    const tag = "【附件未讀到】需求可能喺附件；暫勿假設時數／張數開自動草稿。";
+    const tag =
+      understanding.status === "unsupported"
+        ? "【附件格式不支援】有檔但未能抽取文字；暫勿假設時數／張數開自動草稿。"
+        : "【附件未讀到】需求可能喺附件；暫勿假設時數／張數開自動草稿。";
     notes = notes?.trim() ? `${notes.trim()}（${tag}）` : tag;
   }
 
@@ -150,5 +200,8 @@ export function applyAttachmentUnderstandingToParsed<
     assumptions,
     notes,
     attachmentStatus: understanding.status,
+    ...(understanding.unsupportedFiles.length > 0
+      ? { unsupportedAttachments: understanding.unsupportedFiles }
+      : {}),
   };
 }

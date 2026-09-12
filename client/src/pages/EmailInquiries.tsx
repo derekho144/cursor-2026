@@ -236,12 +236,20 @@ Web: https://jdstudiohk.com/`);
                   附件未讀到
                 </span>
               )}
+              {aiParsed?.attachmentStatus === "unsupported" && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-sm shrink-0"
+                  style={{ background: "rgba(255,152,0,0.15)", color: "#ffb74d", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(255,152,0,0.35)" }}
+                >
+                  附件格式不支援
+                </span>
+              )}
               {aiParsed?.attachmentStatus === "used" && (
                 <span
                   className="text-xs px-2 py-0.5 rounded-sm shrink-0"
                   style={{ background: "rgba(33,150,243,0.12)", color: "#64b5f6", fontSize: "0.6rem", letterSpacing: "0.08em", border: "1px solid rgba(33,150,243,0.3)" }}
                 >
-                  已讀 PDF
+                  已讀附件
                 </span>
               )}
               {aiParsed?.draftReadiness &&
@@ -383,12 +391,14 @@ Web: https://jdstudiohk.com/`);
                       [
                         "附件理解",
                         aiParsed.attachmentStatus === "used"
-                          ? "已讀取 PDF 文字"
+                          ? "已讀取附件文字"
                           : aiParsed.attachmentStatus === "missing"
-                            ? "正文／PDF 指明附件但未讀到文字"
-                            : aiParsed.attachmentStatus === "none"
-                              ? "無附件（正文 RFQ）"
-                              : null,
+                            ? "正文／附件指明需求但未讀到文字"
+                            : aiParsed.attachmentStatus === "unsupported"
+                              ? "有附件但格式暫不支援（請人手核實）"
+                              : aiParsed.attachmentStatus === "none"
+                                ? "無附件（正文 RFQ）"
+                                : null,
                       ],
                     ].filter(([, v]) => v).map(([label, value]) => (
                       <div key={label as string} className="flex gap-2">
@@ -466,7 +476,7 @@ Web: https://jdstudiohk.com/`);
                           className="mt-2 pt-2"
                           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
                         >
-                          <div className="text-muted-foreground mb-1">PDF 附件</div>
+                          <div className="text-muted-foreground mb-1">已處理附件</div>
                           <ul className="list-disc pl-4 space-y-0.5">
                             {aiParsed.pdfAttachments.map(
                               (
@@ -476,11 +486,13 @@ Web: https://jdstudiohk.com/`);
                                   pages?: number;
                                   error?: string;
                                   truncated?: boolean;
+                                  source?: string;
                                 },
                                 i: number
                               ) => (
                                 <li key={i}>
                                   {p.filename}
+                                  {p.source ? ` · ${p.source}` : ""}
                                   {p.pages ? ` · ${p.pages} 頁` : ""}
                                   {p.chars ? ` · ${p.chars} 字` : ""}
                                   {p.truncated ? " · 已截斷" : ""}
@@ -494,6 +506,42 @@ Web: https://jdstudiohk.com/`);
                           </ul>
                         </div>
                       )}
+                    {((Array.isArray(aiParsed.unsupportedAttachments) &&
+                      aiParsed.unsupportedAttachments.length > 0) ||
+                      (Array.isArray(aiParsed.skippedAttachments) &&
+                        aiParsed.skippedAttachments.length > 0)) && (
+                      <div
+                        className="mt-2 pt-2"
+                        style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+                      >
+                        <div className="text-muted-foreground mb-1">未支援／略過附件</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {Array.isArray(aiParsed.unsupportedAttachments) &&
+                            aiParsed.unsupportedAttachments.map(
+                              (name: string, i: number) => (
+                                <li key={`u-${i}`}>{name}</li>
+                              )
+                            )}
+                          {Array.isArray(aiParsed.skippedAttachments) &&
+                            aiParsed.skippedAttachments.map(
+                              (
+                                s: {
+                                  filename?: string;
+                                  contentType?: string;
+                                  reason?: string;
+                                },
+                                i: number
+                              ) => (
+                                <li key={`s-${i}`}>
+                                  {s.filename || "(unnamed)"}
+                                  {s.contentType ? ` · ${s.contentType}` : ""}
+                                  {s.reason ? ` · ${s.reason}` : ""}
+                                </li>
+                              )
+                            )}
+                        </ul>
+                      </div>
+                    )}
                     {aiParsed.notes && (
                       <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                         <div className="text-muted-foreground mb-1">需求摘要</div>

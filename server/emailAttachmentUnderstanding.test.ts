@@ -7,11 +7,18 @@ import {
 import { evaluateInquiryDraftReadiness } from "../shared/inquiryDraftReadiness";
 
 describe("mentionsRequirementsAttachment", () => {
-  it("detects Chinese and English cues", () => {
+  it("detects Chinese and English cues (including relaxed phrasing)", () => {
     expect(mentionsRequirementsAttachment("詳情請見附件。謝謝")).toBe(true);
     expect(mentionsRequirementsAttachment("Please find the attached brief")).toBe(
       true
     );
+    expect(
+      mentionsRequirementsAttachment("Please see the attachment for details")
+    ).toBe(true);
+    expect(mentionsRequirementsAttachment("I have attached the RFQ")).toBe(true);
+    expect(mentionsRequirementsAttachment("PFA the shot list")).toBe(true);
+    expect(mentionsRequirementsAttachment("請查收附件 brief")).toBe(true);
+    expect(mentionsRequirementsAttachment("附上需求說明")).toBe(true);
     expect(
       mentionsRequirementsAttachment("We need 3 hours event photography on Nov 2")
     ).toBe(false);
@@ -30,7 +37,7 @@ describe("resolveAttachmentUnderstanding", () => {
     expect(r.blockers).toHaveLength(0);
   });
 
-  it("marks used when PDF text is present", () => {
+  it("marks used when attachment text is present", () => {
     const r = resolveAttachmentUnderstanding({
       subject: "Quote",
       bodyText: "詳情請見附件",
@@ -48,10 +55,10 @@ describe("resolveAttachmentUnderstanding", () => {
       attachmentFileCount: 0,
     });
     expect(r.status).toBe("missing");
-    expect(r.blockers[0]).toContain("未讀到");
+    expect(r.blockers[0]).toMatch(/未讀到|未能|指明/);
   });
 
-  it("marks missing when PDF present but OCR/text empty", () => {
+  it("marks missing when readable files present but OCR/text empty", () => {
     const r = resolveAttachmentUnderstanding({
       subject: "Brief",
       bodyText: "See attached",
@@ -59,18 +66,21 @@ describe("resolveAttachmentUnderstanding", () => {
       attachmentFileCount: 1,
     });
     expect(r.status).toBe("missing");
-    expect(r.blockers[0]).toContain("OCR");
     expect(r.missingFields).toContain("attachmentText");
   });
 
-  it("marks missing when PDF present but empty text layer", () => {
+  it("marks unsupported when non-extractable files present (not none)", () => {
     const r = resolveAttachmentUnderstanding({
       subject: "RFQ",
       bodyText: "Please quote as discussed.",
       attachmentText: "",
-      pdfFileCount: 1,
+      pdfFileCount: 0,
+      unsupportedFiles: ["brief.doc", "budget.xlsx"],
     });
-    expect(r.status).toBe("missing");
+    expect(r.status).toBe("unsupported");
+    expect(r.hasUnsupportedFiles).toBe(true);
+    expect(r.unsupportedFiles).toContain("brief.doc");
+    expect(r.blockers[0]).toMatch(/不支援|格式/);
   });
 });
 
@@ -104,6 +114,35 @@ describe("applyAttachmentUnderstandingToParsed + readiness", () => {
     });
     expect(readiness.readyForAutoDraft).toBe(false);
     expect(readiness.blockers.some((b) => b.includes("附件"))).toBe(true);
+  });
+
+  it("blocks auto-draft for unsupported attachment formats", () => {
+    const understanding = resolveAttachmentUnderstanding({
+      subject: "Expo",
+      bodyText: "Please see the attachment",
+      attachmentText: "",
+      unsupportedFiles: ["ifx-brief.doc"],
+    });
+    const parsed = applyAttachmentUnderstandingToParsed(
+      {
+        serviceType: "corporate_event",
+        isInquiry: true,
+        confidence: "high",
+        quantitySource: "explicit",
+        shootHours: 5,
+        missingFields: [],
+        assumptions: [],
+        suggestedItems: [{ quantity: 5, unitPrice: 900 }],
+      },
+      understanding
+    );
+    expect(parsed.attachmentStatus).toBe("unsupported");
+    const readiness = evaluateInquiryDraftReadiness({
+      ...parsed,
+      learningReady: true,
+    });
+    expect(readiness.readyForAutoDraft).toBe(false);
+    expect(readiness.blockers.some((b) => /不支援|附件/.test(b))).toBe(true);
   });
 
   it("does not block plain-body explicit RFQs", () => {

@@ -17,7 +17,7 @@ export type InquiryParseExtras = {
   assumptions?: string[] | null;
   missingFields?: string[] | null;
   /** none = plain body OK; used = PDF text read; missing = referenced/unread attachment */
-  attachmentStatus?: "none" | "used" | "missing" | string | null;
+  attachmentStatus?: "none" | "used" | "missing" | "unsupported" | string | null;
 };
 
 export type InquiryDraftReadiness = {
@@ -101,10 +101,18 @@ export function evaluateInquiryDraftReadiness(parsed: {
   if (parsed.learningReady === false) {
     blockers.push("定價學習未達「可參考」，暫不自動開草稿（避免規則價偏離人手成交）");
   }
-  if (String(parsed.attachmentStatus ?? "").toLowerCase() === "missing") {
-    blockers.push("正文／PDF 指明附件需求但未讀到附件文字，暫不自動開草稿");
-    if (!missingFields.includes("attachmentText")) {
-      missingFields.push("attachmentText");
+  {
+    const attStatus = String(parsed.attachmentStatus ?? "").toLowerCase();
+    if (attStatus === "missing") {
+      blockers.push("正文／PDF 指明附件需求但未讀到附件文字，暫不自動開草稿");
+      if (!missingFields.includes("attachmentText")) {
+        missingFields.push("attachmentText");
+      }
+    } else if (attStatus === "unsupported") {
+      blockers.push("有附件但格式暫不支援抽取（例如舊版 .doc／Excel／zip），暫不自動開草稿");
+      if (!missingFields.includes("attachmentText")) {
+        missingFields.push("attachmentText");
+      }
     }
   }
 

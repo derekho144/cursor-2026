@@ -1,7 +1,10 @@
 /**
- * Extract text from PDF and image email attachments for inquiry understanding.
+ * Extract text from PDF, image, and Word (.docx) email attachments
+ * for inquiry understanding.
  * Text-layer PDFs first; scanned PDFs and images fall back to OCR.
+ * Unsupported formats are recorded (not silently dropped).
  */
+import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import {
   isOcrEnabled,
@@ -13,14 +16,20 @@ import {
 
 export const MAX_PDF_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB
 export const MAX_IMAGE_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_WORD_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 export const MAX_PDF_TEXT_CHARS = 12000;
 export const MAX_PDF_ATTACHMENTS = 3;
 export const MAX_IMAGE_ATTACHMENTS = 3;
+export const MAX_WORD_ATTACHMENTS = 3;
 
 export type EmailAttachmentInput = {
   filename?: string | null;
   contentType?: string | null;
   content: Buffer;
+  /** mailparser: true for related/inline CID parts */
+  related?: boolean | null;
+  contentDisposition?: string | null;
+  cid?: string | null;
 };
 
 export type AttachmentExtractResult = {
@@ -28,9 +37,15 @@ export type AttachmentExtractResult = {
   text: string;
   pages?: number;
   truncated: boolean;
-  /** pdf_text | pdf_ocr | image_ocr */
-  source?: "pdf_text" | "pdf_ocr" | "image_ocr";
+  /** pdf_text | pdf_ocr | image_ocr | docx */
+  source?: "pdf_text" | "pdf_ocr" | "image_ocr" | "docx";
   error?: string;
+};
+
+export type SkippedAttachment = {
+  filename: string;
+  contentType: string;
+  reason: string;
 };
 
 /** @deprecated use AttachmentExtractResult */
@@ -60,6 +75,39 @@ function isImageAttachment(att: EmailAttachmentInput): boolean {
     );
   }
   return /\.(jpe?g|png|webp|gif|bmp)$/i.test(name);
+}
+
+/** .docx only — mammoth does not extract legacy .doc binary. */
+function isDocxAttachment(att: EmailAttachmentInput): boolean {
+  const name = (att.filename ?? "").toLowerCase();
+  const type = (att.contentType ?? "").toLowerCase();
+  return (
+    name.endsWith(".docx") ||
+    type.includes(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) ||
+    type === "application/vnd.ms-word.document.macroenabled.12"
+  );
+}
+
+function isLegacyDocAttachment(att: EmailAttachmentInput): boolean {
+  const name = (att.filename ?? "").toLowerCase();
+  const type = (att.contentType ?? "").toLowerCase();
+  if (name.endsWith(".docx")) return false;
+  return (
+    name.endsWith(".doc") ||
+    type === "application/msword" ||
+    type.includes("application/msword")
+  );
+}
+
+/** Skip CID/signature/inline images — not RFQ attachments. */
+export function isLikelyInlineAttachment(att: EmailAttachmentInput): boolean {
+  if (att.related === true) return true;
+  const disp = (att.contentDisposition ?? "").toLowerCase();
+  if (disp.includes("inline")) return true;
+  if (att.cid && !att.filename && isImageAttachment(att)) return true;
+  return false;
 }
 
 export async function extractTextFromPdfBuffer(
@@ -103,9 +151,11 @@ export async function extractTextFromPdfBuffer(
     };
   }
 
-  // Scanned / image PDF — OCR fallback
   try {
-    const ocr = await ocrPdfBuffer(content, { maxPages: MAX_OCR_PAGES_PER_PDF, maxChars });
+    const ocr = await ocrPdfBuffer(content, {
+      maxPages: MAX_OCR_PAGES_PER_PDF,
+      maxChars,
+    });
     if (ocr.text.trim()) {
       return {
         text: ocr.text,
@@ -127,8 +177,27 @@ export async function extractTextFromPdfBuffer(
   };
 }
 
+export async function extractTextFromDocxBuffer(
+  content: Buffer,
+  opts?: { maxChars?: number }
+): Promise<{ text: string; truncated: boolean }> {
+  const maxChars = opts?.maxChars ?? MAX_PDF_TEXT_CHARS;
+  const result = await mammoth.extractRawText({ buffer: content });
+  const text = (result?.value ?? "")
+    .replace(/\u0000/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const truncated = text.length > maxChars;
+  return {
+    text: truncated ? text.slice(0, maxChars) : text,
+    truncated,
+  };
+}
+
 /**
- * Extract text from PDF + image attachments on an email (mailparser shape).
+ * Extract text from PDF + image + Word attachments on an email (mailparser shape).
+ * Skipped/unsupported non-inline files are returned for UI + gate logic.
  */
 export async function extractTextFromEmailAttachments(
   attachments: EmailAttachmentInput[] | null | undefined
@@ -137,24 +206,71 @@ export async function extractTextFromEmailAttachments(
   combinedText: string;
   pdfCount: number;
   imageCount: number;
+  wordCount: number;
   attachmentCount: number;
+  skippedAttachments: SkippedAttachment[];
+  rawNonInlineCount: number;
 }> {
   const list = Array.isArray(attachments) ? attachments : [];
-  const pdfs = list.filter(isPdfAttachment).slice(0, MAX_PDF_ATTACHMENTS);
-  const images = list
+  const nonInline = list.filter((a) => !isLikelyInlineAttachment(a));
+  const skippedAttachments: SkippedAttachment[] = [];
+
+  const pdfs = nonInline.filter(isPdfAttachment).slice(0, MAX_PDF_ATTACHMENTS);
+  const images = nonInline
     .filter((a) => !isPdfAttachment(a) && isImageAttachment(a))
     .slice(0, MAX_IMAGE_ATTACHMENTS);
+  const words = nonInline
+    .filter((a) => isDocxAttachment(a))
+    .slice(0, MAX_WORD_ATTACHMENTS);
   const texts: AttachmentExtractResult[] = [];
+
+  const handled = new Set<EmailAttachmentInput>([
+    ...pdfs,
+    ...images,
+    ...words,
+  ]);
+
+  for (const att of nonInline) {
+    if (handled.has(att)) continue;
+    const filename = att.filename?.trim() || "(unnamed)";
+    const contentType = att.contentType?.trim() || "unknown";
+    if (isLegacyDocAttachment(att)) {
+      skippedAttachments.push({
+        filename,
+        contentType,
+        reason: "legacy_doc_unsupported_use_docx",
+      });
+      continue;
+    }
+    // Cap overflow of supported types also counts as skipped
+    if (isPdfAttachment(att) || isImageAttachment(att) || isDocxAttachment(att)) {
+      skippedAttachments.push({
+        filename,
+        contentType,
+        reason: "over_attachment_limit",
+      });
+      continue;
+    }
+    skippedAttachments.push({
+      filename,
+      contentType,
+      reason: "unsupported_format",
+    });
+  }
+
+  if (skippedAttachments.length > 0) {
+    console.warn(
+      "[EmailAttachment] Skipped non-inline attachments:",
+      skippedAttachments
+        .map((s) => `${s.filename} (${s.reason})`)
+        .join("; ")
+    );
+  }
 
   for (const att of pdfs) {
     const filename = att.filename?.trim() || "attachment.pdf";
     if (!att.content || att.content.length === 0) {
-      texts.push({
-        filename,
-        text: "",
-        truncated: false,
-        error: "empty",
-      });
+      texts.push({ filename, text: "", truncated: false, error: "empty" });
       continue;
     }
     if (att.content.length > MAX_PDF_ATTACHMENT_BYTES) {
@@ -199,12 +315,7 @@ export async function extractTextFromEmailAttachments(
   for (const att of images) {
     const filename = att.filename?.trim() || "attachment.jpg";
     if (!att.content || att.content.length === 0) {
-      texts.push({
-        filename,
-        text: "",
-        truncated: false,
-        error: "empty",
-      });
+      texts.push({ filename, text: "", truncated: false, error: "empty" });
       continue;
     }
     if (att.content.length > MAX_IMAGE_ATTACHMENT_BYTES) {
@@ -236,6 +347,46 @@ export async function extractTextFromEmailAttachments(
     }
   }
 
+  for (const att of words) {
+    const filename = att.filename?.trim() || "attachment.docx";
+    if (!att.content || att.content.length === 0) {
+      texts.push({ filename, text: "", truncated: false, error: "empty" });
+      continue;
+    }
+    if (att.content.length > MAX_WORD_ATTACHMENT_BYTES) {
+      texts.push({
+        filename,
+        text: "",
+        truncated: false,
+        error: `too_large (${att.content.length} bytes)`,
+      });
+      continue;
+    }
+    try {
+      const extracted = await extractTextFromDocxBuffer(att.content);
+      texts.push({
+        filename,
+        text: extracted.text,
+        truncated: extracted.truncated,
+        source: extracted.text ? "docx" : undefined,
+        error: extracted.text ? undefined : "docx_empty",
+      });
+    } catch (e) {
+      texts.push({
+        filename,
+        text: "",
+        truncated: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      // Also surface as unsupported-ish for gate if extract threw
+      skippedAttachments.push({
+        filename,
+        contentType: att.contentType ?? "application/docx",
+        reason: `docx_extract_failed: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
   const combinedParts = texts
     .filter((t) => t.text.trim())
     .map((t) => {
@@ -244,9 +395,11 @@ export async function extractTextFromEmailAttachments(
           ? "OCR"
           : t.source === "image_ocr"
             ? "image OCR"
-            : t.pages
-              ? `${t.pages} pages`
-              : "";
+            : t.source === "docx"
+              ? "Word"
+              : t.pages
+                ? `${t.pages} pages`
+                : "";
       const suffix = via ? ` (${via})` : "";
       const trunc = t.truncated ? " [truncated]" : "";
       return `--- Attachment: ${t.filename}${suffix}${trunc} ---\n${t.text}`;
@@ -257,7 +410,10 @@ export async function extractTextFromEmailAttachments(
     combinedText: combinedParts.join("\n\n"),
     pdfCount: pdfs.length,
     imageCount: images.length,
-    attachmentCount: pdfs.length + images.length,
+    wordCount: words.length,
+    attachmentCount: pdfs.length + images.length + words.length,
+    skippedAttachments,
+    rawNonInlineCount: nonInline.length,
   };
 }
 
@@ -288,7 +444,7 @@ export function mergeEmailBodyWithPdfText(
   const pdf = (pdfCombinedText ?? "").trim();
   if (!pdf) return body.slice(0, maxTotal);
   const header =
-    "\n\n=== PDF ATTACHMENT TEXT (extracted; use for requirements) ===\n";
+    "\n\n=== ATTACHMENT TEXT (extracted; use for requirements) ===\n";
   const budget = Math.max(0, maxTotal - body.length - header.length);
   if (budget <= 0) return body.slice(0, maxTotal);
   const pdfSlice = pdf.length > budget ? pdf.slice(0, budget) : pdf;
