@@ -1090,7 +1090,7 @@ export async function getHelloTobyCookies(): Promise<string | null> {
  *  - ad_expenses 表：廣告開支、退款（僅付費平台）
  *  - quotes.leadSource 欄位：精確識別詢價來源平台
  *    可選值：HelloToby / PRO360 / FreelanceHunter / Google / Repeat / 其他
- *  - expenses 表：直接服務成本（transport + equipment_rent + equipment_buy + staff）
+ *  - expenses 表：直接服務成本（transport + equipment_rent + equipment_buy + staff + post_production）
  *
  * 指標體系（業界標準）：
  *  - 詢價數 (totalLeads)       = COUNT(*) FROM quotes WHERE leadSource = platform（該年 createdAt，不論 status）
@@ -1110,7 +1110,7 @@ export async function getHelloTobyCookies(): Promise<string | null> {
  *  - 真實 ROI (真實投資回報率) = (revenue - netAdSpend - allocatedServiceCost) / (netAdSpend + allocatedServiceCost) * 100
  *    衡量真實盈利：扣除廣告開支及按比例分攤的直接服務成本後的實際利潤率
  *    allocatedServiceCost = 全年直接服務成本 × (該平台成交收入 / 全年總成交收入)
- *    直接服務成本 = transport + equipment_rent + equipment_buy + staff（不含 software/office 等固定成本）
+ *    直接服務成本 = transport + equipment_rent + equipment_buy + staff + post_production（不含 software/office 等固定成本）
  *
  *  - LTV/CAC 比率              = 客戶終身價值 / 每客戶獲取成本
  *    LTV = 平均成交金額 × 平均回購次數（以 Repeat 詢價數估算）
@@ -1216,12 +1216,12 @@ export async function getPlatformEfficiency(year: number) {
   }
 
   // 4. 查詢直接服務成本（用於計算真實 ROI）
-  // 直接成本：transport + equipment_rent + equipment_buy + staff
+  // 直接成本：transport + equipment_rent + equipment_buy + staff + post_production
   // 不含 software/office 等固定成本（屬於間接成本，無論有沒有平台詢價都會發生）
   const dcResult = await db
     .select({ total: sql<number>`SUM(amount)` })
     .from(expenses)
-    .where(sql`date >= ${yearStart} AND date < ${yearEnd} AND category IN ('transport','equipment_rent','equipment_buy','staff')`);
+    .where(sql`date >= ${yearStart} AND date < ${yearEnd} AND category IN ('transport','equipment_rent','equipment_buy','staff','post_production')`);
   const totalDirectServiceCost = Number(dcResult[0]?.total ?? 0);
 
   // 5. 計算全年總成交收入（用於按比例分攤服務成本）
@@ -3144,6 +3144,36 @@ export async function createQuoteCost(data: InsertQuoteCost) {
   return created;
 }
 
+let expensesCategoryEnumReady = false;
+
+/** Ensure expenses.category ENUM includes post_production (後期製作). */
+export async function ensureExpensesPostProductionCategory() {
+  if (expensesCategoryEnumReady) return;
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`
+      ALTER TABLE expenses
+      MODIFY COLUMN category ENUM(
+        'transport',
+        'equipment_rent',
+        'equipment_buy',
+        'staff',
+        'post_production',
+        'software',
+        'marketing',
+        'office',
+        'other'
+      ) NOT NULL
+    `);
+    expensesCategoryEnumReady = true;
+  } catch (err) {
+    console.warn("[expenses] post_production enum migrate:", err);
+    // Still mark ready if column already has the value (duplicate alter can error harmlessly on some hosts)
+    expensesCategoryEnumReady = true;
+  }
+}
+
 /** Auto-create 收入及支出 expense row linked to a quote_costs id. */
 export async function createExpenseFromQuoteCost(params: {
   quoteCostId: number;
@@ -3158,6 +3188,8 @@ export async function createExpenseFromQuoteCost(params: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+
+  await ensureExpensesPostProductionCategory();
 
   const expenseCategory = mapQuoteCostCategoryToExpense(params.category);
   const description = formatQuoteCostExpenseDescription(

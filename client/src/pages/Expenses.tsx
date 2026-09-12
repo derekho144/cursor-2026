@@ -19,13 +19,15 @@ const CATEGORIES = [
   { value: "equipment_rent", label: "租用器材", color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
   { value: "equipment_buy", label: "購買器材", color: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
   { value: "staff", label: "員工薪酬", color: "bg-green-500/20 text-green-300 border-green-500/30" },
+  { value: "post_production", label: "後期製作", color: "bg-teal-500/20 text-teal-300 border-teal-500/30" },
   { value: "software", label: "軟件/訂閱", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
   { value: "marketing", label: "市場推廣", color: "bg-pink-500/20 text-pink-300 border-pink-500/30" },
   { value: "office", label: "辦公室/場地", color: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" },
   { value: "other", label: "其他", color: "bg-gray-500/20 text-gray-300 border-gray-500/30" },
 ];
 
-const getCategoryStyle = (cat: string) => CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[7];
+const getCategoryStyle = (cat: string) =>
+  CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[CATEGORIES.length - 1];
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   wedding: "婚禮攝影",
