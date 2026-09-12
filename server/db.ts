@@ -1833,11 +1833,12 @@ export async function hasAlreadySentToEmail(fromEmail: string): Promise<boolean>
 export async function getEmailInquiries(opts: { status?: string; limit?: number; offset?: number }) {
   const db = await getDb();
   if (!db) return { data: [], total: 0 };
-  const conditions = [];
+  // FH board–linked rows belong on Freehunter 工作板 only — hide from 詢價郵件管理.
+  const conditions = [isNull(emailInquiries.fhJobId)];
   if (opts.status && opts.status !== "all") {
     conditions.push(eq(emailInquiries.status, opts.status as any));
   }
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const where = and(...conditions);
   const limit = opts.limit ?? 20;
   const offset = opts.offset ?? 0;
   const [data, countResult] = await Promise.all([

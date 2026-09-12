@@ -23,7 +23,7 @@ import { pricingLearningRouter } from "./routers/pricingLearning";
 import { googleAdsRouter } from "./routers/googleAds";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
-import { eq, sql, isNotNull, and, gt } from "drizzle-orm";
+import { eq, sql, isNotNull, isNull, and, gt } from "drizzle-orm";
 import { getWatchdogStatus } from "./watchdog";
 import { lastFreehunterScrapeAt, lastFreehunterScrapeResult } from "./scheduler";
 import { parseAllowedPages } from "@shared/pagePermissions";
@@ -146,11 +146,12 @@ export const appRouter = router({
           // 3. WhatsApp click stats (same selected month as other KPIs)
           getWhatsappClickStats({ year, month }),
           // 4. Pending email inquiries count (lightweight — only count, no full rows)
+          // Exclude FH board–linked rows (shown on Freehunter 工作板 instead).
           db
             ? db
                 .select({ total: sql<number>`COUNT(*)` })
                 .from(emailInquiries)
-                .where(eq(emailInquiries.status, "pending"))
+                .where(and(eq(emailInquiries.status, "pending"), isNull(emailInquiries.fhJobId)))
                 .then((r) => Number(r[0]?.total ?? 0))
             : Promise.resolve(0),
           // 5. Freehunter board stats (status counts + follow-up sent)
