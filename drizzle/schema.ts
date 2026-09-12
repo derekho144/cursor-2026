@@ -408,6 +408,7 @@ export const expenses = mysqlTable("expenses", {
     "equipment_rent",  // 租用器材
     "equipment_buy",   // 購買器材
     "staff",           // 員工薪酬
+    "post_production", // 後期製作
     "software",        // 軟件/訂閱
     "marketing",       // 市場推廣
     "office",          // 辦公室/場地

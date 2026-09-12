@@ -17,6 +17,7 @@ export type ExpenseCategory =
   | "equipment_rent"
   | "equipment_buy"
   | "staff"
+  | "post_production"
   | "software"
   | "marketing"
   | "office"
@@ -25,7 +26,7 @@ export type ExpenseCategory =
 const MAP: Record<QuoteCostCategory, ExpenseCategory> = {
   freelancer: "staff",
   venue: "office",
-  post_production: "other",
+  post_production: "post_production",
   transport: "transport",
   equipment_rent: "equipment_rent",
   equipment_buy: "equipment_buy",

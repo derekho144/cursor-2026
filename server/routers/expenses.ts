@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, ensureExpensesPostProductionCategory } from "../db";
 import { expenses } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -10,6 +10,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   equipment_rent: "租用器材",
   equipment_buy: "購買器材",
   staff: "員工薪酬",
+  post_production: "後期製作",
   software: "軟件/訂閱",
   marketing: "市場推廣",
   office: "辦公室/場地",
@@ -18,7 +19,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const expenseInputSchema = z.object({
   date: z.string(),
-  category: z.enum(["transport", "equipment_rent", "equipment_buy", "staff", "software", "marketing", "office", "other"]),
+  category: z.enum([
+    "transport",
+    "equipment_rent",
+    "equipment_buy",
+    "staff",
+    "post_production",
+    "software",
+    "marketing",
+    "office",
+    "other",
+  ]),
   description: z.string().min(1).max(512),
   amount: z.number().positive(),
   payee: z.string().max(255).optional(),
@@ -37,6 +48,7 @@ export const expensesRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+      await ensureExpensesPostProductionCategory();
       const conditions = [];
 
       if (input?.year && input?.month) {
@@ -108,6 +120,7 @@ export const expensesRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+      await ensureExpensesPostProductionCategory();
       const [result] = await db.insert(expenses).values({
         date: new Date(input.date),
         category: input.category,

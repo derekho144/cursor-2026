@@ -15,7 +15,7 @@ describe("quoteCostExpenseSync", () => {
   it("maps quote-only categories to closest expense bucket", () => {
     expect(mapQuoteCostCategoryToExpense("freelancer")).toBe("staff");
     expect(mapQuoteCostCategoryToExpense("venue")).toBe("office");
-    expect(mapQuoteCostCategoryToExpense("post_production")).toBe("other");
+    expect(mapQuoteCostCategoryToExpense("post_production")).toBe("post_production");
   });
 
   it("formats expense description with quote number", () => {
