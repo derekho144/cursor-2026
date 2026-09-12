@@ -33,8 +33,8 @@ sha,msg=sys.argv[1],sys.argv[2]
 print(json.dumps({
   "additional_context": (
     f"Git push 已執行（HEAD {sha}: {msg}）。"
-    "已自動觸發 Manus Pull/Sync + Publish（scripts/manus-auto-deploy.sh）。"
-    "唔使叫用戶通知 Manus；回覆報告部署已觸發／結果即可。"
+    "已自動觸發固定流程：GitHub main → JD SYS sync → checkpoint → Publish "
+    "（scripts/manus-auto-deploy.sh）。唔使叫用戶通知 Manus；回覆報告部署結果即可。"
   )
 }, ensure_ascii=False))
 ' "$SHA" "$MSG")
