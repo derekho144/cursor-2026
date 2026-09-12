@@ -206,8 +206,16 @@ while time.time() < deadline:
             if isinstance(content, list):
                 content = json.dumps(content, ensure_ascii=False)
             text = str(content)
-            if send_marker in text or sha in text or "synced_sha" in text.lower() or "checkpoint" in text.lower():
-                # Only count replies after we sent this deploy prompt.
+            # Require this deploy's SHA (or explicit synced_sha report), not
+            # generic older "checkpoint" chatter from prior turns.
+            lower = text.lower()
+            mentions_this_sha = (
+                send_marker in text
+                or sha in text
+                or full[:12] in text
+                or (f"synced_sha" in lower and sha in lower)
+            )
+            if mentions_this_sha:
                 ts = ev.get("timestamp") or ev.get("created_at") or 0
                 try:
                     ts_n = float(ts)
