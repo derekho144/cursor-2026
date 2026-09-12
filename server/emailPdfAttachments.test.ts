@@ -39,7 +39,7 @@ describe("mergeEmailBodyWithPdfText", () => {
   it("appends pdf section", () => {
     const merged = mergeEmailBodyWithPdfText("body", "pdf contents here");
     expect(merged).toContain("body");
-    expect(merged).toContain("PDF ATTACHMENT TEXT");
+    expect(merged).toContain("ATTACHMENT TEXT");
     expect(merged).toContain("pdf contents here");
   });
 });
@@ -92,4 +92,57 @@ describe("extractTextFromEmailAttachments", () => {
     // OCR may misread slightly — check for key tokens
     expect(out.combinedText.toLowerCase()).toMatch(/product|shoot|25|photo/);
   }, 60_000);
+});
+
+describe("extractTextFromDocxBuffer / Word attachments", () => {
+  it("extracts text from a simple .docx and records unsupported .xlsx", async () => {
+    const { extractTextFromDocxBuffer, extractTextFromEmailAttachments } = await import("./emailPdfAttachments");
+    // Build a minimal docx (zip of word/document.xml)
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    zip.file(
+      "[Content_Types].xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`
+    );
+    zip.folder("_rels")!.file(
+      ".rels",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`
+    );
+    zip.folder("word")!.file(
+      "document.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>Need fashion shoot 6 hours at HKCEC for lookbook.</w:t></w:r></w:p></w:body>
+</w:document>`
+    );
+    const buf = await zip.generateAsync({ type: "nodebuffer" });
+    const direct = await extractTextFromDocxBuffer(buf);
+    expect(direct.text.toLowerCase()).toContain("fashion");
+
+    const out = await extractTextFromEmailAttachments([
+      {
+        filename: "brief.docx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        content: buf,
+      },
+      {
+        filename: "budget.xlsx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content: Buffer.from("not-real"),
+      },
+    ]);
+    expect(out.wordCount).toBe(1);
+    expect(out.combinedText.toLowerCase()).toContain("fashion");
+    expect(out.skippedAttachments.some((s) => s.filename === "budget.xlsx")).toBe(true);
+  });
 });
