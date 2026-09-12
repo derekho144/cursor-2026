@@ -1,39 +1,55 @@
 #!/usr/bin/env bash
-# Trigger Manus: Pull GitHub main → checkpoint → Publish jdsys.biz
-# Requires .env: MANUS_API_KEY, MANUS_TASK_ID, MANUS_WEBSITE_ID
+# Fixed production deploy path:
+#   GitHub main (SoT) → sync JD SYS project → checkpoint → Publish jdsys.biz
+#
+# Requires: MANUS_API_KEY, MANUS_WEBSITE_ID
+# Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS PTxdA5w7AUDNxF2XREC0dk
+#
+# Usage:
+#   bash scripts/manus-auto-deploy.sh
+#   bash scripts/manus-auto-deploy.sh --dry-run
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ( -z "${MANUS_API_KEY:-}" || -z "${MANUS_TASK_ID:-}" ) && -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
 fi
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/manus-credentials.sh"
-
-API_BASE="${MANUS_API_BASE:-https://api.manus.ai}"
-KEY="${MANUS_API_KEY:-}"
-TASK_ID="${MANUS_TASK_ID:-}"
-WEBSITE_ID="${MANUS_WEBSITE_ID:-}"
+manus_load_env_file "$ROOT"
 
 if ! manus_credentials_available "$ROOT"; then
-  echo "manus-auto-deploy: missing MANUS_API_KEY or MANUS_TASK_ID (set Cloud Agent secrets or .env)" >&2
+  echo "manus-auto-deploy: missing MANUS_API_KEY (set Cloud Agent secrets or .env)" >&2
   exit 1
 fi
 
+API_BASE="${MANUS_API_BASE:-https://api.manus.ai}"
 KEY="${MANUS_API_KEY:-}"
-TASK_ID="${MANUS_TASK_ID:-}"
-WEBSITE_ID="${MANUS_WEBSITE_ID:-}"
+TASK_ID="$(manus_resolve_project_task_id "$ROOT")"
+WEBSITE_ID="$(manus_website_id "$ROOT")"
+SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+FULL="$(git rev-parse HEAD 2>/dev/null || echo "")"
+MSG="$(git log -1 --pretty=%s 2>/dev/null || echo "")"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 
-SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-MSG=$(git log -1 --pretty=%s 2>/dev/null || echo "")
-FULL=$(git rev-parse HEAD 2>/dev/null || echo "")
+if [[ -z "$WEBSITE_ID" ]]; then
+  echo "manus-auto-deploy: missing MANUS_WEBSITE_ID" >&2
+  exit 1
+fi
 
-export API_BASE KEY TASK_ID WEBSITE_ID SHA MSG FULL
+echo "manus-auto-deploy: SoT GitHub HEAD ${SHA} (${BRANCH})"
+echo "manus-auto-deploy: JD SYS task ${TASK_ID}"
+echo "manus-auto-deploy: website ${WEBSITE_ID}"
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "manus-auto-deploy: dry-run only (no sendMessage / publish)"
+  exit 0
+fi
+
+export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH
 
 python3 <<'PY'
 import json, os, subprocess, sys, time
@@ -41,20 +57,11 @@ import json, os, subprocess, sys, time
 api_base = os.environ["API_BASE"]
 key = os.environ["KEY"]
 task_id = os.environ["TASK_ID"]
-website_id = os.environ.get("WEBSITE_ID") or ""
+website_id = os.environ["WEBSITE_ID"]
 sha = os.environ["SHA"]
-msg = os.environ["MSG"]
 full = os.environ["FULL"]
-
-prompt = f"""請立即執行（唔使再問確認）：
-
-1. Pull / Sync GitHub main，目標 commit：{sha}（{full}）— {msg}
-2. 確認工作區已包含該 commit 的改動
-3. 保存 checkpoint
-4. Publish 到 jdsys.biz（production）
-5. 完成後只回報：SHA、checkpoint/version id、publish_status、site URLs
-
-唔好改其他代碼。"""
+msg = os.environ["MSG"]
+branch = os.environ.get("BRANCH") or ""
 
 
 def api(method: str, path: str, body=None):
@@ -65,7 +72,10 @@ def api(method: str, path: str, body=None):
         "-H", "Accept: application/json",
     ]
     if body is not None:
-        cmd += ["-H", "Content-Type: application/json", "-d", json.dumps(body, ensure_ascii=False)]
+        cmd += [
+            "-H", "Content-Type: application/json",
+            "-d", json.dumps(body, ensure_ascii=False),
+        ]
     raw = subprocess.check_output(cmd + [url], text=True)
     try:
         return json.loads(raw or "{}")
@@ -73,7 +83,69 @@ def api(method: str, path: str, body=None):
         return {"ok": False, "error": {"message": raw}}
 
 
-print(f"manus-auto-deploy: sending sync+publish for {sha} …")
+def task_status(detail: dict) -> str:
+    task = detail.get("task") if isinstance(detail.get("task"), dict) else detail
+    return str(
+        (task or {}).get("status")
+        or detail.get("status")
+        or detail.get("agent_status")
+        or ""
+    ).lower()
+
+
+def task_type(detail: dict) -> str:
+    task = detail.get("task") if isinstance(detail.get("task"), dict) else detail
+    return str((task or {}).get("task_type") or "").lower()
+
+
+detail0 = api("GET", f"task.detail?task_id={task_id}")
+if detail0.get("ok") is False and detail0.get("error"):
+    print("manus-auto-deploy: task.detail failed:", json.dumps(detail0, ensure_ascii=False), file=sys.stderr)
+    sys.exit(2)
+
+st0 = task_status(detail0)
+tt0 = task_type(detail0)
+print(f"manus-auto-deploy: task precheck type={tt0 or '?'} status={st0 or '?'}")
+if tt0 and tt0 != "project":
+    print(
+        "manus-auto-deploy: refusing non-project task for production deploy "
+        f"(got task_type={tt0}). Use JD SYS project PTxdA5w7AUDNxF2XREC0dk.",
+        file=sys.stderr,
+    )
+    sys.exit(4)
+if st0 == "error":
+    print(
+        "manus-auto-deploy: JD SYS task is in unrecoverable error — "
+        "repair/recreate the project task in Manus, then update MANUS_PROJECT_TASK_ID.",
+        file=sys.stderr,
+    )
+    sys.exit(5)
+
+prompt = f"""【固定 production 流程 — 已授權執行】
+
+唯一來源：GitHub main（derekho144/cursor-2026）
+目標 commit：{sha}（{full}）— {msg}
+目前本地 branch 參考：{branch}
+
+請嚴格按序執行，唔使再問確認：
+
+1. Pull / Sync GitHub **main** 到本 JD SYS 專案，對齊上述 commit
+2. 確認工作區已包含該 commit 的改動（可用 git rev-parse / git log 核對）
+3. 保存 checkpoint（version）
+4. Publish 到 jdsys.biz production（website_id={website_id}）
+5. 完成後只回報四項：
+   - synced_sha
+   - checkpoint_or_version_id
+   - publish_status
+   - site_urls
+
+規則：
+- 唔好另開無關標準 task 做 production 發佈
+- 唔好改業務代碼
+- GitHub main 係唯一來源；Manus 只負責 sync → checkpoint → publish
+"""
+
+print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} …")
 send = api(
     "POST",
     "task.sendMessage",
@@ -89,17 +161,18 @@ if not send.get("ok"):
 print("sendMessage ok")
 
 confirmed = set()
-deadline = time.time() + 15 * 60
+deadline = time.time() + 20 * 60
 last = None
+terminal = None
 
 while time.time() < deadline:
     detail = api("GET", f"task.detail?task_id={task_id}")
-    status = (detail.get("status") or detail.get("agent_status") or "").lower()
+    status = task_status(detail)
     if status != last:
         print(f"task status: {status or detail}")
         last = status
 
-    msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=30&order=desc")
+    msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
     for ev in msgs.get("data") or msgs.get("messages") or []:
         wait_type = ev.get("waiting_for_event_type") or ""
         event_id = ev.get("waiting_for_event_id") or ""
@@ -120,34 +193,51 @@ while time.time() < deadline:
             print("confirm:", conf.get("ok"), conf.get("error"))
             confirmed.add(event_id)
 
-    if status in ("stopped", "error"):
+    if status in ("stopped", "error", "completed"):
+        terminal = status
         break
     time.sleep(5)
 
-if website_id:
-    pub = api(
-        "POST",
-        "website.publish",
-        {"website_id": website_id, "visibility": "public"},
-    )
-    print(
-        "website.publish:",
-        json.dumps(
-            {k: pub.get(k) for k in ("ok", "version_id", "website_id", "error")},
-            ensure_ascii=False,
-        ),
-    )
-    for _ in range(60):
-        st = api("GET", f"website.status?website_id={website_id}")
-        ps = st.get("publish_status")
-        print(
-            f"publish_status: {ps} version={st.get('version_id')} urls={st.get('site_urls')}"
-        )
-        if ps in ("published", "failed"):
-            if ps != "published":
-                sys.exit(3)
-            break
-        time.sleep(3)
+if terminal == "error":
+    print("manus-auto-deploy: JD SYS task ended in error during sync", file=sys.stderr)
+    sys.exit(6)
 
-print("manus-auto-deploy: done")
+# Always publish via website API so production publish is deterministic
+# even if the agent reply omitted the publish step.
+print(f"manus-auto-deploy: website.publish {website_id} …")
+pub = api(
+    "POST",
+    "website.publish",
+    {"website_id": website_id, "visibility": "public"},
+)
+print(
+    "website.publish:",
+    json.dumps(
+        {k: pub.get(k) for k in ("ok", "version_id", "website_id", "error", "request_id")},
+        ensure_ascii=False,
+    ),
+)
+if pub.get("ok") is False:
+    print("website.publish failed", file=sys.stderr)
+    sys.exit(3)
+
+published = False
+for _ in range(60):
+    st = api("GET", f"website.status?website_id={website_id}")
+    ps = st.get("publish_status")
+    print(
+        f"publish_status: {ps} version={st.get('version_id')} urls={st.get('site_urls')}"
+    )
+    if ps == "published":
+        published = True
+        break
+    if ps == "failed":
+        sys.exit(3)
+    time.sleep(3)
+
+if not published:
+    print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
+    sys.exit(3)
+
+print("manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published")
 PY

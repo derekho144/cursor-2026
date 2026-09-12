@@ -1,22 +1,39 @@
 ---
-description: After bug fixes, auto commit/push and auto-deploy via Manus API
+description: GitHub main is SoT; deploy only via JD SYS sync → checkpoint → publish
 alwaysApply: true
 ---
 
-# JD Studio ↔ Manus auto workflow
+# JD Studio ↔ Manus production workflow
 
-When you finish a **bug fix** or **deployable code change** in this repo, do the following **without waiting for the user to ask**:
+**Single source of truth:** GitHub `main` (`derekho144/cursor-2026`).  
+**Production control plane:** Manus **JD SYS** project task `PTxdA5w7AUDNxF2XREC0dk` (override with `MANUS_PROJECT_TASK_ID`).
 
-1. **Verify** — run focused tests / `tsc --noEmit` for touched areas when practical.
-2. **Commit + push** to `origin/main` (`derekho144/cursor-2026`) — only the relevant files.
-3. **Deploy** — if Cloud Agent secrets or `.env` has `MANUS_API_KEY` (+ `MANUS_TASK_ID` / `MANUS_WEBSITE_ID`), run:
+Fixed path (do not invent alternatives):
+
+1. Land deployable changes on **`origin/main`**
+2. **Sync** that commit into the JD SYS project
+3. **Checkpoint**
+4. **Publish** `jdsys.biz` (`MANUS_WEBSITE_ID`)
+
+## After a bug fix / deployable change
+
+1. **Verify** — focused tests / `tsc --noEmit` when practical.
+2. **Commit + push** to `origin/main` — only relevant files.
+3. **Deploy** — run:
 
    `bash scripts/manus-auto-deploy.sh`
 
-   Then tell the user deploy was triggered (and poll/log result if the script printed status). **Do not ask the user to notify Manus.**
+   This script always targets the **JD SYS project** (not one-off Ads/standard tasks), waits for sync, then calls `website.publish`.  
+   Report that deploy was triggered / poll result. **Do not ask the user to notify Manus.**
 
-4. **Fallback only** (no API key): end with a ready-to-paste Manus Pull/Sync + Publish block including the commit SHA.
+4. **Fallback only** (no `MANUS_API_KEY`): paste output of `bash scripts/manus-sync-prompt.sh`.
 
 5. If the user pastes Manus’s “done” reply, re-verify `https://jdsys.biz`.
+
+## Do not
+
+- Publish production from a new disposable Manus standard task when JD SYS is healthy.
+- Point `MANUS_TASK_ID` at Ads/experiment tasks for deploy — use `MANUS_PROJECT_TASK_ID` / JD SYS.
+- Treat Manus as source of truth over GitHub `main`.
 
 Exceptions: pure Q&A with no code changes — skip commit/push/deploy.
