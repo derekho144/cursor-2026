@@ -107,3 +107,22 @@ describe("Client email handling for Freehunter inquiries", () => {
     expect(clientEmail).not.toContain("freehunter");
   });
 });
+
+/**
+ * 詢價郵件管理 list filter: rows with fhJobId are owned by FH 工作板.
+ * Mirror of getEmailInquiries() isNull(fhJobId) condition.
+ */
+function shouldShowInEmailInquiryList(inquiry: { fhJobId?: number | null }): boolean {
+  return inquiry.fhJobId == null;
+}
+
+describe("Email inquiry list excludes FH board–linked rows", () => {
+  it("hides inquiries already linked to FH 工作板 (fhJobId set)", () => {
+    expect(shouldShowInEmailInquiryList({ fhJobId: 42 })).toBe(false);
+  });
+
+  it("still shows Freehunter-sourced Gmail inquiries without board link", () => {
+    expect(shouldShowInEmailInquiryList({ fhJobId: null })).toBe(true);
+    expect(shouldShowInEmailInquiryList({})).toBe(true);
+  });
+});
