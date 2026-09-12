@@ -158,12 +158,18 @@ send = api(
 if not send.get("ok"):
     print("sendMessage failed:", json.dumps(send, ensure_ascii=False), file=sys.stderr)
     sys.exit(2)
-print("sendMessage ok")
+print("sendMessage ok", send.get("request_id") or "")
+send_marker = f"目標 commit：{sha}"
+send_started = time.time()
 
+# Avoid racing a previous "stopped" status: wait until this deploy is running,
+# then wait until it finishes.
+saw_running = False
 confirmed = set()
-deadline = time.time() + 20 * 60
+deadline = time.time() + 25 * 60
 last = None
 terminal = None
+assistant_seen_for_sha = False
 
 while time.time() < deadline:
     detail = api("GET", f"task.detail?task_id={task_id}")
@@ -171,6 +177,8 @@ while time.time() < deadline:
     if status != last:
         print(f"task status: {status or detail}")
         last = status
+    if status == "running":
+        saw_running = True
 
     msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
     for ev in msgs.get("data") or msgs.get("messages") or []:
@@ -193,14 +201,54 @@ while time.time() < deadline:
             print("confirm:", conf.get("ok"), conf.get("error"))
             confirmed.add(event_id)
 
-    if status in ("stopped", "error", "completed"):
+        if ev.get("type") == "assistant_message":
+            content = (ev.get("assistant_message") or {}).get("content") or ""
+            if isinstance(content, list):
+                content = json.dumps(content, ensure_ascii=False)
+            text = str(content)
+            # Require this deploy's SHA (or explicit synced_sha report), not
+            # generic older "checkpoint" chatter from prior turns.
+            lower = text.lower()
+            mentions_this_sha = (
+                send_marker in text
+                or sha in text
+                or full[:12] in text
+                or (f"synced_sha" in lower and sha in lower)
+            )
+            if mentions_this_sha:
+                ts = ev.get("timestamp") or ev.get("created_at") or 0
+                try:
+                    ts_n = float(ts)
+                    # Manus timestamps may be seconds or ms.
+                    if ts_n > 10_000_000_000:
+                        ts_n = ts_n / 1000.0
+                    if ts_n >= send_started - 5:
+                        assistant_seen_for_sha = True
+                except (TypeError, ValueError):
+                    if saw_running:
+                        assistant_seen_for_sha = True
+
+    if status == "error":
         terminal = status
         break
+
+    # Require that we observed running (or waited briefly) before accepting stopped.
+    if status in ("stopped", "completed") and (saw_running or time.time() - send_started > 45):
+        if assistant_seen_for_sha or time.time() - send_started > 90:
+            terminal = status
+            break
+
     time.sleep(5)
+
+if terminal is None:
+    print("manus-auto-deploy: timed out waiting for JD SYS sync", file=sys.stderr)
+    sys.exit(7)
 
 if terminal == "error":
     print("manus-auto-deploy: JD SYS task ended in error during sync", file=sys.stderr)
     sys.exit(6)
+
+print(f"manus-auto-deploy: JD SYS sync finished ({terminal})")
 
 # Always publish via website API so production publish is deterministic
 # even if the agent reply omitted the publish step.
