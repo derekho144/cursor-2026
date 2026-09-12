@@ -20,6 +20,7 @@ const PAUSE_TEXTS = [
   "香港攝影師",
   "餐牌設計",
   "餐單設計",
+  "菜單設計",
   "restaurant menu design",
 ];
 
