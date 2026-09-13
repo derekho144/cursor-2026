@@ -35,6 +35,7 @@ import {
   isQuoteLineItemCategory,
   type QuoteLineItemCategory,
 } from "../../shared/quoteLineItemKind";
+import { computeQuoteDiscountAmount } from "../../shared/quoteDiscount";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
@@ -220,9 +221,10 @@ function reconcileQuoteItemsAndTotals(
         0
       ) * 100
     ) / 100;
+  // Same rule as QuoteForm: % discount excludes transport / rush fees
   const discountAmount =
     totals.discountPercent > 0
-      ? Math.round((subtotal * totals.discountPercent) / 100 * 100) / 100
+      ? computeQuoteDiscountAmount(reconciled, totals.discountPercent)
       : totals.discountAmount;
   const total = Math.round((subtotal - discountAmount) * 100) / 100;
   return { items: reconciled, subtotal, discountAmount, total, adjustments };
