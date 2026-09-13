@@ -12,6 +12,12 @@ export const ENV = {
    * Default: gemini-2.5-pro. Override with LLM_MODEL (e.g. gemini-2.5-flash).
    */
   llmModel: (process.env.LLM_MODEL ?? "gemini-2.5-pro").trim() || "gemini-2.5-pro",
+  /**
+   * Model for AI monthly ad / commercial analysis only.
+   * Default: gpt-5. Override with LLM_MODEL_AD_ANALYSIS (e.g. gpt-5.6, gpt-5-mini).
+   */
+  llmModelAdAnalysis:
+    (process.env.LLM_MODEL_AD_ANALYSIS ?? "gpt-5").trim() || "gpt-5",
   gmailUser: process.env.GMAIL_USER ?? "",
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",

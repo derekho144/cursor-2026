@@ -632,8 +632,8 @@ export default function PlatformEfficiency() {
             <div className="flex items-center gap-3">
               <Sparkles className="h-5 w-5" style={{ color: "#d4a843" }} />
               <div>
-                <div className="text-sm font-medium" style={{ color: "#d4a843" }}>AI 月度廣告效益分析｜商業分析師</div>
-                <div className="text-xs text-muted-foreground mt-0.5">用當月數據制定下月投放與成交策略，目標提高成交率與營業額</div>
+                <div className="text-sm font-medium" style={{ color: "#d4a843" }}>AI 月度廣告效益分析｜商業分析師（GPT）</div>
+                <div className="text-xs text-muted-foreground mt-0.5">用當月數據制定下月投放與成交策略；此報告專用 GPT，其他 AI 功能仍用 Gemini</div>
               </div>
             </div>
             <div className="flex items-center gap-3">

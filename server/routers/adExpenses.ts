@@ -2,6 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { invokeLLM, extractLLMText } from "../_core/llm";
+import { ENV } from "../_core/env";
 import {
   createAdSyncLog,
   deleteAdExpense,
@@ -931,6 +932,8 @@ CPL 暴升、成交率驟降、ROAS < 1、某渠道只燒錢無成交 → 立即
 - 全文焦點永遠係：${nextMonthTitle} 點樣用更好投放 + 更高成交率帶動更高營業額`;
 
       const response = await invokeLLM({
+        // Monthly commercial analysis only — other LLM calls stay on ENV.llmModel (Gemini).
+        model: ENV.llmModelAdAnalysis,
         messages: [
           {
             role: "system",
@@ -943,6 +946,7 @@ CPL 暴升、成交率驟降、ROAS < 1、某渠道只燒錢無成交 → 立即
 
       const content = extractLLMText(response?.choices?.[0]?.message?.content);
       const dataSnapshot = {
+        llmModel: ENV.llmModelAdAnalysis,
         totalNetSpend, totalRevenue, overallRoas, overallConvRate,
         platformCount: platformSummary.length,
         curMonthTotalSpend, prevMonthTotalSpend,

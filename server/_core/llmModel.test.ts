@@ -17,4 +17,16 @@ describe("LLM model selection", () => {
     const { ENV } = await import("./env");
     expect(ENV.llmModel).toBe("gemini-2.5-flash");
   });
+
+  it("defaults ad analysis model to gpt-5", async () => {
+    vi.stubEnv("LLM_MODEL_AD_ANALYSIS", "");
+    const { ENV } = await import("./env");
+    expect(ENV.llmModelAdAnalysis).toBe("gpt-5");
+  });
+
+  it("respects LLM_MODEL_AD_ANALYSIS override", async () => {
+    vi.stubEnv("LLM_MODEL_AD_ANALYSIS", "gpt-5.6");
+    const { ENV } = await import("./env");
+    expect(ENV.llmModelAdAnalysis).toBe("gpt-5.6");
+  });
 });
