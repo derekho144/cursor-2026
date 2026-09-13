@@ -2,6 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { invokeLLM, extractLLMText } from "../_core/llm";
+import { ENV } from "../_core/env";
 import {
   createAdSyncLog,
   deleteAdExpense,
@@ -761,6 +762,10 @@ export const adExpensesRouter = router({
       const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
       const monthLabel = monthNames[month - 1];
       const prevMonthLabel = monthNames[prevMonth - 1];
+      const nextMonthNum = month === 12 ? 1 : month + 1;
+      const nextYearNum = month === 12 ? year + 1 : year;
+      const nextMonthLabel = monthNames[nextMonthNum - 1];
+      const nextMonthTitle = `${nextYearNum}年${nextMonthLabel}`;
 
       // 計算淨利潤（收入 - 廣告開支 - 營運支出）
       const curMonthNetProfit = curMonthRevenue - curMonthTotalSpend - curMonthOpExpenses;
@@ -814,16 +819,37 @@ export const adExpensesRouter = router({
         .map(([name, cpl]) => `${name}：${cpl}/詢價`)
         .join("、") || "暫無 CPL 數據";
 
-      const prompt = `你是一位外聘的營運策劃總監，專門為香港中小型創意服務公司提供業務診斷與增長策略。你曾服務過多家香港攝影工作室，了解市場競爭、客戶心理和季節性規律。現在你正在為 JD Studio HK 撰寫 ${year}年${monthLabel} 的月度廣告效益分析報告。
+      const prompt = `你是一位商業分析師（Commercial Analyst），服務香港 B2B 創意／攝影工作室。你的唯一目標不是寫漂亮報告，而是：
 
-以下是從其管理系統提取的真實數據，請根據這些數字按照 8 個核心廣告效益指標撰寫一份專業、深度、可執行的月度報告。
+**用 ${year}年${monthLabel} 的真實數據，設計 ${nextMonthTitle} 的投放與成交策略，從而提高「詢價→成交率」與「營業額」。**
+
+決策框架（必須貫穿全文）：
+1. 診斷：本月哪個環節流失最大（曝光→點擊→詢價→報價→成交→客單）？
+2. 歸因：流失來自渠道質量、CPL/CPC、跟進、定價、還是服務結構？
+3. 決策：${nextMonthTitle} 預算如何重新分配？加碼／凍結／砍哪個平台？
+4. 成交：怎樣提高成交率（跟進、報價、拒絕原因對策）？
+5. 營業額：怎樣提高收入（高意向渠道、高客單服務、回頭客）？
+6. 量化：每項行動要有預期影響（成交率 pp 或 HKD）與完成期限。
+
+以下是系統抽取的真實數據，請嚴格依據數字，不要編造未提供的指標。
 
 ---
-# ${year}年${monthLabel} JD Studio HK 月度廣告效益分析
+# ${year}年${monthLabel} → ${nextMonthTitle}｜商業分析師投放決策報告
 
-## 📊 8 個核心廣告效益指標數據
+## 本月 vs 上月（增長／流失總覽）
+- 廣告開支：本月 HK$${curMonthTotalSpend.toLocaleString()}｜上月 HK$${prevMonthTotalSpend.toLocaleString()}｜變化 ${spendChangePct !== "N/A" ? (Number(spendChangePct) >= 0 ? "+" : "") + spendChangePct + "%" : "N/A"}
+- 詢價：本月 ${curMonthLeads}｜上月 ${prevMonthLeads}｜變化 ${leadsChangePct !== "N/A" ? (Number(leadsChangePct) >= 0 ? "+" : "") + leadsChangePct + "%" : "N/A"}
+- 成交：本月 ${curMonthConversions}｜上月 ${prevMonthConversions}
+- 成交率：本月 ${curConvRate}%｜上月 ${prevConvRate}%｜全年 ${overallConvRate}%
+- 營業額：本月 HK$${curMonthRevenue.toLocaleString()}｜上月 HK$${prevMonthRevenue.toLocaleString()}｜變化 ${revenueChangePct !== "N/A" ? (Number(revenueChangePct) >= 0 ? "+" : "") + revenueChangePct + "%" : "N/A"}
+- ROAS：本月 ${curRoas}${curRoas !== "N/A" ? "x" : ""}｜上月 ${prevRoas}${prevRoas !== "N/A" ? "x" : ""}｜全年 ${overallRoas}${overallRoas !== "N/A" ? "x" : ""}
+- 淨利估算：本月 HK$${Math.round(curMonthNetProfit).toLocaleString()}（廣告 HK$${curMonthTotalSpend.toLocaleString()} + 營運 HK$${curMonthOpExpenses.toLocaleString()}）
+- 回頭客成交：${returningClientCount} 位
+- 平均失敗報價金額：HK$${avgRejectedAmount.toLocaleString()}
 
-### 指標一：總廣告支出（投放力度）
+## 漏斗指標（投放 → 曝光 → 點擊 → 詢價 → 成交）
+
+### ① 投放力度（預算結構）
 | 平台 | ${monthLabel}開支 | ${prevMonthLabel}開支 | 變化 |
 |------|---------|---------|------|
 ${platformSummary.map((p: { name: string; curSpend: number; prevSpend: number }) => {
@@ -832,111 +858,95 @@ ${platformSummary.map((p: { name: string; curSpend: number; prevSpend: number })
 }).join("\n")}
 | **合計** | **HK$${curMonthTotalSpend.toLocaleString()}** | **HK$${prevMonthTotalSpend.toLocaleString()}** | **${spendChangePct !== "N/A" ? (Number(spendChangePct) >= 0 ? "+" : "") + spendChangePct + "%" : "N/A"}** |
 
-### 指標二：曝光次數（Google Ads，其他平台暫無數據）
-- 本月曝光：${curMonthImpressions > 0 ? curMonthImpressions.toLocaleString() + " 次" : "暫無數據（需同步 Google Ads）"}
-- 上月曝光：${prevMonthImpressions > 0 ? prevMonthImpressions.toLocaleString() + " 次" : "暫無數據"}
+### ②–④ Google Ads 曝光／CTR／CPC
+- 曝光：本月 ${curMonthImpressions > 0 ? curMonthImpressions.toLocaleString() : "暫無"}｜上月 ${prevMonthImpressions > 0 ? prevMonthImpressions.toLocaleString() : "暫無"}
+- CTR：本月 ${curCtr !== null ? curCtr + "%" : "暫無"}｜上月 ${prevCtr !== null ? prevCtr + "%" : "暫無"}（業界參考 1–3%）
+- CPC：本月 ${curCpc !== null ? "HK$" + curCpc : "暫無"}｜上月 ${prevCpc !== null ? "HK$" + prevCpc : "暫無"}
 - Google Ads 本月開支：HK$${curGoogleSpend.toLocaleString()}
 
-### 指標三：CTR 點擊率（Google Ads）
-- 本月 CTR：${curCtr !== null ? curCtr + "% (" + curMonthClicks.toLocaleString() + " 點擊 / " + curMonthImpressions.toLocaleString() + " 曝光)" : "暫無數據"}
-- 上月 CTR：${prevCtr !== null ? prevCtr + "% (" + prevMonthClicks.toLocaleString() + " 點擊 / " + prevMonthImpressions.toLocaleString() + " 曝光)" : "暫無數據"}
-- 業界參考：攝影服務 Google Ads CTR 通常 1-3%，高於 3% 為優秀
-
-### 指標四：CPC 每次點擊成本（Google Ads）
-- 本月 CPC：${curCpc !== null ? "HK$" + curCpc : "暫無數據"}
-- 上月 CPC：${prevCpc !== null ? "HK$" + prevCpc : "暫無數據"}
-- 業界參考：香港攝影服務 CPC 通常 HK$5-25，越低越好
-
-### 指標五：CPL 每個詢價成本（最重要指標）
+### ⑤–⑥ 詢價成本與來源質量
 - 各平台 CPL（全年均值）：${cplSummary}
-- 本月詢價總數：${curMonthLeads} 個
-- 上月詢價總數：${prevMonthLeads} 個
-- 本月詢價來源分布：${leadSourceSummary}
+- 本月詢價來源：${leadSourceSummary}
+- 成交服務類型：${serviceTypeSummary}
 
-### 指標六：詢價數量與來源分布
-- 本月詢價：${curMonthLeads} 個 | 上月：${prevMonthLeads} 個 | 變化：${leadsChangePct !== "N/A" ? (Number(leadsChangePct) >= 0 ? "+" : "") + leadsChangePct + "%" : "N/A"}
-- 詢價來源分布（本月）：${leadSourceSummary}
-- 回頭客成交：${returningClientCount} 位
-
-### 指標七：詢價轉成交率
-- 本月成交率：${curConvRate}%（${curMonthConversions} 成交 / ${curMonthLeads} 詢價）
-- 上月成交率：${prevConvRate}%（${prevMonthConversions} 成交 / ${prevMonthLeads} 詢價）
-- 全年整體成交率：${overallConvRate}%
-- 本月報價失敗：${rejectedQuoteDetails.length} 宗 | 平均失敗金額：HK$${avgRejectedAmount.toLocaleString()}
+### ⑦ 成交率與拒絕原因（提高成交率的關鍵）
 - 失敗原因分布：${rejectionSummary}
+- 全年失敗原因：${yearlyRejectionSummary}
+- 失敗明細：
+${rejectedDetailsText}
 
-### 指標八：ROAS / ROI（廣告投資回報）
-- 本月 ROAS：${curRoas}${curRoas !== "N/A" ? "x（每 HK$1 廣告費帶來 HK$" + curRoas + " 收入）" : ""}
-- 上月 ROAS：${prevRoas}${prevRoas !== "N/A" ? "x" : ""}
-- 全年整體 ROAS：${overallRoas}${overallRoas !== "N/A" ? "x" : ""}
-- 本月成交收入：HK$${curMonthRevenue.toLocaleString()} | 上月：HK$${prevMonthRevenue.toLocaleString()} | 變化：${revenueChangePct !== "N/A" ? (Number(revenueChangePct) >= 0 ? "+" : "") + revenueChangePct + "%" : "N/A"}
-- 本月淨利潤估算：HK$${Math.round(curMonthNetProfit).toLocaleString()}（扣除廣告 HK$${curMonthTotalSpend.toLocaleString()} + 營運支出 HK$${curMonthOpExpenses.toLocaleString()}）
-
-## 各平台綜合效益評級
-| 平台 | 評級 | 全年ROAS | 全年CPL | 成交率 | 全年開支 |
-|------|------|---------|---------|--------|----------|
+### ⑧ 平台綜合效益（加碼／砍量依據）
+| 平台 | 評級 | 全年ROAS | 全年CPL | 成交率 | 全年開支 | 本月開支 |
+|------|------|---------|---------|--------|----------|----------|
 ${platformSummary.map((p: {
   name: string; grade: string; score: number; spend: number;
   leads: number; conversions: number; convRate: number; roas: number | null;
   cpa: number | null; curSpend: number;
-}) => `| ${p.name} | ${p.grade}(${p.score}分) | ${p.roas !== null ? p.roas + "x" : "-"} | ${platformCplMap[p.name] ?? "-"} | ${p.convRate}% | HK$${p.spend.toLocaleString()} |`).join("\n")}
+}) => `| ${p.name} | ${p.grade}(${p.score}分) | ${p.roas !== null ? p.roas + "x" : "-"} | ${platformCplMap[p.name] ?? "-"} | ${p.convRate}% | HK$${p.spend.toLocaleString()} | HK$${p.curSpend.toLocaleString()} |`).join("\n")}
 
-## 跟進與郵件打開成效（按渠道）
+### 跟進效率
 ${followUpChannelSummary}
 
-## 報價失敗完整記錄（${monthLabel}，共 ${rejectedQuoteDetails.length} 宗）
-${rejectedDetailsText}
-
-**全年失敗原因累計（${year}年，共${totalYearlyRejections}宗）：** ${yearlyRejectionSummary}
+### 營運支出（影響淨利）
+${opExpSummary}
 
 ---
-請以外聘營運策劃總監的身份，根據以上 8 個核心廣告效益指標的真實數據，撰寫以下 8 個部分的專業診斷報告。
+# 請輸出報告結構（必須完整，不可省略）
 
-**報告撰寫要求：**
-- 每個部分必須對應一個廣告效益指標，給出具體的數據解讀和改善建議
-- 語氣像外聘顧問向老闆報告：直接、果斷、有根據，不說廢話
-- 每個建議要具體到「下週一就能執行」的程度
-- 建議要有優先次序，不要什麼都說「重要」
-- 結合香港 B2B 創意服務（攝影）市場的實際情況
-- 如某指標暫無數據，說明原因並給出如何獲取數據的建議
-- **報告結尾必須加「本週優先行動 Top 3」**：每項包含（1）負責人建議（Derek／助理）（2）具體動作（3）對應指標（4）預期影響（HKD 或 %）（5）完成期限（本週內哪一天）
-- 若有明顯異常（某平台 CPL 暴升、成交率驟降、ROAS < 1），單獨用「異常警報」段落點名，並給出立即止血方案
+## A. 執行摘要（給老闆 30 秒看完）
+- 本月生意結論（營業額／成交率／ROAS 一句話）
+- 最大增長槓桿 vs 最大出血點（各 1 點）
+- ${nextMonthTitle} 目標建議：成交率目標（%）＋營業額目標（HKD）＋所需詢價／預算粗算
 
----
+## B. 漏斗診斷（本月哪裡丟單／丟錢）
+依序分析：投放→曝光→CTR→CPC→CPL→詢價質量→成交率→ROAS。每層只寫：
+- 數據事實
+- 商業含義（對成交率／營業額的影響）
+- 是否值得在 ${nextMonthTitle} 優先處理
 
-### 指標一分析：廣告投放力度評估
-本月廣告預算分配是否合理？哪個平台性價比最高？哪個平台應該增加/減少預算？直接給出下月建議預算分配方案（具體金額）。
+## C. 渠道決策矩陣（${nextMonthTitle} 必做）
+為每個有花費或有詢價的平台標註：**加碼／維持／優化後再加／減碼／暫停**，並給出：
+- 建議預算（HKD）
+- 原因（用 CPL、成交率、ROAS、來源質量）
+- 預期對詢價量／成交／營業額的影響
 
-### 指標二分析：曝光量診斷
-Google Ads 本月曝光量是否足夠？曝光量的趨勢說明什麼？如何在同等預算下提升曝光量？其他平台（HelloToby、360Pro）的觸及情況如何判斷？
+## D. 提高成交率行動（非純投流）
+根據拒絕原因與跟進數據，列出 3–5 項可在 ${nextMonthTitle} 執行的成交率提升動作（報價、跟進節奏、服務包裝、定價）。每項寫預期可提升幾個百分點。
 
-### 指標三分析：CTR 點擊率診斷
-Google Ads 的 CTR 是否達到業界水準（1-3%）？CTR 低的根本原因是什麼（廣告文案？關鍵字選擇？受眾定向？）？給出具體的廣告優化建議。
+## E. 提高營業額行動
+指出應側重哪些服務類型／客單／回頭客策略，以及廣告訊息應指向哪些高意向關鍵字或場景（結合現有數據，勿空談）。
 
-### 指標四分析：CPC 每次點擊成本診斷
-CPC 是否在合理範圍？如何在不降低 CTR 的前提下降低 CPC？有哪些關鍵字策略可以優化？
+## F. ${nextMonthTitle} 投放作戰計劃（核心產出）
+用表格輸出：
+| 優先級 | 行動 | 負責人(Derek/助理) | 對應指標 | 預期影響(成交率pp或HKD) | 完成期限 |
+|--------|------|-------------------|----------|-------------------------|----------|
+至少 5 項，按影響力排序。前 3 項必須是「不做就影響下月營業額」的事。
 
-### 指標五分析：CPL 每個詢價成本診斷（核心）
-哪個平台的 CPL 最低（最划算）？哪個平台 CPL 過高需要優化或停止？如何降低整體 CPL？這是最重要的廣告效益指標，請重點分析。
+## G. 異常警報（如有）
+CPL 暴升、成交率驟降、ROAS < 1、某渠道只燒錢無成交 → 立即止血方案。
 
-### 指標六分析：詢價量與來源診斷
-本月詢價量是否達標？各來源的詢價質量如何（哪個來源成交率最高）？如何增加高質量詢價？
-
-### 指標七分析：成交率診斷
-本月成交率是否正常？失敗原因分析：是定價問題、跟進問題還是客戶質量問題？針對主要失敗原因，給出具體的改善方案，預估可提升成交率多少個百分點。
-
-### 指標八分析：ROAS / ROI 總結與下月策略
-本月廣告整體回報是否達到業界標準（服務業 ROAS ≥ 3x 為良好）？根據 8 個指標的綜合表現，給出下月廣告策略的 3 個最優先行動（按影響力排序）。`;
+寫作要求：
+- 繁體中文；商業分析師口吻：冷靜、量化、可執行
+- 禁止空泛句（如「加強品牌曝光」）；每句建議要能落地
+- 所有結論必須能回溯到上方數據；缺數據就寫「缺什麼數據、怎樣補、否則決策風險是什麼」
+- 全文焦點永遠係：${nextMonthTitle} 點樣用更好投放 + 更高成交率帶動更高營業額`;
 
       const response = await invokeLLM({
+        // Monthly commercial analysis only — other LLM calls stay on ENV.llmModel (Gemini).
+        model: ENV.llmModelAdAnalysis,
         messages: [
-          { role: "system", content: "你是一位外聘的營運策劃總監，專門為香港中小型創意服務公司提供業務診斷與增長策略。你曾服務過多家香港攝影工作室，深入了解香港 B2B 創意服務市場的競爭格局、客戶決策心理、季節性規律和定價策略。你的報告風格是：直接、果斷、有根據，像麥肯錫顧問向老闆報告。請用繁體中文回答，分析要有深度，建議要具體到「下週一就能執行」的程度。" },
+          {
+            role: "system",
+            content:
+              "你是服務香港攝影／創意工作室的商業分析師。你的報告只服務一個目的：根據本月數據，制定下月投放與成交策略，以提高成交率與營業額。風格像內部商業分析備忘：直接、量化、可執行，不要公關腔。請用繁體中文。",
+          },
           { role: "user", content: prompt },
         ],
       });
 
       const content = extractLLMText(response?.choices?.[0]?.message?.content);
       const dataSnapshot = {
+        llmModel: ENV.llmModelAdAnalysis,
         totalNetSpend, totalRevenue, overallRoas, overallConvRate,
         platformCount: platformSummary.length,
         curMonthTotalSpend, prevMonthTotalSpend,
@@ -952,7 +962,7 @@ CPC 是否在合理範圍？如何在不降低 CTR 的前提下降低 CPC？有�
         avgRejectedAmount,
         yearlyRejectionReasons,
         totalYearlyRejections,
-        // Google Ads 曝光/點擊數據（8 個指標）
+        // Google Ads 曝光/點擊（漏斗診斷用）
         curMonthImpressions, prevMonthImpressions,
         curMonthClicks, prevMonthClicks,
         curCtr, prevCtr,

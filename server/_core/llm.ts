@@ -57,6 +57,8 @@ export type ToolChoice =
 
 export type InvokeParams = {
   messages: Message[];
+  /** Override ENV.llmModel for this call only (e.g. gpt-5 for ad analysis). */
+  model?: string;
   tools?: Tool[];
   toolChoice?: ToolChoice;
   tool_choice?: ToolChoice;
@@ -280,11 +282,16 @@ export function extractLLMText(content: unknown): string {
   return "";
 }
 
+function isGeminiModel(model: string): boolean {
+  return model.toLowerCase().startsWith("gemini");
+}
+
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
   const {
     messages,
+    model: modelOverride,
     tools,
     toolChoice,
     tool_choice,
@@ -294,8 +301,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     response_format,
   } = params;
 
+  const model = (modelOverride?.trim() || ENV.llmModel).trim() || ENV.llmModel;
+
   const payload: Record<string, unknown> = {
-    model: ENV.llmModel,
+    model,
     messages: messages.map(normalizeMessage),
   };
 
@@ -311,9 +320,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  payload.max_tokens = 32768;
+  // Gemini-only extended thinking; OpenAI GPT models reject this field.
+  if (isGeminiModel(model)) {
+    payload.thinking = {
+      budget_tokens: 128,
+    };
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
