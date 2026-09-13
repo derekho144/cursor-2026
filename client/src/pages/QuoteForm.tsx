@@ -40,6 +40,10 @@ import {
   splitQuoteLineItemMoney,
   type QuoteLineItemCategory,
 } from "@shared/quoteLineItemKind";
+import {
+  computeQuoteDiscountAmount,
+  discountableQuoteSubtotal,
+} from "@shared/quoteDiscount";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -838,17 +842,15 @@ export default function QuoteForm() {
     () => splitQuoteLineItemMoney(form.items),
     [form.items]
   );
-  // Items excluded from discount: transportation / 車費, expedited fee / 加急費用
+  // Membership % discount excludes transportation / 車費 and rush / 加急 fees
   const discountableSubtotal = useMemo(
-    () => form.items.reduce((sum, item) => {
-      const desc = item.description.toLowerCase();
-      const isTransport = ["transportation", "transport", "車費", "交通", "travel"].some(k => desc.includes(k));
-      const isExpedited = ["expedited", "加急", "urgent fee", "rush fee", "express fee"].some(k => desc.includes(k));
-      return (isTransport || isExpedited) ? sum : sum + item.amount;
-    }, 0),
+    () => discountableQuoteSubtotal(form.items),
     [form.items]
   );
-  const discountAmount = Math.round(discountableSubtotal * (form.discountPercent || 0) / 100);
+  const discountAmount = computeQuoteDiscountAmount(
+    form.items,
+    form.discountPercent || 0
+  );
   const total = Math.max(0, subtotal - discountAmount);
 
   const updateItem = (
@@ -1003,9 +1005,10 @@ export default function QuoteForm() {
     const items = reconciledItems;
 
     const reconciledSubtotal = items.reduce((sum, item) => sum + item.amount, 0);
+    // Keep same rule as live preview: never discount transport / rush fees
     const reconciledDiscountAmount =
       form.discountPercent > 0
-        ? Math.round((reconciledSubtotal * form.discountPercent) / 100 * 100) / 100
+        ? computeQuoteDiscountAmount(items, form.discountPercent)
         : discountAmount;
     const reconciledTotal =
       Math.round((reconciledSubtotal - reconciledDiscountAmount) * 100) / 100;
