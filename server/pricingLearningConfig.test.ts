@@ -38,6 +38,26 @@ describe("pricingLearningConfig", () => {
       isQuoteEligibleForPricingLearning(new Date("2026-09-01T12:00:00+08:00"))
     ).toBe(true);
   });
+
+  it("includes early drafts when shootingDate is on/after start day", () => {
+    // Product JD202608-W279: created 18/8, shoot 2026-09-04
+    expect(
+      isQuoteEligibleForPricingLearning("2026-08-18T10:00:00+08:00", "2026-09-04")
+    ).toBe(true);
+    // Jewelry JD202607-JZCH: created 19/7, shoot 2026-09-03
+    expect(
+      isQuoteEligibleForPricingLearning("2026-07-19T10:00:00+08:00", "2026-09-03")
+    ).toBe(true);
+  });
+
+  it("still excludes quotes with both createdAt and shootingDate before start", () => {
+    expect(
+      isQuoteEligibleForPricingLearning("2026-07-19T10:00:00+08:00", "2026-08-20")
+    ).toBe(false);
+    expect(
+      isQuoteEligibleForPricingLearning("2026-08-18T10:00:00+08:00", null)
+    ).toBe(false);
+  });
 });
 
 describe("evaluateSuggestConfidence", () => {
