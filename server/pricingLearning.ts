@@ -41,6 +41,7 @@ import {
   evaluateSuggestConfidence,
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
+  getPricingLearningStartDateYmd,
   isLearningReadyForAutoDraft,
   pricingLearningStartAtIso,
   SUGGEST_TRUST,
@@ -48,8 +49,17 @@ import {
 
 const MIN_BUCKET_SAMPLES = 2;
 
+/** createdAt ≥ start OR shootingDate (YYYY-MM-DD) ≥ start day (HKT). */
 function pricingLearningStartCondition() {
-  return gte(quotes.createdAt, getPricingLearningStartAt());
+  const startAt = getPricingLearningStartAt();
+  const startYmd = getPricingLearningStartDateYmd();
+  return or(
+    gte(quotes.createdAt, startAt),
+    and(
+      ne(quotes.shootingDate, ""),
+      sql`LEFT(${quotes.shootingDate}, 10) >= ${startYmd}`
+    )
+  )!;
 }
 
 export interface PricingLearningQuoteRow {
@@ -537,7 +547,7 @@ export async function getPricingLearningOverview() {
     generatedAt: new Date().toISOString(),
     learningStartAt: pricingLearningStartAtIso(),
     learningStartLabel: formatPricingLearningStartAtLabel(),
-    learningScopeNote: `只計 ${formatPricingLearningStartAtLabel()}（香港時間）之後建立嘅報價；以往舊單唔作學習參考。`,
+    learningScopeNote: `只計 ${formatPricingLearningStartAtLabel()}（香港時間）起：開單日或拍攝日任一達標即納入；兩者都早過起點嘅舊單唔作學習參考。`,
     acceptedCount: rows.length,
     rejectedCount,
     coverage: {

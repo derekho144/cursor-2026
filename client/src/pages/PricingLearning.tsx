@@ -252,7 +252,7 @@ export default function PricingLearning() {
           </div>
           <p className="text-sm text-muted-foreground max-w-2xl">
             {overview?.learningScopeNote ??
-              "只計指定日期之後建立嘅報價；以往舊單唔作學習參考。"}
+              "只計指定日期起：開單日或拍攝日任一達標即納入；兩者都早過起點嘅舊單唔作學習參考。"}
             「其他」服務類型不計入學習。新單請填齊時長套餐、時數／張數、人手；拒絕時填原因＋預算。
           </p>
         </div>
@@ -1004,9 +1004,9 @@ export default function PricingLearning() {
           className="text-xs text-muted-foreground p-3 rounded"
           style={{ background: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.12)" }}
         >
-          學習起點：{overview?.learningStartLabel ?? "—"}（香港時間）— 此前舊報價唔計入。
+          學習起點：{overview?.learningStartLabel ?? "—"}（香港時間）— 開單日或拍攝日達標即計；兩者都早過起點先唔計。
           建議價門檻：≥8 筆先顯示；≥15 筆＋結構化≥50%「可參考」；≥25 筆＋結構化≥70%「較可信」。
-          新單請填齊結構化欄位；回填只處理起點之後嘅報價。
+          新單請填齊結構化欄位；回填只處理起點達標嘅報價。
         </div>
       </div>
     </DashboardLayout>

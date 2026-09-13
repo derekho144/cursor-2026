@@ -1,6 +1,9 @@
 /**
- * Pricing learning only uses quotes created on/after this instant.
- * Override with env PRICING_LEARNING_START_AT (ISO 8601).
+ * Pricing learning only uses quotes on/after this instant when either:
+ * - createdAt is on/after the start, or
+ * - shootingDate (YYYY-MM-DD) is on/after the start calendar day (HKT).
+ * Early drafts with a later shoot still count. Override with env
+ * PRICING_LEARNING_START_AT (ISO 8601).
  */
 const DEFAULT_START_AT = "2026-08-25T00:00:00+08:00";
 
@@ -152,14 +155,45 @@ export function formatPricingLearningStartAtLabel(): string {
   });
 }
 
+/** Start calendar day in Asia/Hong_Kong as YYYY-MM-DD (for shootingDate compare). */
+export function getPricingLearningStartDateYmd(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(getPricingLearningStartAt());
+}
+
+function normalizeShootingDateYmd(
+  shootingDate: string | null | undefined
+): string | null {
+  if (shootingDate == null) return null;
+  const raw = String(shootingDate).trim();
+  if (!raw) return null;
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Eligible if createdAt ≥ start, OR shootingDate (calendar day) ≥ start day (HKT).
+ */
 export function isQuoteEligibleForPricingLearning(
-  createdAt: Date | string | null | undefined
+  createdAt: Date | string | null | undefined,
+  shootingDate?: string | null
 ): boolean {
-  if (createdAt == null) return false;
-  const t =
-    createdAt instanceof Date
-      ? createdAt.getTime()
-      : new Date(createdAt).getTime();
-  if (Number.isNaN(t)) return false;
-  return t >= getPricingLearningStartAt().getTime();
+  if (createdAt != null) {
+    const t =
+      createdAt instanceof Date
+        ? createdAt.getTime()
+        : new Date(createdAt).getTime();
+    if (!Number.isNaN(t) && t >= getPricingLearningStartAt().getTime()) {
+      return true;
+    }
+  }
+  const shootYmd = normalizeShootingDateYmd(shootingDate);
+  if (shootYmd) {
+    return shootYmd >= getPricingLearningStartDateYmd();
+  }
+  return false;
 }
