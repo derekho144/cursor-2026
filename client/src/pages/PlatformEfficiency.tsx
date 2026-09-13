@@ -632,8 +632,8 @@ export default function PlatformEfficiency() {
             <div className="flex items-center gap-3">
               <Sparkles className="h-5 w-5" style={{ color: "#d4a843" }} />
               <div>
-                <div className="text-sm font-medium" style={{ color: "#d4a843" }}>AI 月度廣告效益分析（8 個核心指標）</div>
-                <div className="text-xs text-muted-foreground mt-0.5">按廣告漏斗分層：投放力度 → 曝光 → 點擊 → 詢價 → 成交 → 回報</div>
+                <div className="text-sm font-medium" style={{ color: "#d4a843" }}>AI 月度廣告效益分析｜商業分析師</div>
+                <div className="text-xs text-muted-foreground mt-0.5">用當月數據制定下月投放與成交策略，目標提高成交率與營業額</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -664,40 +664,32 @@ export default function PlatformEfficiency() {
             </div>
           </div>
 
-          {/* 8 個核心指標數據摘要 */}
+          {/* 決策用指標摘要（餵畀商業分析師報告） */}
           {(() => {
-            const snap = aiResult ? null : null; // 使用 platformStats 數據
             const ps = data.platformStats;
             const curM = selectedMonth;
             const curY = selectedYear;
-            // 從 trendByMonth 取得當月各平台開支
-            const curTrend = data.trendByMonth?.find((r: { month: number }) => r.month === curM);
-            const curSpendTotal = ps.reduce((s: number, p: { spend?: number }) => s + (p.spend ?? 0), 0);
-            // 計算各平台 CPL
             const cplItems = ps.filter((p: { cpl: number | null; label: string }) => p.cpl !== null).map((p: { label: string; cpl: number | null }) => ({ label: p.label, cpl: p.cpl! }));
             const bestCpl = cplItems.length > 0 ? cplItems.reduce((a: { label: string; cpl: number }, b: { label: string; cpl: number }) => a.cpl < b.cpl ? a : b) : null;
             const totalLeadsAll = ps.reduce((s: number, p: { totalLeads: number }) => s + p.totalLeads, 0);
             const totalConvAll = ps.reduce((s: number, p: { conversions: number }) => s + p.conversions, 0);
             const overallConvPct = totalLeadsAll > 0 ? ((totalConvAll / totalLeadsAll) * 100).toFixed(1) : "0";
             const overallRoasVal = data.totalNetSpend > 0 ? (data.totalRevenue / data.totalNetSpend).toFixed(2) : null;
-            // Google Ads 曝光/點擊/CPC 真實數據
             const gaStats = ps.find((p: { platform: string }) => p.platform === "google_ads");
             const gaImpressions = gaStats?.impressions ?? null;
             const gaClicks = gaStats?.clicks ?? null;
             const gaCpc = gaStats?.cpc ?? null;
             const gaCtr = gaStats?.ctr ?? null;
             const metrics = [
-              { label: "① 總廣告支出", sub: `${curY}年${["一","二","三","四","五","六","七","八","九","十","十一","十二"][curM-1]}月`, value: `HK$${data.totalNetSpend.toLocaleString()}`, note: "全年淨開支", color: "#d4a843" },
-              { label: "② 曝光次數", sub: "Google Ads", value: gaImpressions !== null ? gaImpressions.toLocaleString() : "未有數據", note: gaImpressions !== null ? "來自廣告開支記錄" : "請在廣告開支填入曝光次數", color: "#60a5fa" },
-              { label: "③ CTR 點擊率", sub: "Google Ads", value: gaCtr !== null ? `${gaCtr.toFixed(2)}%` : (gaImpressions !== null && gaClicks !== null ? `${((gaClicks/gaImpressions)*100).toFixed(2)}%` : "未有數據"), note: "業界標準 1-3%", color: "#34d399" },
-              { label: "④ CPC 點擊成本", sub: "Google Ads", value: gaCpc !== null ? `HK$${gaCpc.toFixed(2)}` : "未有數據", note: gaCpc !== null ? `點擊數：${gaClicks?.toLocaleString() ?? "—"}` : "請在廣告開支填入點擊次數", color: "#a78bfa" },
-              { label: "⑤ CPL 詢價成本", sub: bestCpl ? `最優：${bestCpl.label}` : "各平台", value: bestCpl ? `HK$${Math.round(bestCpl.cpl)}` : "無數據", note: "越低越好", color: "#f59e0b" },
-              { label: "⑥ 詢價數量", sub: "全年", value: `${totalLeadsAll} 個`, note: `${ps.filter((p: { totalLeads: number }) => p.totalLeads > 0).length} 個平台`, color: "#fb923c" },
-              { label: "⑦ 成交率", sub: "全年整體", value: `${overallConvPct}%`, note: `${totalConvAll}/${totalLeadsAll}`, color: "#4ade80" },
-              { label: "⑧ ROAS 回報率", sub: "全年整體", value: overallRoasVal ? `${overallRoasVal}x` : "N/A", note: "≥3x 為良好", color: "#f43f5e" },
+              { label: "廣告開支", sub: `${curY}年${["一","二","三","四","五","六","七","八","九","十","十一","十二"][curM-1]}月｜全年`, value: `HK$${data.totalNetSpend.toLocaleString()}`, note: "預算分配依據", color: "#d4a843" },
+              { label: "曝光／CTR", sub: "Google Ads", value: gaCtr !== null ? `${gaCtr.toFixed(2)}% CTR` : (gaImpressions !== null && gaClicks !== null ? `${((gaClicks/gaImpressions)*100).toFixed(2)}% CTR` : "未有數據"), note: gaImpressions !== null ? `曝光 ${gaImpressions.toLocaleString()}` : "需補曝光數據", color: "#60a5fa" },
+              { label: "CPC／CPL", sub: bestCpl ? `最優 CPL：${bestCpl.label}` : "點擊／詢價成本", value: bestCpl ? `CPL HK$${Math.round(bestCpl.cpl)}` : (gaCpc !== null ? `CPC HK$${gaCpc.toFixed(2)}` : "未有數據"), note: gaCpc !== null ? `CPC HK$${gaCpc.toFixed(2)}` : "越低越好", color: "#f59e0b" },
+              { label: "詢價量", sub: "全年", value: `${totalLeadsAll} 個`, note: `${ps.filter((p: { totalLeads: number }) => p.totalLeads > 0).length} 個平台有來源`, color: "#fb923c" },
+              { label: "成交率", sub: "全年整體｜下月目標核心", value: `${overallConvPct}%`, note: `${totalConvAll}/${totalLeadsAll} 成交`, color: "#4ade80" },
+              { label: "ROAS／營業額槓桿", sub: "全年整體", value: overallRoasVal ? `${overallRoasVal}x` : "N/A", note: "≥3x 為健康；決定加碼／砍量", color: "#f43f5e" },
             ];
             return (
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-3 gap-3 mb-5">
                 {metrics.map((m) => (
                   <div key={m.label} className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${m.color}22` }}>
                     <div className="text-xs font-medium mb-1" style={{ color: m.color }}>{m.label}</div>
@@ -732,7 +724,7 @@ export default function PlatformEfficiency() {
                   <span className="text-xs">或點擊「生成分析」重新生成</span>
                 </div>
               ) : (
-                <div className="text-sm">點擊「生成分析」，AI 將根據當前數據提供整體評估及改善建議</div>
+                <div className="text-sm">點擊「生成分析」，商業分析師會用當月數據輸出下月投放作戰計劃（提高成交率與營業額）</div>
               )}
             </div>
           )}
@@ -741,7 +733,7 @@ export default function PlatformEfficiency() {
             <div className="text-center py-10 text-muted-foreground">
               <div className="flex items-center justify-center gap-2">
                 <RefreshCw className="h-4 w-4 animate-spin" style={{ color: "#d4a843" }} />
-                <span className="text-sm">AI 正在分析數據，請稍候...</span>
+                <span className="text-sm">商業分析師正在診斷漏斗並撰寫下月作戰計劃...</span>
               </div>
             </div>
           )}
