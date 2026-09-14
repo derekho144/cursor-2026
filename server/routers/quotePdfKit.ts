@@ -100,8 +100,11 @@ function formatMoney(v: number | string): string {
 
 function fmtNum(v: number | string): string {
   const n = Number(v);
-  if (n % 1 === 0) return n.toLocaleString("en-HK");
-  return n.toLocaleString("en-HK", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+  // Always 2 dp — match /print/quote UNIT PRICE / AMOUNT columns
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function wrapText(doc: PDFKit.PDFDocument, text: string, maxWidth: number): string[] {
@@ -250,9 +253,10 @@ export async function generateQuotePdfBuffer(
     y += infoH + 0.5;
 
     // ── ITEMS TABLE ────────────────────────────────────────────────
-    const colQty = 50;
-    const colPrice = 100;
-    const colAmt = 100;
+    // Column widths match /print/quote body: QTY 48 · PRICE 110 · AMT 110
+    const colQty = 48;
+    const colPrice = 110;
+    const colAmt = 110;
     const colDesc = CW - colQty - colPrice - colAmt;
 
     // Table header
@@ -262,18 +266,38 @@ export async function generateQuotePdfBuffer(
     doc.text("QTY", ML, y + 9, { width: colQty, align: "center", lineBreak: false });
     doc.text("DESCRIPTION", ML + colQty, y + 9, { lineBreak: false });
     doc.text("UNIT PRICE", ML + colQty + colDesc, y + 9, { width: colPrice, align: "right", lineBreak: false });
-    doc.text("AMOUNT", ML + colQty + colDesc + colPrice, y + 9, { width: colAmt, align: "right", lineBreak: false });
+    doc.text("AMOUNT", ML + colQty + colDesc + colPrice, y + 9, {
+      width: colAmt - 4,
+      align: "right",
+      lineBreak: false,
+    });
     doc.rect(0, y + thH, PW, 0.5).fill("#CCCCCC");
     y += thH + 0.5;
 
     // Table rows
     const items = quote.items || [];
+    const redrawTableHeader = () => {
+      const hh = 26;
+      doc.rect(0, y, PW, hh).fill(C.white);
+      doc.fontSize(6.5).font("NotoSans").fillColor(C.lightGray);
+      doc.text("QTY", ML, y + 9, { width: colQty, align: "center", lineBreak: false });
+      doc.text("DESCRIPTION", ML + colQty, y + 9, { lineBreak: false });
+      doc.text("UNIT PRICE", ML + colQty + colDesc, y + 9, { width: colPrice, align: "right", lineBreak: false });
+      doc.text("AMOUNT", ML + colQty + colDesc + colPrice, y + 9, {
+        width: colAmt - 4,
+        align: "right",
+        lineBreak: false,
+      });
+      doc.rect(0, y + hh, PW, 0.5).fill("#CCCCCC");
+      y += hh + 0.5;
+    };
+
     items.forEach((item: any, idx: number) => {
       const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
       const descLines = String(item.description).split("\n");
 
       // Calculate row height based on description lines
-      doc.fontSize(9).font("NotoSansBold");
+      doc.fontSize(10).font("NotoSans");
       let totalDescLines = 0;
       for (const line of descLines) {
         const wrapped = wrapText(doc, line, colDesc - 10);
@@ -281,16 +305,26 @@ export async function generateQuotePdfBuffer(
       }
       const rowH = Math.max(28, totalDescLines * 13 + 14);
 
+      if (y + rowH > PH - 40) {
+        doc.addPage();
+        y = 32;
+        redrawTableHeader();
+      }
+
       // Row background
       const rowBg = idx % 2 === 0 ? C.rowWhite : C.rowAlt;
       doc.rect(0, y, PW, rowH).fill(rowBg);
 
       // QTY
-      doc.fontSize(9).font("NotoSans").fillColor(C.darkGray);
-      doc.text(String(Number(item.quantity)), ML, y + rowH / 2 - 5, { width: colQty, align: "center", lineBreak: false });
+      doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
+      doc.text(String(Number(item.quantity)), ML, y + rowH / 2 - 5, {
+        width: colQty,
+        align: "center",
+        lineBreak: false,
+      });
 
-      // Description
-      doc.fontSize(9).font("NotoSansBold").fillColor(C.black);
+      // Description — regular weight like print page
+      doc.fontSize(10).font("NotoSans").fillColor(C.black);
       let descY = y + 8;
       for (const line of descLines) {
         const wrapped = wrapText(doc, line, colDesc - 10);
@@ -302,20 +336,36 @@ export async function generateQuotePdfBuffer(
 
       // Unit Price
       if (isIncluded) {
-        doc.fontSize(8).font("NotoSans").fillColor(C.medGray);
-        doc.text("Included", ML + colQty + colDesc, y + rowH / 2 - 5, { width: colPrice, align: "right", lineBreak: false });
+        doc.fontSize(10).font("NotoSans").fillColor("#888888");
+        doc.text("Included", ML + colQty + colDesc, y + rowH / 2 - 5, {
+          width: colPrice,
+          align: "right",
+          lineBreak: false,
+        });
       } else {
-        doc.fontSize(9).font("NotoSans").fillColor(C.darkGray);
-        doc.text(fmtNum(item.unitPrice), ML + colQty + colDesc, y + rowH / 2 - 5, { width: colPrice, align: "right", lineBreak: false });
+        doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
+        doc.text(fmtNum(item.unitPrice), ML + colQty + colDesc, y + rowH / 2 - 5, {
+          width: colPrice,
+          align: "right",
+          lineBreak: false,
+        });
       }
 
       // Amount
       if (isIncluded) {
-        doc.fontSize(8).font("NotoSans").fillColor(C.medGray);
-        doc.text("Included", ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, { width: colAmt, align: "right", lineBreak: false });
+        doc.fontSize(10).font("NotoSans").fillColor("#888888");
+        doc.text("Included", ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, {
+          width: colAmt - 4,
+          align: "right",
+          lineBreak: false,
+        });
       } else {
-        doc.fontSize(9).font("NotoSans").fillColor(C.darkGray);
-        doc.text(fmtNum(item.amount), ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, { width: colAmt, align: "right", lineBreak: false });
+        doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
+        doc.text(fmtNum(item.amount), ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, {
+          width: colAmt - 4,
+          align: "right",
+          lineBreak: false,
+        });
       }
 
       // Row bottom border
@@ -398,30 +448,29 @@ export async function generateQuotePdfBuffer(
         : Number(quote.total) * depositPct / 100;
       const netAmt = Number(quote.total) - depositAmt;
       const isFullPayment = depositAmt >= Number(quote.total);
-      const fmtAmt = (n: number) => {
-        const s = n % 1 === 0
-          ? n.toLocaleString("en-HK")
-          : n.toLocaleString("en-HK", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-        return `$${s}`;
-      };
+      const fmtAmt = (n: number) =>
+        `HKD ${n.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
       // 訂金標籤：固定金額顯示金額，百分比顯示百分比
       const depositLabel = depositMode === "fixed"
         ? `DEPOSIT (HKD ${depositAmt.toLocaleString("en-HK")})`
         : `DEPOSIT (${depositPct}%)`;
       const depositRowH = !isFullPayment ? 48 : 28;
-      doc.rect(0, y, PW, depositRowH).fill("#f9f6ef");
+      // No beige band — match /print/quote (plain white totals stack)
       doc.rect(0, y, PW, 0.5).fill(C.border);
       // Deposit row
       doc.fontSize(7.5).font("NotoSans").fillColor(C.lightGray);
-      doc.text(depositLabel, PW - MR - 200, y + 8, { width: 120, align: "right", lineBreak: false });
-      doc.fontSize(11).font("NotoSansBold").fillColor(C.black);
-      doc.text(fmtAmt(depositAmt), PW - MR - 80, y + 6, { width: 80, align: "right", lineBreak: false });
+      doc.text(depositLabel, PW - MR - 220, y + 8, { width: 120, align: "right", lineBreak: false });
+      doc.fontSize(10.5).font("NotoSansBold").fillColor(C.black);
+      doc.text(fmtAmt(depositAmt), PW - MR - 100, y + 6, { width: 100, align: "right", lineBreak: false });
       // Net Payment row
       if (!isFullPayment) {
         doc.fontSize(7.5).font("NotoSans").fillColor(C.lightGray);
-        doc.text("NET PAYMENT", PW - MR - 200, y + 28, { width: 120, align: "right", lineBreak: false });
-        doc.fontSize(11).font("NotoSans").fillColor(C.darkGray);
-        doc.text(fmtAmt(netAmt), PW - MR - 80, y + 26, { width: 80, align: "right", lineBreak: false });
+        doc.text("NET PAYMENT", PW - MR - 220, y + 28, { width: 120, align: "right", lineBreak: false });
+        doc.fontSize(10.5).font("NotoSans").fillColor(C.darkGray);
+        doc.text(fmtAmt(netAmt), PW - MR - 100, y + 26, { width: 100, align: "right", lineBreak: false });
       }
       doc.rect(0, y + depositRowH, PW, 0.5).fill(C.border);
       y += depositRowH + 0.5;
