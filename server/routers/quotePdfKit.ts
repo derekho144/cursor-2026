@@ -7,6 +7,7 @@ import PDFDocument from "pdfkit";
 import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join as pathJoin } from "path";
 import { tmpdir } from "os";
+import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
 
 // ─── Font CDN URLs (uploaded to Manus CDN) ─────────────────────────
 const FONT_CDN = {
@@ -194,7 +195,7 @@ export async function generateQuotePdfBuffer(
     let y = headerH;
 
     // ── PREPARED FOR / SERVICE DETAILS ────────────────────────────
-    // Dynamically calculate infoH based on client name length
+    // Dynamically calculate infoH based on client name length + service extras
     const clientName = quote.clientCompany || quote.clientName;
     const clientNameWidth = CW / 2 - 16;
     // Estimate lines needed for client name (approx 13pt font, ~40 chars per line at this width)
@@ -202,7 +203,28 @@ export async function generateQuotePdfBuffer(
     const nameLines = Math.ceil(clientName.length / charsPerLine);
     const nameBlockH = Math.max(16, nameLines * 16);
     const extraLines = (quote.clientPhone ? 1 : 0) + (quote.clientEmail ? 1 : 0);
-    const infoH = Math.max(70, 24 + nameBlockH + extraLines * 14 + 12);
+    const photogs = Number((quote as any).crewPhotographers ?? 0);
+    const asst = Number((quote as any).crewAssistants ?? 0);
+    const video = Number((quote as any).crewVideographers ?? 0);
+    const others = Number((quote as any).crewOthers ?? 0);
+    const crewParts: string[] = [];
+    if (photogs > 0) crewParts.push(`Photographer×${photogs}`);
+    if (video > 0) crewParts.push(`Video×${video}`);
+    if (asst > 0) crewParts.push(`Assistant×${asst}`);
+    if (others > 0) crewParts.push(`Other×${others}`);
+    const teamField = String((quote as any).team ?? "").trim();
+    const teamLabel = crewParts.length > 0 ? crewParts.join(" + ") : teamField;
+    const serviceExtraCount =
+      (quote.shootingDate ? 1 : 0) +
+      (quote.shootingLocation ? 1 : 0) +
+      ((quote as any).shotCount != null && Number((quote as any).shotCount) > 0 ? 1 : 0) +
+      ((quote as any).shootHours != null && Number((quote as any).shootHours) > 0 ? 1 : 0) +
+      (teamLabel ? 1 : 0);
+    const infoH = Math.max(
+      70,
+      24 + nameBlockH + extraLines * 14 + 12,
+      24 + 16 + serviceExtraCount * 12 + 12
+    );
     doc.rect(0, y, PW, infoH).fill(C.white);
 
     // Left: Prepared For
@@ -246,6 +268,31 @@ export async function generateQuotePdfBuffer(
         width: CW / 2 - 16,
         lineBreak: false,
       });
+    }
+
+    // Extra service lines — match print page (shots / hours / crew team)
+    {
+      let svcY =
+        y +
+        40 +
+        (quote.shootingDate ? 12 : 0) +
+        (quote.shootingLocation ? 12 : 0);
+      const extras: string[] = [];
+      if ((quote as any).shotCount != null && Number((quote as any).shotCount) > 0) {
+        extras.push(`Shots: ${Number((quote as any).shotCount)}`);
+      }
+      if ((quote as any).shootHours != null && Number((quote as any).shootHours) > 0) {
+        extras.push(`Hours: ${Number((quote as any).shootHours)}`);
+      }
+      if (teamLabel) extras.push(`Team: ${teamLabel}`);
+      doc.fontSize(9).font("NotoSans").fillColor(C.medGray);
+      for (const line of extras) {
+        doc.text(line, PW / 2 + 16, svcY, {
+          width: CW / 2 - 16,
+          lineBreak: false,
+        });
+        svcY += 12;
+      }
     }
 
     // Bottom border
@@ -477,8 +524,9 @@ export async function generateQuotePdfBuffer(
     }
 
     // ── NOTES ──────────────────────────────────────────────────────
-    if (quote.notes) {
-      const noteLines = quote.notes.split("\n");
+    const clientNotes = sanitizeQuoteNotesForClientPdf(quote.notes);
+    if (clientNotes) {
+      const noteLines = clientNotes.split("\n");
       const noteH = noteLines.length * 14 + 36;
       doc.rect(ML, y + 8, CW, noteH).fill(C.noteBg);
       doc.rect(ML, y + 8, 2, noteH).fill("#CCCCCC");

@@ -190,3 +190,20 @@ export function formatInquiryDraftNotes(input: {
   }
   return lines.join("\n");
 }
+
+/**
+ * Strip internal draft diagnostics from notes before client-facing PDF / email.
+ * Keeps 【假設（請核實）】 (useful for ops review) but never ships 【缺欄】 field names.
+ */
+export function sanitizeQuoteNotesForClientPdf(
+  notes: string | null | undefined
+): string {
+  if (!notes) return "";
+  const cleaned = notes
+    .split("\n")
+    .filter((line) => !/^\s*【缺欄】/.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned;
+}
