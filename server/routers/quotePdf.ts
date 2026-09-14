@@ -84,88 +84,116 @@ export function generateQuotePdfHtml(
       .toUpperCase();
   };
 
+  const money = (n: number) =>
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   const itemRows = items
     .map((item: any, idx: number) => {
       const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
-      const money = (n: number) =>
-        n.toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
       const priceCell = isIncluded
         ? `<em style="font-style:italic;color:#888;">Included</em>`
         : money(Number(item.unitPrice));
       const amountCell = isIncluded
         ? `<em style="font-style:italic;color:#888;">Included</em>`
         : money(Number(item.amount));
-      const rowBg = idx % 2 === 0 ? "background:#ffffff;" : "background:#f5f5f5;";
+      const rowBg = idx % 2 === 0 ? "background:#ffffff;" : "background:#f7f7f7;";
       return `
-      <tr style="${rowBg}">
-        <td style="padding:9px 6px 9px 8px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;text-align:center;">${Number(item.quantity)}</td>
-        <td style="padding:9px 10px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;overflow-wrap:break-word;max-width:0;">${item.description.replace(/\n/g, "<br>")}</td>
-        <td style="padding:9px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10.5px;color:#333;white-space:nowrap;">${priceCell}</td>
-        <td style="padding:9px 8px 9px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10.5px;color:#333;white-space:nowrap;">${amountCell}</td>
+      <tr style="${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <td style="padding:7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#444;text-align:center;width:48px;">${Number(item.quantity)}</td>
+        <td style="padding:7px 8px 7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;">${item.description.replace(/\n/g, "<br>")}</td>
+        <td style="padding:7px 0;border-bottom:1px solid #eeeeee;text-align:right;font-size:10.5px;color:#444;white-space:nowrap;width:110px;">${priceCell}</td>
+        <td style="padding:7px 4px 7px 0;border-bottom:1px solid #eeeeee;text-align:right;font-size:10.5px;color:#222;white-space:nowrap;width:110px;">${amountCell}</td>
       </tr>`;
     })
     .join("");
 
+  // Meta rows match /print/quote — equipment / team / delivery only (shots/hours go in SERVICE DETAILS)
   const extraRowDefs = [
-    (quote as any).shotCount != null && Number((quote as any).shotCount) > 0
-      ? { label: "SHOT<br>COUNT", value: `${Number((quote as any).shotCount)} shots` }
-      : null,
-    (quote as any).shootHours != null && Number((quote as any).shootHours) > 0
-      ? { label: "SHOOT<br>HOURS", value: `${Number((quote as any).shootHours)} hours` }
-      : null,
-    quote.equipment ? { label: "LIGHTING &amp;<br>EQUIPMENT", value: quote.equipment } : null,
+    quote.equipment ? { label: "LIGHTING &amp; EQUIPMENT", value: quote.equipment } : null,
     quote.team ? { label: "TEAM", value: quote.team } : null,
-    quote.deliveryMethod ? { label: "PHOTO<br>DELIVERY<br>METHOD", value: quote.deliveryMethod } : null,
+    quote.deliveryMethod ? { label: "PHOTO DELIVERY METHOD", value: quote.deliveryMethod } : null,
   ].filter(Boolean) as { label: string; value: string }[];
 
   const extraRows = extraRowDefs
     .map((row, i) => {
-      const rowBg = (items.length + i) % 2 === 0 ? "background:#ffffff;" : "background:#f5f5f5;";
-      return `<tr style="${rowBg}">
-          <td colspan="2" style="padding:8px 8px 8px 8px;border-bottom:1px solid #e8e8e8;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;vertical-align:top;min-width:120px;">${row.label}</td>
-          <td colspan="2" style="padding:8px 8px 8px 10px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;word-break:break-word;overflow-wrap:break-word;text-align:right;">${row.value}</td>
+      const rowBg = (items.length + i) % 2 === 0 ? "background:#ffffff;" : "background:#f7f7f7;";
+      return `<tr style="${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+          <td colspan="2" style="padding:7px 0 7px 8px;border-bottom:1px solid #eeeeee;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;vertical-align:top;">${row.label}</td>
+          <td colspan="2" style="padding:7px 4px 7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#333;word-break:break-word;text-align:right;">${row.value}</td>
         </tr>`;
     })
     .join("");
 
   const notesHtml = quote.notes ? quote.notes.replace(/\n/g, "<br>") : "";
 
+  const discPct = Number((quote as any).discountPercent ?? 0);
   const discountRow =
     Number(quote.discountAmount) > 0
-      ? `<div style="display:flex;justify-content:space-between;padding:6px 0;">
-           <span style="font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:#999;">DISCOUNT</span>
-           <span style="font-size:11.5px;color:#555;">- ${Number(quote.discountAmount).toLocaleString()}.00</span>
+      ? `<div style="display:flex;justify-content:space-between;gap:32px;margin-bottom:4px;">
+           <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaa;">SUBTOTAL</span>
+           <span style="font-size:10.5px;color:#555;">HKD ${money(Number(quote.subtotal))}</span>
+         </div>
+         <div style="display:flex;justify-content:space-between;gap:32px;margin-bottom:4px;">
+           <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaa;">DISCOUNT${discPct > 0 ? ` (${discPct}%)` : ""}</span>
+           <span style="font-size:10.5px;color:#555;">- HKD ${money(Number(quote.discountAmount))}</span>
          </div>`
       : "";
 
+  // Match /print/quote: missing depositPercent = 0 (do NOT invent 50%)
   const depositMode = (quote as any).depositMode ?? "percent";
-  const depositPct = Number((quote as any).depositPercent ?? (quote as any).depositPercentage ?? 50);
+  const depositPct = Number((quote as any).depositPercent ?? 0);
   const depositFixedAmt = Number((quote as any).depositFixedAmount ?? 0);
   const hasDeposit = depositMode === "fixed" ? depositFixedAmt > 0 : depositPct > 0;
   const depositAmt = depositMode === "fixed"
     ? depositFixedAmt
-    : Math.round(Number(quote.total) * depositPct / 100);
+    : Number(quote.total) * depositPct / 100;
   const netPayment = Number(quote.total) - depositAmt;
   const depositLabel = depositMode === "fixed"
-    ? `DEPOSIT (HKD ${depositAmt.toLocaleString()})`
+    ? `DEPOSIT (HKD ${depositAmt.toLocaleString("en-HK")})`
     : `DEPOSIT (${depositPct}%)`;
   const isFullPayment = depositAmt >= Number(quote.total);
+  const fmtDeposit = (n: number) =>
+    n.toLocaleString("en-HK", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const depositBlock = hasDeposit
     ? `
     <div style="margin-top:8px;">
       <div style="display:flex;justify-content:space-between;gap:32px;">
         <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">${depositLabel}</span>
-        <span style="font-size:10.5px;color:#111111;font-weight:600;">HKD ${depositAmt.toLocaleString()}</span>
+        <span style="font-size:10.5px;color:#111111;font-weight:600;">HKD ${fmtDeposit(depositAmt)}</span>
       </div>
       ${!isFullPayment ? `<div style="display:flex;justify-content:space-between;gap:32px;margin-top:4px;">
         <span style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;">NET PAYMENT</span>
-        <span style="font-size:10.5px;color:#555555;">HKD ${netPayment.toLocaleString()}</span>
+        <span style="font-size:10.5px;color:#555555;">HKD ${fmtDeposit(netPayment)}</span>
       </div>` : ""}
     </div>`
     : "";
+
+  // SERVICE DETAILS extras — match QuotePrintPage (shots / hours / team)
+  const photogs = Number((quote as any).crewPhotographers ?? 0);
+  const asst = Number((quote as any).crewAssistants ?? 0);
+  const video = Number((quote as any).crewVideographers ?? 0);
+  const others = Number((quote as any).crewOthers ?? 0);
+  const crewParts: string[] = [];
+  if (photogs > 0) crewParts.push(`Photographer×${photogs}`);
+  if (video > 0) crewParts.push(`Video×${video}`);
+  if (asst > 0) crewParts.push(`Assistant×${asst}`);
+  if (others > 0) crewParts.push(`Other×${others}`);
+  const teamField = String((quote as any).team ?? "").trim();
+  const teamLabel = crewParts.length > 0 ? crewParts.join(" + ") : teamField;
+  const serviceDetailLines = [
+    quote.shootingDate ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Date: ${quote.shootingDate}</div>` : "",
+    quote.shootingLocation ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Location: ${quote.shootingLocation}</div>` : "",
+    (quote as any).shotCount != null && Number((quote as any).shotCount) > 0
+      ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Shots: ${Number((quote as any).shotCount)}</div>`
+      : "",
+    (quote as any).shootHours != null && Number((quote as any).shootHours) > 0
+      ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Hours: ${Number((quote as any).shootHours)}</div>`
+      : "",
+    teamLabel ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Team: ${teamLabel}</div>` : "",
+  ].join("");
 
   const termsItems = [
     "訂金不設退款 &middot; Deposit is non-refundable",
@@ -204,18 +232,18 @@ export function generateQuotePdfHtml(
 </head>
 <body>
 
-<!-- ═══ HEADER - BLACK BG ═══ -->
-<table width="794" cellpadding="0" cellspacing="0" style="background-color:#111111;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><tr><td style="padding:24px 32px 20px 32px;">
+<!-- ═══ HEADER - BLACK BG (mirrors QuotePrintPage) ═══ -->
+<table width="794" cellpadding="0" cellspacing="0" style="background-color:#111111;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><tr><td style="padding:16px 32px 14px 32px;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td style="vertical-align:top;width:55%;">
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:8px;">
           <img src="${LOGO_BASE64_URL}" alt="JD STUDIO" style="width:90px;height:auto;display:block;" />
         </div>
-        <div style="font-size:10px;line-height:2.2;">
-          <span style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#777;font-weight:500;display:inline-block;width:40px;">TEL</span><span style="color:#cccccc;">+852 9153 1976</span><br>
-          <span style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#777;font-weight:500;display:inline-block;width:40px;">EMAIL</span><span style="color:#cccccc;">info.exposurehk@gmail.com</span><br>
-          <span style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#777;font-weight:500;display:inline-block;width:40px;">WEB</span><span style="color:#cccccc;">www.jdstudiohk.com</span>
+        <div style="font-size:11px;line-height:2.0;">
+          <span style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#777;display:inline-block;width:38px;">TEL</span><span style="font-size:9.5px;color:#cccccc;">+852 9153 1976</span><br>
+          <span style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#777;display:inline-block;width:38px;">EMAIL</span><span style="font-size:9.5px;color:#cccccc;">info.exposurehk@gmail.com</span><br>
+          <span style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#777;display:inline-block;width:38px;">WEB</span><span style="font-size:9.5px;color:#cccccc;">www.jdstudiohk.com</span>
         </div>
       </td>
       <td style="vertical-align:top;text-align:right;width:45%;">
@@ -227,30 +255,32 @@ export function generateQuotePdfHtml(
     </tr>
   </table>
 </td></tr></table>
+<!-- Gold accent under header — same as /print/quote -->
+<div style="width:794px;height:1px;background:linear-gradient(to right,#d4a843,rgba(212,168,67,0.1),transparent);-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
 
-<!-- ═══ MAIN BODY - WHITE BG ═══ -->
-<div style="background:#ffffff;width:794px;">
+<!-- ═══ MAIN BODY - WHITE BG (40px content inset like QuotePrintPage) ═══ -->
+<div style="background:#ffffff;width:794px;padding:0 40px 32px 40px;box-sizing:border-box;">
 
   <!-- PREPARED FOR / SERVICE DETAILS -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #e0e0e0;border-collapse:collapse;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #e8e8e8;border-collapse:collapse;">
     <tr>
-      <td width="50%" style="padding:16px 20px 16px 32px;vertical-align:top;border-right:1px solid #e0e0e0;">
-        <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:10px;">PREPARED FOR</div>
-        <div style="font-size:14px;font-weight:600;color:#111111;margin-bottom:5px;letter-spacing:0.01em;">${quote.clientCompany || quote.clientName}</div>
-        ${quote.clientPhone ? `<div style="font-size:11px;color:#555555;margin-top:4px;">${quote.clientPhone}</div>` : ""}
-        ${quote.clientEmail ? `<div style="font-size:10px;color:#888888;margin-top:4px;">${quote.clientEmail}</div>` : ""}
+      <td width="50%" style="padding:10px 16px 10px 0;vertical-align:top;">
+        <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">PREPARED FOR</div>
+        <div style="font-size:13px;font-weight:700;color:#111111;margin-bottom:2px;">${quote.clientCompany || quote.clientName}</div>
+        ${quote.clientCompany && quote.clientName ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientName}</div>` : ""}
+        ${quote.clientPhone ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientPhone}</div>` : ""}
+        ${quote.clientEmail ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientEmail}</div>` : ""}
       </td>
-      <td width="50%" style="padding:16px 32px 16px 20px;vertical-align:top;">
-        <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:10px;">SERVICE DETAILS</div>
-        <div style="font-size:13px;color:#111111;font-weight:400;">${serviceTypeLabels[quote.serviceType] || quote.serviceType}</div>
-        ${quote.shootingDate ? `<div style="font-size:10.5px;color:#888888;margin-top:6px;">Date: ${quote.shootingDate}</div>` : ""}
-        ${quote.shootingLocation ? `<div style="font-size:10.5px;color:#888888;margin-top:4px;">Location: ${quote.shootingLocation}</div>` : ""}
+      <td width="50%" style="padding:10px 0 10px 16px;vertical-align:top;border-left:1px solid #f0f0f0;">
+        <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">SERVICE DETAILS</div>
+        <div style="font-size:12px;color:#222222;font-weight:400;margin-bottom:2px;">${serviceTypeLabels[quote.serviceType] || quote.serviceType}</div>
+        ${serviceDetailLines}
       </td>
     </tr>
   </table>
 
   <!-- ITEMS TABLE -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;border-bottom:1px solid #e8e8e8;">
     <colgroup>
       <col style="width:48px;" />
       <col />
@@ -258,11 +288,11 @@ export function generateQuotePdfHtml(
       <col style="width:110px;" />
     </colgroup>
     <thead>
-      <tr style="border-bottom:1px solid #cccccc;">
-        <th style="padding:8px 6px 8px 8px;text-align:center;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">QTY</th>
-        <th style="padding:10px 10px;text-align:left;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">DESCRIPTION</th>
-        <th style="padding:10px 10px;text-align:right;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">UNIT PRICE</th>
-        <th style="padding:8px 8px 8px 10px;text-align:right;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">AMOUNT</th>
+      <tr style="background:#f7f7f7;border-top:1px solid #dddddd;border-bottom:1px solid #dddddd;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <th style="padding:5px 0;text-align:center;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">QTY</th>
+        <th style="padding:5px 0;text-align:left;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">DESCRIPTION</th>
+        <th style="padding:5px 0;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">UNIT PRICE</th>
+        <th style="padding:5px 4px 5px 0;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">AMOUNT</th>
       </tr>
     </thead>
     <tbody>
@@ -272,12 +302,12 @@ export function generateQuotePdfHtml(
   </table>
 
   <!-- TOTAL — stacked layout matching /print/quote -->
-  <div style="padding:10px 32px 6px 32px;display:flex;justify-content:flex-end;">
+  <div style="padding:10px 0 6px 0;display:flex;justify-content:flex-end;">
     <div style="text-align:right;min-width:200px;padding-right:4px;">
       ${discountRow}
       <div style="border-top:1px solid #cccccc;padding-top:8px;margin-top:4px;">
         <div style="font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;margin-bottom:4px;">TOTAL AMOUNT</div>
-        <div style="font-size:22px;font-weight:300;color:#111111;letter-spacing:-0.02em;">$${Number(quote.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <div style="font-size:22px;font-weight:300;color:#111111;letter-spacing:-0.02em;">$${money(Number(quote.total))}</div>
       </div>
       ${depositBlock}
     </div>
@@ -285,54 +315,54 @@ export function generateQuotePdfHtml(
 
   ${notesHtml ? `
   <!-- NOTES -->
-  <div style="margin:0 32px 14px;border-left:2px solid #cccccc;padding:8px 14px;background:#f9f9f9;">
-    <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:8px;">NOTES</div>
-    <div style="font-size:11px;color:#444444;line-height:1.9;">${notesHtml}</div>
+  <div style="margin:8px 0;border:1px solid #e8e8e8;border-radius:2px;padding:7px 10px;">
+    <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:6px;">NOTES</div>
+    <div style="font-size:10.5px;color:#444444;line-height:1.7;">${notesHtml}</div>
   </div>` : ""}
 
   <!-- PAYMENT DETAIL -->
-  <div style="padding:0 32px 0 32px;margin-bottom:0;page-break-inside:avoid;-webkit-column-break-inside:avoid;break-inside:avoid;">
-    <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:12px;">PAYMENT DETAIL</div>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+  <div style="margin-top:10px;margin-bottom:8px;page-break-inside:avoid;-webkit-column-break-inside:avoid;break-inside:avoid;">
+    <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:12px;">PAYMENT DETAIL</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
       <tr>
-        <td style="vertical-align:top;width:35%;padding-right:24px;">
-          <div style="font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;margin-bottom:14px;">BANK TRANSFER</div>
+        <td style="vertical-align:top;width:35%;padding-right:16px;">
+          <div style="font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">BANK TRANSFER</div>
           <table cellpadding="0" cellspacing="0">
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;white-space:nowrap;">PAYEE</td><td style="font-size:10px;color:#333333;">JD STUDIO Limited</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">BANK</td><td style="font-size:10px;color:#333333;">Standard Chartered Bank (Hong Kong) Ltd</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">ACCOUNT</td><td style="font-size:10px;color:#333333;">44796326072</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">REF</td><td style="font-size:10px;color:#111111;font-weight:600;">${quote.quoteNumber}</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;white-space:nowrap;width:48px;vertical-align:top;">PAYEE</td><td style="font-size:9.5px;color:#222222;font-weight:500;">JD STUDIO Limited</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">BANK</td><td style="font-size:9.5px;color:#222222;font-weight:500;">Standard Chartered Bank (Hong Kong) Ltd</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">ACCOUNT</td><td style="font-size:9.5px;color:#222222;font-weight:500;">44796326072</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">REF</td><td style="font-size:9.5px;color:#222222;font-weight:700;">${quote.quoteNumber}</td></tr>
           </table>
         </td>
-        <td style="vertical-align:top;width:35%;padding-right:24px;">
-          <div style="font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;margin-bottom:14px;">FPS 轉數快</div>
+        <td style="vertical-align:top;width:35%;padding-right:16px;">
+          <div style="font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">FPS 轉數快</div>
           <table cellpadding="0" cellspacing="0">
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;white-space:nowrap;">PAYEE</td><td style="font-size:10px;color:#333333;">HUI MAN HO</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">電話</td><td style="font-size:10px;color:#333333;">95131188</td></tr>
-            <tr><td style="font-size:7px;letter-spacing:0.14em;text-transform:uppercase;color:#bbbbbb;padding:3px 16px 3px 0;">REF</td><td style="font-size:10px;color:#111111;font-weight:600;">${quote.quoteNumber}</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;white-space:nowrap;width:48px;vertical-align:top;">PAYEE</td><td style="font-size:9.5px;color:#222222;font-weight:500;">HUI MAN HO</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">電話</td><td style="font-size:9.5px;color:#222222;font-weight:500;">95131188</td></tr>
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">REF</td><td style="font-size:9.5px;color:#222222;font-weight:700;">${quote.quoteNumber}</td></tr>
           </table>
         </td>
         <td style="vertical-align:top;width:30%;">
-          <div style="background:#1a1a1a;padding:14px 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-            <div style="font-size:7px;letter-spacing:0.24em;text-transform:uppercase;color:#666666;margin-bottom:12px;">CONTACT</div>
-            <div style="font-size:16px;font-weight:500;color:#ffffff;margin-bottom:4px;">Derek</div>
-            <div style="font-size:10.5px;color:#aaaaaa;">+852 9153 1976</div>
-            <div style="width:30px;height:2px;background:#b8873a;margin-top:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+          <div style="background:#1a1a1a;padding:10px 14px;min-width:120px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+            <div style="font-size:6.5px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;margin-bottom:5px;">CONTACT</div>
+            <div style="font-size:18px;font-weight:400;color:#ffffff;margin-bottom:3px;">Derek</div>
+            <div style="font-size:10px;color:#cccccc;">+852 9153 1976</div>
+            <div style="width:20px;height:2px;background:#c9a84c;margin-top:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
           </div>
         </td>
       </tr>
     </table>
   </div>
   <!-- TERMS & CONDITIONS -->
-  <div style="padding:0 32px 14px 32px;">
-    <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:12px;">TERMS &amp; CONDITIONS</div>
+  <div style="margin-top:8px;margin-bottom:8px;">
+    <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:10px;">TERMS &amp; CONDITIONS</div>
     <ul style="list-style:disc;padding-left:18px;">
       ${termsItems}
     </ul>
   </div>
   ${docType !== "RECEIPT" ? `
   <!-- GOOGLE REVIEW — matches /print/quote -->
-  <div style="margin:0 32px 10px 32px;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+  <div style="margin:12px 0 10px 0;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
     <table width="100%" cellpadding="0" cellspacing="0"><tr>
       <td style="width:36px;vertical-align:top;font-size:24px;line-height:1;padding-top:1px;">⭐</td>
       <td style="vertical-align:top;">
@@ -352,39 +382,39 @@ export function generateQuotePdfHtml(
   </div>` : ""}
   ${signatureData ? `
   <!-- SIGNATURE BLOCK -->
-  <div style="padding:8px 32px 10px 32px;border-top:1px solid #e8e8e8;page-break-inside:avoid;break-inside:avoid;">
-    <div style="font-size:7px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:8px;">SIGNATURES</div>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e8e8e8;page-break-inside:avoid;break-inside:avoid;">
+    <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:12px;">SIGNATURES</div>
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td style="width:48%;vertical-align:top;padding-right:16px;">
-          <div style="font-size:6.5px;letter-spacing:0.18em;text-transform:uppercase;color:#bbbbbb;margin-bottom:4px;">CLIENT SIGNATURE</div>
-          <div style="border:1px solid #e0e0e0;border-radius:2px;background:#fafafa;padding:3px;margin-bottom:4px;height:48px;overflow:hidden;text-align:center;">
-            <img src="${signatureData}" style="max-width:100%;max-height:42px;object-fit:contain;display:inline-block;" alt="Client Signature" />
+          <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#bbbbbb;margin-bottom:8px;">CLIENT SIGNATURE</div>
+          <div style="border:1px solid #e0e0e0;border-radius:2px;background:#fafafa;padding:4px;margin-bottom:8px;height:80px;overflow:hidden;text-align:center;">
+            <img src="${signatureData}" style="max-width:100%;max-height:72px;object-fit:contain;display:inline-block;" alt="Client Signature" />
           </div>
-          <div style="border-top:1px solid #cccccc;padding-top:4px;">
-            <div style="font-size:9px;color:#333333;font-weight:500;">${quote.signedByName || ""}</div>
-            <div style="font-size:7px;color:#aaaaaa;margin-top:1px;">${quote.signedAt ? new Date(quote.signedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div>
+          <div style="border-top:1px solid #cccccc;padding-top:6px;">
+            <div style="font-size:10px;color:#333333;font-weight:500;">${quote.signedByName || ""}</div>
+            <div style="font-size:8px;color:#aaaaaa;margin-top:2px;">${quote.signedAt ? new Date(quote.signedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div>
           </div>
         </td>
         <td style="width:4%;"></td>
         <td style="width:48%;vertical-align:top;padding-left:16px;">
-          <div style="font-size:6.5px;letter-spacing:0.18em;text-transform:uppercase;color:#bbbbbb;margin-bottom:4px;">AUTHORISED SIGNATURE</div>
-          <div style="border:1px solid #e0e0e0;border-radius:2px;background:#fafafa;padding:3px;margin-bottom:4px;height:48px;overflow:hidden;text-align:center;line-height:48px;">
-            <span style="font-family:'Georgia',serif;font-size:20px;color:#1a1a1a;letter-spacing:0.02em;font-style:italic;vertical-align:middle;">JD Studio HK</span>
+          <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#bbbbbb;margin-bottom:8px;">AUTHORISED SIGNATURE</div>
+          <div style="border:1px solid #e0e0e0;border-radius:2px;background:#fafafa;padding:4px;margin-bottom:8px;height:80px;overflow:hidden;text-align:center;line-height:80px;">
+            <span style="font-family:'Georgia',serif;font-size:26px;color:#1a1a1a;letter-spacing:0.02em;font-style:italic;vertical-align:middle;">JD Studio HK</span>
           </div>
-          <div style="border-top:1px solid #cccccc;padding-top:4px;">
-            <div style="font-size:9px;color:#333333;font-weight:500;">JD Studio HK</div>
-            <div style="font-size:7px;color:#aaaaaa;margin-top:1px;">${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div>
+          <div style="border-top:1px solid #cccccc;padding-top:6px;">
+            <div style="font-size:10px;color:#333333;font-weight:500;">JD Studio HK</div>
+            <div style="font-size:8px;color:#aaaaaa;margin-top:2px;">${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}</div>
           </div>
         </td>
       </tr>
     </table>
   </div>` : ""}
   <!-- FOOTER -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e0e0e0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e8e8e8;margin-top:10px;">
     <tr>
-      <td style="padding:7px 32px;font-size:8.5px;color:#bbbbbb;letter-spacing:0.14em;">JD STUDIO &middot; HONG KONG</td>
-      <td style="padding:7px 32px;text-align:right;font-size:8.5px;color:#bbbbbb;">info.exposurehk@gmail.com &nbsp;&middot;&nbsp; www.jdstudiohk.com</td>
+      <td style="padding-top:7px;font-size:8px;color:#bbbbbb;letter-spacing:0.1em;">JD STUDIO &middot; HONG KONG</td>
+      <td style="padding-top:7px;text-align:right;font-size:8px;color:#bbbbbb;letter-spacing:0.1em;">info.exposurehk@gmail.com &nbsp;&middot;&nbsp; www.jdstudiohk.com</td>
     </tr>
   </table>
 </div>

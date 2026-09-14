@@ -49,7 +49,7 @@ function normalizeQuoteItemCategory(
 }
 
 /**
- * Prefer print-page HTML→PDF (same layout as 「下載 PDF」/print/quote).
+ * Single PDF pipeline for 「下載 PDF」and email attachments (Chromium HTML template).
  * Falls back to PDFKit only if Chromium is unavailable.
  */
 async function generateQuotePdfMatchingDownload(
@@ -711,25 +711,29 @@ export const quotesRouter = router({
     }),
 
   // ─── Generate Quote PDF (admin) ────────────────────────────────
+  // Same Chromium HTML template as email attachment — keeps 「下載 PDF」 identical to 發送郵件.
   generatePdf: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const quote = await getQuoteById(input.id);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
 
-      const itemsText = quote.items
-        .map((item, idx) => `${idx + 1}. ${item.description} × ${item.quantity}${item.unit} @ HKD ${item.unitPrice} = HKD ${item.amount}`)
-        .join("\n");
+      // Reuse cached description when present (download + email share one layout pipeline)
+      let llmDescription = (quote.llmDescription || "").trim();
+      if (!llmDescription) {
+        const itemsText = quote.items
+          .map((item, idx) => `${idx + 1}. ${item.description} × ${item.quantity}${item.unit} @ HKD ${item.unitPrice} = HKD ${item.amount}`)
+          .join("\n");
 
-      const llmResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `你是 JD Studio HK 的專業報價單撰寫助手。JD Studio 是香港頂尖的商業攝影與影片製作公司，成立於2014年，服務超過1,250間企業客戶。請根據報價單資料，生成一段專業、精煉的服務說明文字（繁體中文），用於報價單PDF的服務描述部分，約100-150字。`,
-          },
-          {
-            role: "user",
-            content: `報價單資料：
+        const llmResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `你是 JD Studio HK 的專業報價單撰寫助手。JD Studio 是香港頂尖的商業攝影與影片製作公司，成立於2014年，服務超過1,250間企業客戶。請根據報價單資料，生成一段專業、精煉的服務說明文字（繁體中文），用於報價單PDF的服務描述部分，約100-150字。`,
+            },
+            {
+              role: "user",
+              content: `報價單資料：
 客戶：${quote.clientName}${quote.clientCompany ? ` (${quote.clientCompany})` : ""}
 服務類型：${SERVICE_TYPE_LABELS[quote.serviceType] || quote.serviceType}
 拍攝日期：${quote.shootingDate || "待定"}
@@ -738,12 +742,14 @@ export const quotesRouter = router({
 ${itemsText}
 總金額：HKD ${quote.total}
 備註：${quote.notes || "無"}`,
-          },
-        ],
-      });
+            },
+          ],
+        });
 
-      const llmDescription = extractLLMText(llmResponse.choices?.[0]?.message?.content)
-        || "感謝您選擇 JD Studio HK 的專業攝影服務。我們將以最高水準為您提供專業的視覺內容製作，確保每個細節都能完美呈現您的品牌形象。";
+        llmDescription = extractLLMText(llmResponse.choices?.[0]?.message?.content)
+          || "感謝您選擇 JD Studio HK 的專業攝影服務。我們將以最高水準為您提供專業的視覺內容製作，確保每個細節都能完美呈現您的品牌形象。";
+      }
+
       const pdfBuffer = await generateQuotePdfMatchingDownload(quote, llmDescription);
       const fileKey = `quotes/${quote.quoteNumber}-${nanoid(8)}.pdf`;
       const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");

@@ -33,7 +33,31 @@ describe("generateQuotePdfHtml print-format template", () => {
     expect(html).toContain("Google Review");
     expect(html).toContain("10% Discount");
     expect(html).toContain("DEPOSIT (50%)");
+    expect(html).toContain("background:#f7f7f7");
+    expect(html).toContain("padding:0 40px 32px 40px");
+    expect(html).toContain("linear-gradient(to right,#d4a843");
+    expect(html).toContain("#c9a84c");
     expect(html).not.toContain("d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/%E8%9E%A2");
+  });
+
+  it("puts shots / hours / crew team into SERVICE DETAILS like the print page", () => {
+    const rich = {
+      ...quote,
+      shootingDate: "2026-09-20",
+      shootingLocation: "Kwun Tong",
+      shotCount: 80,
+      shootHours: 4,
+      crewPhotographers: 1,
+      team: "攝影師×1",
+    };
+    const html = generateQuotePdfHtml(rich, "專業產品攝影服務。", labels);
+    expect(html).toContain("Date: 2026-09-20");
+    expect(html).toContain("Location: Kwun Tong");
+    expect(html).toContain("Shots: 80");
+    expect(html).toContain("Hours: 4");
+    expect(html).toContain("Team: Photographer×1");
+    expect(html).toContain("TEAM");
+    expect(html).toContain("攝影師×1");
   });
 
   it("omits Google Review on receipts", () => {
