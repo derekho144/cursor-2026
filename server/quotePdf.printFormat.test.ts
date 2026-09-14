@@ -87,8 +87,9 @@ describe("generateQuotePdfHtml print-format template", () => {
 
   it("aligns UNIT PRICE / AMOUNT columns with print widths and 2dp money", () => {
     const html = generateQuotePdfHtml(quote, "專業產品攝影服務。", labels);
-    expect(html).toContain('width:48px');
-    expect(html).toContain('width:110px');
+    expect(html).toContain("width:48px");
+    expect(html).toContain("width:110px");
+    expect(html).toContain("display:flex");
     expect(html).toContain("10,000.00");
     expect(html).not.toMatch(/toLocaleString\(\)\.00/);
   });
