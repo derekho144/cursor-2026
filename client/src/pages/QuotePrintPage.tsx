@@ -159,7 +159,7 @@ export default function QuotePrintPage() {
       margin: "8px 0",
     },
     // Payment
-    paymentSection: { marginTop: 10, marginBottom: 8 },
+    paymentSection: { marginTop: 10, marginBottom: 8, pageBreakInside: "avoid" as const, breakInside: "avoid" as const },
     paymentGrid: { display: "flex", gap: 16, alignItems: "flex-start" },
     paymentCol: { flex: 1 },
     paymentTitle: { fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#aaa", fontWeight: 500, marginBottom: 5 },
@@ -413,7 +413,7 @@ export default function QuotePrintPage() {
                 <div style={{ flex: 1, fontSize: 7.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "#888", fontWeight: 600, paddingLeft: 8 }}>
                   {row.label}
                 </div>
-                <div style={{ flex: 1, fontSize: 10.5, color: "#333", textAlign: "right", paddingRight: 4 }}>
+                <div style={{ flex: 1, fontSize: 10.5, color: "#333", textAlign: "right", paddingRight: 4, wordBreak: "break-word" as const }}>
                   {row.value}
                 </div>
               </div>
