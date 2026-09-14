@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { FileText, Plus, Search, Trash2, Edit, Download, ImageIcon, Eye, Building2 } from "lucide-react";
@@ -64,7 +64,6 @@ export default function QuotesList() {
   }, [search]);
 
   const utils = trpc.useUtils();
-  const pendingPdfQuoteNumber = useRef<string>("quotation");
   const { data, isLoading } = trpc.quotes.list.useQuery({
     search: debouncedSearch || undefined,
     serviceType: serviceType === "all" ? undefined : serviceType,
@@ -83,37 +82,6 @@ export default function QuotesList() {
     },
     onError: () => toast.error("刪除失敗"),
   });
-
-  // Same server PDF pipeline as email attachment / QuoteDetail 「下載 PDF」
-  const generatePdfMutation = trpc.quotes.generatePdf.useMutation({
-    onSuccess: async (data) => {
-      if (!data.pdfUrl) return;
-      try {
-        const resp = await fetch(data.pdfUrl);
-        const blob = await resp.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = `${pendingPdfQuoteNumber.current}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(blobUrl);
-        toast.success("PDF 已下載");
-      } catch {
-        window.open(data.pdfUrl, "_blank");
-        toast.success("PDF 已生成，請在新分頁查看");
-      }
-    },
-    onError: (e) => toast.error(`PDF 生成失敗：${e.message}`),
-  });
-
-  const downloadQuotePdf = (quote: { id: number; quoteNumber: string }) => {
-    if (generatePdfMutation.isPending) return;
-    pendingPdfQuoteNumber.current = quote.quoteNumber;
-    toast.message(`正在生成 ${quote.quoteNumber} PDF…`);
-    generatePdfMutation.mutate({ id: quote.id });
-  };
 
   const totalPages = Math.ceil((data?.total ?? 0) / limit);
 
@@ -380,11 +348,10 @@ export default function QuotesList() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            downloadQuotePdf(quote);
+                            window.open(`/print/quote/${quote.id}`, "_blank");
                           }}
                           className="p-1.5 rounded hover:bg-white/10 transition-colors"
                           title="下載PDF"
-                          disabled={generatePdfMutation.isPending}
                         >
                           <Download className="h-3.5 w-3.5" style={{ color: "#d4a843" }} />
                         </button>
@@ -497,11 +464,10 @@ export default function QuotesList() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      downloadQuotePdf(quote);
+                      window.open(`/print/quote/${quote.id}`, "_blank");
                     }}
                     className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-white/10 transition-colors"
                     style={{ border: "1px solid rgba(212,168,67,0.2)", color: "#d4a843" }}
-                    disabled={generatePdfMutation.isPending}
                   >
                     <Download className="h-3 w-3" />PDF
                   </button>

@@ -430,22 +430,20 @@ export default function QuoteDetail() {
               編輯
             </button>
             <button
-              onClick={() => generatePdfMutation.mutate({ id: quoteId })}
-              disabled={generatePdfMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-80 flex-shrink-0 disabled:opacity-50"
+              onClick={() => window.open(`/print/quote/${quoteId}`, "_blank")}
+              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-80 flex-shrink-0"
               style={{ background: "#d4a843", color: "#0a0a0a", fontWeight: 600, letterSpacing: "0.1em" }}
             >
               <Download className="h-3.5 w-3.5" />
-              {generatePdfMutation.isPending ? "生成中…" : "下載 PDF"}
+              下載 PDF
             </button>
             <button
-              onClick={() => generateReceiptMutation.mutate({ id: quoteId })}
-              disabled={generateReceiptMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-80 flex-shrink-0 disabled:opacity-50"
+              onClick={() => window.open(`/print/quote/${quoteId}?type=receipt`, "_blank")}
+              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-80 flex-shrink-0"
               style={{ background: "#1a2e1a", color: "#6fcf6f", border: "1px solid rgba(111,207,111,0.3)", fontWeight: 600, letterSpacing: "0.1em" }}
             >
               <Download className="h-3.5 w-3.5" />
-              {generateReceiptMutation.isPending ? "生成中…" : "下載 Receipt"}
+              下載 Receipt
             </button>
             <button
               onClick={openEmailDialog}
