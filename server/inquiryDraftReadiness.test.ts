@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateInquiryDraftReadiness,
   formatInquiryDraftNotes,
+  sanitizeQuoteNotesForClientPdf,
 } from "../shared/inquiryDraftReadiness";
 
 describe("evaluateInquiryDraftReadiness", () => {
@@ -139,5 +140,24 @@ describe("formatInquiryDraftNotes", () => {
     expect(notes).not.toContain("AI 自動草稿");
     expect(notes).not.toContain("寄件人:");
     expect(notes).not.toContain("主題:");
+  });
+});
+
+describe("sanitizeQuoteNotesForClientPdf", () => {
+  it("strips 【缺欄】 lines but keeps assumptions", () => {
+    const raw = [
+      "香港社會服務聯會活動攝影",
+      "",
+      "【假設（請核實）】",
+      "· 每日 10 小時",
+      "",
+      "【缺欄】clientEmail、shootHours、durationPackage",
+    ].join("\n");
+    const cleaned = sanitizeQuoteNotesForClientPdf(raw);
+    expect(cleaned).toContain("香港社會服務聯會活動攝影");
+    expect(cleaned).toContain("【假設（請核實）】");
+    expect(cleaned).toContain("每日 10 小時");
+    expect(cleaned).not.toContain("【缺欄】");
+    expect(cleaned).not.toContain("clientEmail");
   });
 });

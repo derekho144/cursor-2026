@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { LOGO_BASE64_URL } from "@/lib/logoBase64";
+import { sanitizeQuoteNotesForClientPdf } from "@shared/inquiryDraftReadiness";
 
 // Use inlined base64 logo to avoid CDN dependency - prevents print crash when CDN is slow
 const LOGO_URL = LOGO_BASE64_URL;
@@ -83,6 +84,7 @@ export default function QuotePrintPage() {
   const signatureData = (quote as any).signatureData || null;
   const signedByName = (quote as any).signedByName || "";
   const signedAt = (quote as any).signedAt || null;
+  const clientNotes = sanitizeQuoteNotesForClientPdf(quote.notes);
 
 
   // Styles
@@ -483,12 +485,12 @@ export default function QuotePrintPage() {
         </div>
 
         {/* ── NOTES ── */}
-        {quote.notes && (
+        {clientNotes && (
           <div style={S.notesBlock}>
             <div style={{ ...S.sectionLabel, marginBottom: 6 }}>NOTES</div>
             <p style={{ fontSize: 10.5, color: "#444", lineHeight: 1.7 }}>
-              {quote.notes.split("\n").map((line: string, i: number) => (
-                <span key={i}>{line}{i < quote.notes!.split("\n").length - 1 && <br />}</span>
+              {clientNotes.split("\n").map((line: string, i: number) => (
+                <span key={i}>{line}{i < clientNotes.split("\n").length - 1 && <br />}</span>
               ))}
             </p>
           </div>

@@ -49,8 +49,8 @@ function normalizeQuoteItemCategory(
 }
 
 /**
- * Single PDF pipeline for 「下載 PDF」and email attachments (Chromium HTML template).
- * Falls back to PDFKit only if Chromium is unavailable.
+ * Single PDF pipeline for 「下載 PDF」and email attachments.
+ * Prefer PDFKit (stable JD Studio quotation layout). Chromium HTML is emergency fallback only.
  */
 async function generateQuotePdfMatchingDownload(
   quote: any,
@@ -59,18 +59,18 @@ async function generateQuotePdfMatchingDownload(
   signatureData?: string | null
 ): Promise<Buffer> {
   try {
-    const buf = await renderQuotePdfLikePrint(
+    const buf = await generateQuotePdfBuffer(
       quote,
       llmDescription,
       SERVICE_TYPE_LABELS,
       docType,
       signatureData
     );
-    console.log(`[QuotePDF] Using print-format PDF (${docType}, ${buf.length} bytes)`);
+    console.log(`[QuotePDF] Using PDFKit layout (${docType}, ${buf.length} bytes)`);
     return buf;
   } catch (err) {
-    console.error("[QuotePDF] Print-format PDF failed, falling back to PDFKit:", err);
-    return generateQuotePdfBuffer(
+    console.error("[QuotePDF] PDFKit failed, falling back to Chromium HTML:", err);
+    return renderQuotePdfLikePrint(
       quote,
       llmDescription,
       SERVICE_TYPE_LABELS,

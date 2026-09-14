@@ -9,6 +9,7 @@
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import { LOGO_BASE64_URL } from "./logoBase64";
+import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
 export { SERVICE_TYPE_LABELS } from "./quotePdfKit";
@@ -127,7 +128,10 @@ export function generateQuotePdfHtml(
     })
     .join("");
 
-  const notesHtml = quote.notes ? quote.notes.replace(/\n/g, "<br>") : "";
+  const notesHtml = (() => {
+    const cleaned = sanitizeQuoteNotesForClientPdf(quote.notes);
+    return cleaned ? cleaned.replace(/\n/g, "<br>") : "";
+  })();
 
   const discPct = Number((quote as any).discountPercent ?? 0);
   const discountRow =
