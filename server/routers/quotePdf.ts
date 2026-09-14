@@ -286,7 +286,7 @@ export function generateQuotePdfHtml(
   </div>` : ""}
 
   <!-- PAYMENT DETAIL -->
-  <div style="padding:0 32px 0 32px;margin-bottom:0;">
+  <div style="padding:0 32px 0 32px;margin-bottom:0;page-break-inside:avoid;-webkit-column-break-inside:avoid;break-inside:avoid;">
     <div style="font-size:7.5px;letter-spacing:0.22em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:12px;">PAYMENT DETAIL</div>
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
       <tr>

@@ -323,7 +323,7 @@ export async function generateQuotePdfBuffer(
       y += rowH + 0.5;
     });
 
-    // Extra rows (equipment, team, delivery)
+    // Extra rows (equipment, team, delivery) — wrap long values; never clip with lineBreak:false
     const extraRowDefs = [
       quote.equipment ? { label: "LIGHTING & EQUIPMENT", value: quote.equipment } : null,
       quote.team ? { label: "TEAM", value: quote.team } : null,
@@ -332,12 +332,28 @@ export async function generateQuotePdfBuffer(
 
     extraRowDefs.forEach((row, i) => {
       const rowBg = (items.length + i) % 2 === 0 ? C.rowWhite : C.rowAlt;
-      const rowH = 32;
+      const labelW = 168;
+      const valueW = CW - labelW - 20;
+      doc.fontSize(9).font("NotoSans");
+      const valueLines = wrapText(doc, row.value, valueW);
+      const rowH = Math.max(32, valueLines.length * 12 + 16);
+
+      if (y + rowH + 40 > PH - 36) {
+        doc.addPage();
+        y = 32;
+      }
+
       doc.rect(0, y, PW, rowH).fill(rowBg);
       doc.fontSize(6.5).font("NotoSansBold").fillColor(C.lightGray);
-      doc.text(row.label, ML, y + 10, { width: colQty + colDesc, lineBreak: false });
+      doc.text(row.label, ML + 8, y + 10, { width: labelW - 12, lineBreak: false });
       doc.fontSize(9).font("NotoSans").fillColor(C.darkGray);
-      doc.text(row.value, ML + colQty + colDesc, y + 10, { width: colPrice + colAmt, align: "right", lineBreak: false });
+      valueLines.forEach((line, li) => {
+        doc.text(line, ML + labelW, y + 10 + li * 12, {
+          width: valueW,
+          align: "right",
+          lineBreak: false,
+        });
+      });
       doc.rect(0, y + rowH, PW, 0.5).fill(C.border);
       y += rowH + 0.5;
     });
@@ -398,7 +414,7 @@ export async function generateQuotePdfBuffer(
       // Deposit row
       doc.fontSize(7.5).font("NotoSans").fillColor(C.lightGray);
       doc.text(depositLabel, PW - MR - 200, y + 8, { width: 120, align: "right", lineBreak: false });
-      doc.fontSize(11).font("NotoSansBold").fillColor("#c8922a");
+      doc.fontSize(11).font("NotoSansBold").fillColor(C.black);
       doc.text(fmtAmt(depositAmt), PW - MR - 80, y + 6, { width: 80, align: "right", lineBreak: false });
       // Net Payment row
       if (!isFullPayment) {
@@ -433,6 +449,13 @@ export async function generateQuotePdfBuffer(
     }
 
     // ── PAYMENT DETAIL ─────────────────────────────────────────────
+    // Keep bank / FPS / contact together — avoid orphan "PAYEE" on a mostly blank page.
+    const paymentBlockH = 118;
+    if (y + paymentBlockH > PH - 40) {
+      doc.addPage();
+      y = 32;
+    }
+
     doc.fontSize(6.5).font("NotoSans").fillColor(C.lightGray);
     doc.text("PAYMENT DETAIL", ML, y, { lineBreak: false });
     y += 16;

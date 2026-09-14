@@ -41,4 +41,23 @@ describe("generateQuotePdfHtml print-format template", () => {
     expect(html).toContain("RECEIPT");
     expect(html).not.toContain("Google Review");
   });
+
+  it("keeps payment detail together and wraps long equipment/delivery", () => {
+    const longQuote = {
+      ...quote,
+      equipment:
+        "CAMERA/ Sony A7R4 Lighting AD200 / AD600 / FLASH LIGHT X2 / Softbox / C-stand",
+      deliveryMethod:
+        "Photo: BY LINKS 5-10 DAY | Video first cut BY LINKS 7-10 DAY | Final edit 14 DAY",
+      team: "攝影師×2+錄影×1",
+    };
+    const html = generateQuotePdfHtml(longQuote, "專業活動攝影服務。", labels);
+    expect(html).toContain("break-inside:avoid");
+    expect(html).toContain("PAYMENT DETAIL");
+    expect(html).toContain("JD STUDIO Limited");
+    expect(html).toContain("HUI MAN HO");
+    expect(html).toContain(longQuote.equipment);
+    expect(html).toContain(longQuote.deliveryMethod);
+    expect(html).toContain("word-break:break-word");
+  });
 });
