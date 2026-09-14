@@ -42,19 +42,32 @@ export async function generatePdfFromHtml(
   process.stderr.write(`${logPrefix} Using @sparticuz/chromium: ${execPath}\n`);
 
   const browser = await puppeteerCore.launch({
-    args: chromium.args,
+    args: [
+      ...chromium.args,
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--font-render-hinting=none",
+    ],
     executablePath: execPath,
     headless: true,
   });
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
-    // Wait for @font-face (Noto CJK) + inlined images to settle before capture
-    await page.evaluate(async () => {
-      if (document.fonts?.ready) await document.fonts.ready;
-    });
-    if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+    // Avoid networkidle0 — CDN @font-face can hang forever on Manus egress and break email send.
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
+    try {
+      await Promise.race([
+        page.evaluate(async () => {
+          if (document.fonts?.ready) await document.fonts.ready;
+        }),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    } catch {
+      /* fonts optional — continue with fallback glyphs */
+    }
+    if (waitMs > 0) await new Promise((r) => setTimeout(r, Math.min(waitMs, 1500)));
     const pdfData = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -458,6 +471,6 @@ export async function renderQuotePdfLikePrint(
     docType,
     signatureData
   );
-  return generatePdfFromHtml(html, "[QuotePDF-Print]", [], 1500);
+  return generatePdfFromHtml(html, "[QuotePDF-Print]", [], 800);
 }
 

@@ -22,7 +22,7 @@ import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
-import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
+import { SERVICE_TYPE_LABELS, generateQuotePdfBuffer } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
@@ -48,8 +48,9 @@ function normalizeQuoteItemCategory(
 }
 
 /**
- * Email / stored PDF — MUST match 「下載 PDF」(/print/quote) layout.
- * Uses Chromium HTML→PDF only. Do NOT fall back to PDFKit (different layout = 走位).
+ * Email / stored PDF — match 「下載 PDF」(/print/quote) via Chromium HTML.
+ * Falls back to PDFKit if Chromium is unavailable (common on some hosts) so
+ * 「發送郵件」never hard-fails solely due to headless Chrome.
  */
 async function generateQuotePdfMatchingDownload(
   quote: any,
@@ -68,13 +69,16 @@ async function generateQuotePdfMatchingDownload(
     console.log(`[QuotePDF] Using print-format PDF (${docType}, ${buf.length} bytes)`);
     return buf;
   } catch (err) {
-    console.error("[QuotePDF] Print-format PDF failed (no PDFKit fallback):", err);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message:
-        "無法生成與「下載 PDF」相同格式的檔案（Chromium 列印失敗）。請稍後再試，或先用下載 PDF 檢查排版。",
-      cause: err,
-    });
+    console.error("[QuotePDF] Print-format PDF failed, falling back to PDFKit:", err);
+    const buf = await generateQuotePdfBuffer(
+      quote,
+      llmDescription,
+      SERVICE_TYPE_LABELS,
+      docType,
+      signatureData
+    );
+    console.log(`[QuotePDF] Using PDFKit fallback (${docType}, ${buf.length} bytes)`);
+    return buf;
   }
 }
 /**
