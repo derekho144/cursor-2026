@@ -365,9 +365,9 @@ export function generateQuotePdfHtml(
     </ul>
   </div>
   ${docType !== "RECEIPT" ? `
-  <!-- GOOGLE REVIEW — matches /print/quote -->
-  <div style="margin:12px 0 10px 0;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+  <!-- GOOGLE REVIEW — matches /print/quote; keep block together in email PDF -->
+  <div style="margin:12px 0 10px 0;background:#0d0d0d;border:1px solid #3a2e14;border-radius:6px;padding:12px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;-webkit-column-break-inside:avoid;break-inside:avoid;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="page-break-inside:avoid;break-inside:avoid;"><tr>
       <td style="width:36px;vertical-align:top;font-size:24px;line-height:1;padding-top:1px;">⭐</td>
       <td style="vertical-align:top;">
         <div style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#e8d5a0;margin-bottom:5px;letter-spacing:0.02em;">Google Review</div>
