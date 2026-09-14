@@ -23,7 +23,6 @@ import { ENV } from "../_core/env";
 import { sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
-import { generateQuotePdfBuffer } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
 import {
@@ -49,8 +48,8 @@ function normalizeQuoteItemCategory(
 }
 
 /**
- * Email attachment PDF — same visual template as 「下載 PDF」(/print/quote).
- * Prefer Chromium HTML→PDF; PDFKit only if Chromium is unavailable.
+ * Email / stored PDF — MUST match 「下載 PDF」(/print/quote) layout.
+ * Uses Chromium HTML→PDF only. Do NOT fall back to PDFKit (different layout = 走位).
  */
 async function generateQuotePdfMatchingDownload(
   quote: any,
@@ -66,17 +65,16 @@ async function generateQuotePdfMatchingDownload(
       docType,
       signatureData
     );
-    console.log(`[QuotePDF] Using print-format PDF for email (${docType}, ${buf.length} bytes)`);
+    console.log(`[QuotePDF] Using print-format PDF (${docType}, ${buf.length} bytes)`);
     return buf;
   } catch (err) {
-    console.error("[QuotePDF] Print-format PDF failed, falling back to PDFKit:", err);
-    return generateQuotePdfBuffer(
-      quote,
-      llmDescription,
-      SERVICE_TYPE_LABELS,
-      docType,
-      signatureData
-    );
+    console.error("[QuotePDF] Print-format PDF failed (no PDFKit fallback):", err);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message:
+        "無法生成與「下載 PDF」相同格式的檔案（Chromium 列印失敗）。請稍後再試，或先用下載 PDF 檢查排版。",
+      cause: err,
+    });
   }
 }
 /**

@@ -69,6 +69,14 @@ export async function generatePdfFromHtml(
 }
 
 // ─── HTML Template ─────────────────────────────────────────────────
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function generateQuotePdfHtml(
   quote: any,
   llmDescription: string,
@@ -100,37 +108,49 @@ export function generateQuotePdfHtml(
       const amountCell = isIncluded
         ? `<em style="font-style:italic;color:#888;">Included</em>`
         : money(Number(item.amount));
-      const rowBg = idx % 2 === 0 ? "background:#ffffff;" : "background:#f7f7f7;";
+      const rowBg = idx % 2 === 0 ? "#ffffff" : "#f7f7f7";
+      const descHtml = String(item.description || "")
+        .split("\n")
+        .map((line: string, i: number, arr: string[]) =>
+          `${escapeHtml(line)}${i < arr.length - 1 ? "<br/>" : ""}`
+        )
+        .join("");
       return `
-      <tr style="${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <td style="padding:7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#444;text-align:center;width:48px;">${Number(item.quantity)}</td>
-        <td style="padding:7px 8px 7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;">${item.description.replace(/\n/g, "<br>")}</td>
-        <td style="padding:7px 0;border-bottom:1px solid #eeeeee;text-align:right;font-size:10.5px;color:#444;white-space:nowrap;width:110px;">${priceCell}</td>
-        <td style="padding:7px 4px 7px 0;border-bottom:1px solid #eeeeee;text-align:right;font-size:10.5px;color:#222;white-space:nowrap;width:110px;">${amountCell}</td>
-      </tr>`;
+      <div style="display:flex;border-bottom:1px solid #eeeeee;padding:7px 0;background:${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="width:48px;text-align:center;font-size:10.5px;color:#444;">${Number(item.quantity)}</div>
+        <div style="flex:1;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;padding-right:8px;">${descHtml}</div>
+        <div style="width:110px;text-align:right;font-size:10.5px;color:#444;white-space:nowrap;">${priceCell}</div>
+        <div style="width:110px;text-align:right;font-size:10.5px;color:#222;white-space:nowrap;padding-right:4px;">${amountCell}</div>
+      </div>`;
     })
     .join("");
 
   // Meta rows match /print/quote — equipment / team / delivery only (shots/hours go in SERVICE DETAILS)
   const extraRowDefs = [
-    quote.equipment ? { label: "LIGHTING &amp; EQUIPMENT", value: quote.equipment } : null,
+    quote.equipment ? { label: "LIGHTING & EQUIPMENT", value: quote.equipment } : null,
     quote.team ? { label: "TEAM", value: quote.team } : null,
     quote.deliveryMethod ? { label: "PHOTO DELIVERY METHOD", value: quote.deliveryMethod } : null,
   ].filter(Boolean) as { label: string; value: string }[];
 
   const extraRows = extraRowDefs
     .map((row, i) => {
-      const rowBg = (items.length + i) % 2 === 0 ? "background:#ffffff;" : "background:#f7f7f7;";
-      return `<tr style="${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-          <td colspan="2" style="padding:7px 0 7px 8px;border-bottom:1px solid #eeeeee;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;vertical-align:top;">${row.label}</td>
-          <td colspan="2" style="padding:7px 4px 7px 0;border-bottom:1px solid #eeeeee;font-size:10.5px;color:#333;word-break:break-word;text-align:right;">${row.value}</td>
-        </tr>`;
+      const rowBg = (items.length + i) % 2 === 0 ? "#ffffff" : "#f7f7f7";
+      return `
+      <div style="display:flex;border-bottom:1px solid #eeeeee;padding:7px 0;background:${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="flex:1;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;padding-left:8px;">${row.label}</div>
+        <div style="flex:1;font-size:10.5px;color:#333;text-align:right;padding-right:4px;word-break:break-word;">${escapeHtml(row.value)}</div>
+      </div>`;
     })
     .join("");
 
   const notesHtml = (() => {
     const cleaned = sanitizeQuoteNotesForClientPdf(quote.notes);
-    return cleaned ? cleaned.replace(/\n/g, "<br>") : "";
+    return cleaned
+      ? cleaned
+          .split("\n")
+          .map((line) => escapeHtml(line))
+          .join("<br>")
+      : "";
   })();
 
   const discPct = Number((quote as any).discountPercent ?? 0);
@@ -188,15 +208,21 @@ export function generateQuotePdfHtml(
   const teamField = String((quote as any).team ?? "").trim();
   const teamLabel = crewParts.length > 0 ? crewParts.join(" + ") : teamField;
   const serviceDetailLines = [
-    quote.shootingDate ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Date: ${quote.shootingDate}</div>` : "",
-    quote.shootingLocation ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Location: ${quote.shootingLocation}</div>` : "",
+    quote.shootingDate
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Date: ${escapeHtml(String(quote.shootingDate))}</div>`
+      : "",
+    quote.shootingLocation
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Location: ${escapeHtml(String(quote.shootingLocation))}</div>`
+      : "",
     (quote as any).shotCount != null && Number((quote as any).shotCount) > 0
-      ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Shots: ${Number((quote as any).shotCount)}</div>`
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Shots: ${Number((quote as any).shotCount)}</div>`
       : "",
     (quote as any).shootHours != null && Number((quote as any).shootHours) > 0
-      ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Hours: ${Number((quote as any).shootHours)}</div>`
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Hours: ${Number((quote as any).shootHours)}</div>`
       : "",
-    teamLabel ? `<div style="font-size:9.5px;color:#555;margin-top:4px;">Team: ${teamLabel}</div>` : "",
+    teamLabel
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Team: ${escapeHtml(teamLabel)}</div>`
+      : "",
   ].join("");
 
   const termsItems = [
@@ -265,45 +291,33 @@ export function generateQuotePdfHtml(
 <!-- ═══ MAIN BODY - WHITE BG (40px content inset like QuotePrintPage) ═══ -->
 <div style="background:#ffffff;width:794px;padding:0 40px 32px 40px;box-sizing:border-box;">
 
-  <!-- PREPARED FOR / SERVICE DETAILS -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #e8e8e8;border-collapse:collapse;">
-    <tr>
-      <td width="50%" style="padding:10px 16px 10px 0;vertical-align:top;">
-        <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">PREPARED FOR</div>
-        <div style="font-size:13px;font-weight:700;color:#111111;margin-bottom:2px;">${quote.clientCompany || quote.clientName}</div>
-        ${quote.clientCompany && quote.clientName ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientName}</div>` : ""}
-        ${quote.clientPhone ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientPhone}</div>` : ""}
-        ${quote.clientEmail ? `<div style="font-size:9.5px;color:#555555;margin-bottom:1px;">${quote.clientEmail}</div>` : ""}
-      </td>
-      <td width="50%" style="padding:10px 0 10px 16px;vertical-align:top;border-left:1px solid #f0f0f0;">
-        <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">SERVICE DETAILS</div>
-        <div style="font-size:12px;color:#222222;font-weight:400;margin-bottom:2px;">${serviceTypeLabels[quote.serviceType] || quote.serviceType}</div>
-        ${serviceDetailLines}
-      </td>
-    </tr>
-  </table>
+  <!-- PREPARED FOR / SERVICE DETAILS — flex like QuotePrintPage -->
+  <div style="display:flex;border-bottom:1px solid #e8e8e8;">
+    <div style="flex:1;padding:10px 16px 10px 0;">
+      <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaa;font-weight:500;margin-bottom:5px;">PREPARED FOR</div>
+      <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:2px;">${escapeHtml(quote.clientCompany || quote.clientName || "")}</div>
+      ${quote.clientCompany && quote.clientName ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">${escapeHtml(quote.clientName)}</div>` : ""}
+      ${quote.clientPhone ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">${escapeHtml(quote.clientPhone)}</div>` : ""}
+      ${quote.clientEmail ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">${escapeHtml(quote.clientEmail)}</div>` : ""}
+    </div>
+    <div style="flex:1;padding:10px 0 10px 16px;border-left:1px solid #f0f0f0;">
+      <div style="font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:#aaa;font-weight:500;margin-bottom:5px;">SERVICE DETAILS</div>
+      <div style="font-size:12px;color:#222;font-weight:400;margin-bottom:2px;">${escapeHtml(serviceTypeLabels[quote.serviceType] || quote.serviceType || "")}</div>
+      ${serviceDetailLines}
+    </div>
+  </div>
 
-  <!-- ITEMS TABLE -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;border-bottom:1px solid #e8e8e8;">
-    <colgroup>
-      <col style="width:48px;" />
-      <col />
-      <col style="width:110px;" />
-      <col style="width:110px;" />
-    </colgroup>
-    <thead>
-      <tr style="background:#f7f7f7;border-top:1px solid #dddddd;border-bottom:1px solid #dddddd;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <th style="padding:5px 0;text-align:center;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">QTY</th>
-        <th style="padding:5px 0;text-align:left;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">DESCRIPTION</th>
-        <th style="padding:5px 0;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">UNIT PRICE</th>
-        <th style="padding:5px 4px 5px 0;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888888;font-weight:500;">AMOUNT</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemRows}
-      ${extraRows}
-    </tbody>
-  </table>
+  <!-- ITEMS TABLE — flex rows identical to QuotePrintPage -->
+  <div style="margin-top:0;border-bottom:1px solid #e8e8e8;">
+    <div style="display:flex;border-bottom:1px solid #dddddd;border-top:1px solid #dddddd;background:#f7f7f7;padding:5px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+      <div style="width:48px;text-align:center;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888;font-weight:500;">QTY</div>
+      <div style="flex:1;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888;font-weight:500;">DESCRIPTION</div>
+      <div style="width:110px;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888;font-weight:500;">UNIT PRICE</div>
+      <div style="width:110px;text-align:right;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#888;font-weight:500;padding-right:4px;">AMOUNT</div>
+    </div>
+    ${itemRows}
+    ${extraRows}
+  </div>
 
   <!-- TOTAL — stacked layout matching /print/quote -->
   <div style="padding:10px 0 6px 0;display:flex;justify-content:flex-end;">
