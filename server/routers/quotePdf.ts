@@ -87,19 +87,24 @@ export function generateQuotePdfHtml(
   const itemRows = items
     .map((item: any, idx: number) => {
       const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
+      const money = (n: number) =>
+        n.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
       const priceCell = isIncluded
-        ? `<em style="font-style:italic;color:#555;">Included</em>`
-        : `${Number(item.unitPrice).toLocaleString()}.00`;
+        ? `<em style="font-style:italic;color:#888;">Included</em>`
+        : money(Number(item.unitPrice));
       const amountCell = isIncluded
-        ? `<em style="font-style:italic;color:#555;">Included</em>`
-        : `${Number(item.amount).toLocaleString()}.00`;
+        ? `<em style="font-style:italic;color:#888;">Included</em>`
+        : money(Number(item.amount));
       const rowBg = idx % 2 === 0 ? "background:#ffffff;" : "background:#f5f5f5;";
       return `
       <tr style="${rowBg}">
-        <td style="padding:9px 6px 9px 24px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;text-align:center;">${Number(item.quantity)}</td>
+        <td style="padding:9px 6px 9px 8px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;text-align:center;">${Number(item.quantity)}</td>
         <td style="padding:9px 10px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;overflow-wrap:break-word;max-width:0;">${item.description.replace(/\n/g, "<br>")}</td>
         <td style="padding:9px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10.5px;color:#333;white-space:nowrap;">${priceCell}</td>
-        <td style="padding:9px 24px 9px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10.5px;color:#333;white-space:nowrap;">${amountCell}</td>
+        <td style="padding:9px 8px 9px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:10.5px;color:#333;white-space:nowrap;">${amountCell}</td>
       </tr>`;
     })
     .join("");
@@ -120,8 +125,8 @@ export function generateQuotePdfHtml(
     .map((row, i) => {
       const rowBg = (items.length + i) % 2 === 0 ? "background:#ffffff;" : "background:#f5f5f5;";
       return `<tr style="${rowBg}">
-          <td colspan="2" style="padding:8px 8px 8px 24px;border-bottom:1px solid #e8e8e8;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;vertical-align:top;min-width:120px;">${row.label}</td>
-          <td colspan="2" style="padding:8px 24px 8px 10px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;word-break:break-word;overflow-wrap:break-word;">${row.value}</td>
+          <td colspan="2" style="padding:8px 8px 8px 8px;border-bottom:1px solid #e8e8e8;font-size:7.5px;letter-spacing:0.12em;text-transform:uppercase;color:#888;font-weight:600;vertical-align:top;min-width:120px;">${row.label}</td>
+          <td colspan="2" style="padding:8px 8px 8px 10px;border-bottom:1px solid #e8e8e8;font-size:10.5px;color:#333;word-break:break-word;overflow-wrap:break-word;text-align:right;">${row.value}</td>
         </tr>`;
     })
     .join("");
@@ -247,17 +252,17 @@ export function generateQuotePdfHtml(
   <!-- ITEMS TABLE -->
   <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;">
     <colgroup>
-      <col style="width:56px;" />
+      <col style="width:48px;" />
       <col />
-      <col style="width:108px;" />
-      <col style="width:108px;" />
+      <col style="width:110px;" />
+      <col style="width:110px;" />
     </colgroup>
     <thead>
       <tr style="border-bottom:1px solid #cccccc;">
-        <th style="padding:8px 6px 8px 24px;text-align:center;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">QTY</th>
+        <th style="padding:8px 6px 8px 8px;text-align:center;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">QTY</th>
         <th style="padding:10px 10px;text-align:left;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">DESCRIPTION</th>
         <th style="padding:10px 10px;text-align:right;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">UNIT PRICE</th>
-        <th style="padding:8px 24px 8px 10px;text-align:right;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">AMOUNT</th>
+        <th style="padding:8px 8px 8px 10px;text-align:right;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:#aaaaaa;font-weight:400;">AMOUNT</th>
       </tr>
     </thead>
     <tbody>

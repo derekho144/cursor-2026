@@ -143,10 +143,10 @@ export default function QuotePrintPage() {
       background: "#f7f7f7",
       padding: "5px 0",
     },
-    thQty: { width: 40, textAlign: "center" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500 },
+    thQty: { width: 48, textAlign: "center" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500 },
     thDesc: { flex: 1, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500 },
-    thPrice: { width: 95, textAlign: "right" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500 },
-    thAmount: { width: 95, textAlign: "right" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500, paddingRight: 4 },
+    thPrice: { width: 110, textAlign: "right" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500 },
+    thAmount: { width: 110, textAlign: "right" as const, fontSize: 7, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#888", fontWeight: 500, paddingRight: 4 },
     // Totals
     totalsRow: { display: "flex", justifyContent: "flex-end", padding: "10px 0 6px 0" },
     totalAmountLabel: { fontSize: 8, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: "#aaa", marginBottom: 4 },
