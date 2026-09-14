@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { LOGO_BASE64_URL } from "@/lib/logoBase64";
 import { sanitizeQuoteNotesForClientPdf } from "@shared/inquiryDraftReadiness";
+import { QUOTE_PRINT_DESIGN } from "@shared/quotePrintDesign";
 
 // Use inlined base64 logo to avoid CDN dependency - prevents print crash when CDN is slow
 const LOGO_URL = LOGO_BASE64_URL;
@@ -91,9 +92,9 @@ export default function QuotePrintPage() {
   const S = {
     page: {
       background: "#fff",
-      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+      fontFamily: QUOTE_PRINT_DESIGN.fontFamily,
       color: "#222",
-      maxWidth: 794,
+      maxWidth: QUOTE_PRINT_DESIGN.pageWidthPx,
       margin: "0 auto",
       padding: "0 0 32px 0",
       boxSizing: "border-box" as const,
@@ -313,7 +314,7 @@ export default function QuotePrintPage() {
         {/* Gold gradient divider below header */}
         <div style={{ height: 1, background: "linear-gradient(to right, #d4a843, rgba(212,168,67,0.1), transparent)", WebkitPrintColorAdjust: "exact" as const, printColorAdjust: "exact" as const }} />
         {/* Content wrapper with padding */}
-        <div style={{ padding: "0 40px" }}>
+        <div style={{ padding: `0 ${QUOTE_PRINT_DESIGN.contentHorizontalPaddingPx}px` }}>
 
         {/* ── CLIENT & SERVICE ── */}
         <div style={S.clientServiceRow}>

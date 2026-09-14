@@ -8,8 +8,10 @@
  */
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { existsSync } from "fs";
 import { LOGO_BASE64_URL } from "./logoBase64";
 import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
+import { QUOTE_PRINT_DESIGN } from "../../shared/quotePrintDesign";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
 export { SERVICE_TYPE_LABELS } from "./quotePdfKit";
@@ -20,11 +22,39 @@ const NOTO_CJK_REGULAR =
 const NOTO_CJK_BOLD =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/NotoSansCJK-Bold_74a83bdc.otf";
 
+type PdfBrowserRuntime = "platform" | "sparticuz";
+
+/**
+ * Resolve a real executable before launching the print renderer.
+ *
+ * Production supplies PUPPETEER_EXECUTABLE_PATH. Prefer it over the bundled
+ * serverless binary because it is installed with the platform's matching shared
+ * libraries. The Sparticuz binary is retained as a portable fallback for local
+ * environments, but it must exist after extraction before Puppeteer launches.
+ */
+export async function resolvePdfBrowserExecutablePath(): Promise<{
+  executablePath: string;
+  runtime: PdfBrowserRuntime;
+}> {
+  const platformExecutablePath = (process.env.PUPPETEER_EXECUTABLE_PATH ?? "").trim();
+  if (platformExecutablePath && existsSync(platformExecutablePath)) {
+    return { executablePath: platformExecutablePath, runtime: "platform" };
+  }
+
+  chromium.setGraphicsMode = false;
+  const sparticuzExecutablePath = await chromium.executablePath();
+  if (!existsSync(sparticuzExecutablePath)) {
+    throw new Error(
+      `Chromium executable is unavailable after extraction: ${sparticuzExecutablePath}`
+    );
+  }
+  return { executablePath: sparticuzExecutablePath, runtime: "sparticuz" };
+}
+
 // ─── Shared PDF Generator (@sparticuz/chromium + puppeteer-core) ────────────
 /**
  * Renders HTML to a PDF buffer.
- * Uses @sparticuz/chromium + puppeteer-core — works in Cloud Run serverless without
- * system Chrome, Python, or weasyprint.
+ * Uses the platform Chromium first, then @sparticuz/chromium for portable local use.
  * @param html - Full HTML string to render
  * @param logPrefix - Log prefix for stderr messages
  * @param extraArgs - Additional Chrome args (ignored, kept for API compatibility)
@@ -36,20 +66,22 @@ export async function generatePdfFromHtml(
   _extraArgs: string[] = [],
   waitMs = 2000
 ): Promise<Buffer> {
-  // Disable graphics (WebGL) for serverless — reduces binary size and avoids GPU errors
-  chromium.setGraphicsMode = false;
-  const execPath = await chromium.executablePath();
-  process.stderr.write(`${logPrefix} Using @sparticuz/chromium: ${execPath}\n`);
+  const { executablePath, runtime } = await resolvePdfBrowserExecutablePath();
+  const launchArgs =
+    runtime === "sparticuz"
+      ? chromium.args
+      : ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"];
+  process.stderr.write(`${logPrefix} Using ${runtime} Chromium renderer\n`);
 
   const browser = await puppeteerCore.launch({
     args: [
-      ...chromium.args,
+      ...launchArgs,
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--font-render-hinting=none",
     ],
-    executablePath: execPath,
+    executablePath,
     headless: true,
   });
   try {
@@ -98,6 +130,7 @@ export function generateQuotePdfHtml(
   signatureData?: string | null
 ): string {
   const items = quote.items || [];
+  const { pageWidthPx, contentHorizontalPaddingPx, fontFamily } = QUOTE_PRINT_DESIGN;
 
   const formatDate = (d: string | Date) => {
     const dt = new Date(d);
@@ -267,7 +300,8 @@ export function generateQuotePdfHtml(
     font-style: normal;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#ffffff; color:#222; font-family:'NotoSansCJK','Helvetica Neue',Helvetica,Arial,sans-serif; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:794px; overflow-x:hidden; }
+  /* Shared with QuotePrintPage; Noto is only the CJK fallback. */
+  body { background:#ffffff; color:#222; font-family:${fontFamily}; font-weight:400; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; width:${pageWidthPx}px; overflow-x:hidden; }
   @media print {
     body { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
@@ -276,7 +310,7 @@ export function generateQuotePdfHtml(
 <body>
 
 <!-- ═══ HEADER - BLACK BG (mirrors QuotePrintPage) ═══ -->
-<table width="794" cellpadding="0" cellspacing="0" style="background-color:#111111;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><tr><td style="padding:16px 32px 14px 32px;">
+<table width="${pageWidthPx}" cellpadding="0" cellspacing="0" style="background-color:#111111;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><tr><td style="padding:16px 32px 14px 32px;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td style="vertical-align:top;width:55%;">
@@ -299,10 +333,10 @@ export function generateQuotePdfHtml(
   </table>
 </td></tr></table>
 <!-- Gold accent under header — same as /print/quote -->
-<div style="width:794px;height:1px;background:linear-gradient(to right,#d4a843,rgba(212,168,67,0.1),transparent);-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
+<div style="width:${pageWidthPx}px;height:1px;background:linear-gradient(to right,#d4a843,rgba(212,168,67,0.1),transparent);-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
 
 <!-- ═══ MAIN BODY - WHITE BG (40px content inset like QuotePrintPage) ═══ -->
-<div style="background:#ffffff;width:794px;padding:0 40px 32px 40px;box-sizing:border-box;">
+<div style="background:#ffffff;width:${pageWidthPx}px;padding:0 ${contentHorizontalPaddingPx}px 32px ${contentHorizontalPaddingPx}px;box-sizing:border-box;">
 
   <!-- PREPARED FOR / SERVICE DETAILS — flex like QuotePrintPage -->
   <div style="display:flex;border-bottom:1px solid #e8e8e8;">
@@ -473,4 +507,3 @@ export async function renderQuotePdfLikePrint(
   );
   return generatePdfFromHtml(html, "[QuotePDF-Print]", [], 800);
 }
-
