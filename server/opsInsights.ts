@@ -132,6 +132,89 @@ export type ActivityItem = {
   href: string;
 };
 
+export type AcceptedCalendarItem = {
+  id: number;
+  quoteNumber: string;
+  clientName: string;
+  total: number;
+  /** Calendar day YYYY-MM-DD (HKT for signed/created; shootingDate as stored). */
+  date: string;
+  dateSource: "shootingDate" | "signedAt" | "createdAt";
+  href: string;
+};
+
+/** Format a Date as YYYY-MM-DD in Asia/Hong_Kong. */
+export function toHktYmd(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+/**
+ * Day shown on the accepted calendar:
+ * prefer shootingDate; else signedAt (HKT); else createdAt (HKT).
+ */
+export function resolveAcceptedCalendarDate(input: {
+  shootingDate?: string | null;
+  signedAt?: Date | string | null;
+  createdAt: Date | string;
+}): { date: string; source: AcceptedCalendarItem["dateSource"] } {
+  const shoot = String(input.shootingDate ?? "")
+    .trim()
+    .slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(shoot)) {
+    return { date: shoot, source: "shootingDate" };
+  }
+  if (input.signedAt) {
+    return { date: toHktYmd(new Date(input.signedAt)), source: "signedAt" };
+  }
+  return { date: toHktYmd(new Date(input.createdAt)), source: "createdAt" };
+}
+
+/** Accepted quotes whose calendar day falls in year/month (dashboard selectors). */
+export async function getAcceptedCalendar(
+  year: number,
+  month: number
+): Promise<AcceptedCalendarItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const rows = await db
+    .select({
+      id: quotes.id,
+      quoteNumber: quotes.quoteNumber,
+      clientName: quotes.clientName,
+      total: quotes.total,
+      shootingDate: quotes.shootingDate,
+      signedAt: quotes.signedAt,
+      createdAt: quotes.createdAt,
+    })
+    .from(quotes)
+    .where(eq(quotes.status, "accepted"))
+    .orderBy(desc(quotes.createdAt));
+
+  const prefix = `${year}-${String(month).padStart(2, "0")}-`;
+  const items: AcceptedCalendarItem[] = [];
+  for (const q of rows) {
+    const { date, source } = resolveAcceptedCalendarDate(q);
+    if (!date.startsWith(prefix)) continue;
+    items.push({
+      id: q.id,
+      quoteNumber: q.quoteNumber,
+      clientName: q.clientName,
+      total: Number(q.total ?? 0),
+      date,
+      dateSource: source,
+      href: `/quotes/${q.id}`,
+    });
+  }
+  items.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date.localeCompare(b.date)));
+  return items;
+}
+
 export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
   const db = await getDb();
   if (!db) return [];
