@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   // Fast initial load: fetch KPI cards first (only when authenticated)
   const { data: quickData, isLoading: quickLoading } = trpc.dashboard.quick.useQuery(
@@ -44,8 +45,24 @@ export default function Dashboard() {
   const waStats = dashData?.waStats;
   const pendingInquiries = dashData?.pendingCount ?? 0;
   const receivables = dashData?.receivables;
-  const recentActivity = dashData?.recentActivity ?? [];
+  const acceptedCalendar = dashData?.acceptedCalendar ?? [];
   const fhHealth = dashData?.fhHealth;
+
+  const acceptedByDate = useMemo(() => {
+    const map = new Map<string, typeof acceptedCalendar>();
+    for (const item of acceptedCalendar) {
+      const list = map.get(item.date) ?? [];
+      list.push(item);
+      map.set(item.date, list);
+    }
+    return map;
+  }, [acceptedCalendar]);
+
+  const selectedDayItems = selectedDay ? acceptedByDate.get(selectedDay) ?? [] : [];
+
+  useEffect(() => {
+    setSelectedDay(null);
+  }, [selectedYear, selectedMonth]);
 
   const trendData = stats?.trendData ?? [];
   const sourceData = useMemo(() => {
@@ -65,7 +82,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">業務儀表板</h1>
-            <p className="text-sm text-muted-foreground mt-1">JD Studio 業務數據總覽 · 應收追蹤 · 最近活動</p>
+            <p className="text-sm text-muted-foreground mt-1">JD Studio 業務數據總覽 · 應收追蹤 · 已接受日曆</p>
           </div>
           {/* Year / Month selectors */}
           <div className="flex items-center gap-2">
@@ -415,60 +432,196 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent activity timeline — always visible */}
+        {/* Accepted quotes calendar — replaces recent activity timeline */}
         <div
           className="rounded-lg p-5"
           style={{ background: "#111", border: "1px solid rgba(255,255,255,0.08)" }}
         >
-          <h3 className="text-sm font-medium mb-4" style={{ color: "#e8e0d0" }}>
-            最近活動
-          </h3>
-          {recentActivity.length > 0 ? (
-            <div className="space-y-2">
-              {recentActivity.map((a) => (
-                <button
-                  key={`${a.type}-${a.id}`}
-                  onClick={() => setLocation(a.href)}
-                  className="w-full flex items-start gap-3 text-left px-2 py-2 rounded hover:opacity-80"
-                  style={{ background: "rgba(255,255,255,0.03)" }}
-                >
-                  <span
-                    className="text-[10px] mt-0.5 px-1.5 py-0.5 rounded shrink-0"
-                    style={{
-                      background:
-                        a.type === "quote"
-                          ? "rgba(212,168,67,0.15)"
-                          : a.type === "inquiry"
-                            ? "rgba(0,212,170,0.15)"
-                            : "rgba(255,107,107,0.15)",
-                      color:
-                        a.type === "quote"
-                          ? "#d4a843"
-                          : a.type === "inquiry"
-                            ? "#00D4AA"
-                            : "#FF6B6B",
-                    }}
-                  >
-                    {a.type === "quote" ? "報價" : a.type === "inquiry" ? "詢價" : "FH"}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm truncate" style={{ color: "#e8e0d0" }}>{a.title}</div>
-                    {a.subtitle && (
-                      <div className="text-xs text-muted-foreground truncate">{a.subtitle}</div>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {new Date(a.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </button>
-              ))}
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 className="text-sm font-medium" style={{ color: "#e8e0d0" }}>
+                已接受日曆
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                {selectedYear}年{selectedMonth}月 · 顯示已接受報價日子（優先拍攝日，否則接受／建立日）
+                {acceptedCalendar.length > 0 ? ` · ${acceptedCalendar.length} 單` : ""}
+              </p>
             </div>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ background: "#d4a843" }}
+              />
+              有已接受報價
+            </div>
+          </div>
+
+          <AcceptedMonthCalendar
+            year={selectedYear}
+            month={selectedMonth}
+            acceptedByDate={acceptedByDate}
+            selectedDay={selectedDay}
+            onSelectDay={setSelectedDay}
+          />
+
+          {selectedDay ? (
+            <div className="mt-4 space-y-2">
+              <div className="text-xs text-muted-foreground">
+                {selectedDay} · {selectedDayItems.length} 單已接受
+              </div>
+              {selectedDayItems.length > 0 ? (
+                selectedDayItems.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setLocation(a.href)}
+                    className="w-full flex items-start gap-3 text-left px-2 py-2 rounded hover:opacity-80"
+                    style={{ background: "rgba(255,255,255,0.03)" }}
+                  >
+                    <span
+                      className="text-[10px] mt-0.5 px-1.5 py-0.5 rounded shrink-0"
+                      style={{ background: "rgba(212,168,67,0.15)", color: "#d4a843" }}
+                    >
+                      已接受
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm truncate" style={{ color: "#e8e0d0" }}>
+                        {a.quoteNumber} · {a.clientName}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        HK${a.total.toLocaleString()}
+                        {a.dateSource === "shootingDate"
+                          ? " · 拍攝日"
+                          : a.dateSource === "signedAt"
+                            ? " · 簽署日"
+                            : " · 建立日"}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">呢日冇已接受報價。</p>
+              )}
+            </div>
+          ) : acceptedCalendar.length === 0 ? (
+            <p className="text-xs text-muted-foreground mt-4">
+              本月暫無已接受報價日子。接受報價或填拍攝日後會喺日曆顯示。
+            </p>
           ) : (
-            <p className="text-xs text-muted-foreground">載入中或暫無最近報價／詢價／FH 活動。</p>
+            <p className="text-xs text-muted-foreground mt-4">撳有標記嘅日子睇當日已接受報價。</p>
           )}
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
+
+function AcceptedMonthCalendar({
+  year,
+  month,
+  acceptedByDate,
+  selectedDay,
+  onSelectDay,
+}: {
+  year: number;
+  month: number;
+  acceptedByDate: Map<string, Array<{ id: number }>>;
+  selectedDay: string | null;
+  onSelectDay: (day: string) => void;
+}) {
+  const cells = useMemo(() => {
+    const first = new Date(year, month - 1, 1);
+    // Monday-first: JS getDay() Sun=0 … Sat=6 → Mon=0 … Sun=6
+    const startPad = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Hong_Kong",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const out: Array<{
+      ymd: string | null;
+      day: number | null;
+      hasAccepted: boolean;
+      count: number;
+      isToday: boolean;
+    }> = [];
+
+    for (let i = 0; i < startPad; i++) {
+      out.push({ ymd: null, day: null, hasAccepted: false, count: 0, isToday: false });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ymd = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const list = acceptedByDate.get(ymd);
+      out.push({
+        ymd,
+        day: d,
+        hasAccepted: Boolean(list?.length),
+        count: list?.length ?? 0,
+        isToday: ymd === todayYmd,
+      });
+    }
+    while (out.length % 7 !== 0) {
+      out.push({ ymd: null, day: null, hasAccepted: false, count: 0, isToday: false });
+    }
+    return out;
+  }, [year, month, acceptedByDate]);
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAYS.map((w) => (
+          <div key={w} className="text-center text-[10px] text-muted-foreground py-1">
+            {w}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, idx) => {
+          if (!cell.ymd || cell.day == null) {
+            return <div key={`pad-${idx}`} className="aspect-square" />;
+          }
+          const isSelected = selectedDay === cell.ymd;
+          return (
+            <button
+              key={cell.ymd}
+              type="button"
+              onClick={() => onSelectDay(cell.ymd!)}
+              className="aspect-square rounded-md flex flex-col items-center justify-center gap-0.5 relative"
+              style={{
+                background: isSelected
+                  ? "rgba(212,168,67,0.22)"
+                  : cell.hasAccepted
+                    ? "rgba(212,168,67,0.08)"
+                    : "rgba(255,255,255,0.03)",
+                border: isSelected
+                  ? "1px solid rgba(212,168,67,0.55)"
+                  : cell.isToday
+                    ? "1px solid rgba(255,255,255,0.25)"
+                    : "1px solid transparent",
+                color: cell.hasAccepted ? "#e8e0d0" : "#888",
+              }}
+              title={
+                cell.hasAccepted
+                  ? `${cell.ymd} · ${cell.count} 單已接受`
+                  : cell.ymd
+              }
+            >
+              <span className="text-xs leading-none">{cell.day}</span>
+              {cell.hasAccepted && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: "#d4a843" }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

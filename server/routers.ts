@@ -12,7 +12,7 @@ import { freehunterBoardRouter } from "./routers/freehunterBoard";
 import { expensesRouter } from "./routers/expenses";
 import { loyaltyRouter } from "./routers/loyalty";
 import { getDashboardStats, getDashboardStatsQuick, getAvgResponseTimeHours, getWhatsappClickStats, getMonthlyQuoteCosts, getDb, getUserByUsername } from "./db";
-import { getReceivablesSummary, getRecentActivity } from "./opsInsights";
+import { getReceivablesSummary, getAcceptedCalendar } from "./opsInsights";
 import { quoteCostsRouter } from "./routers/quoteCosts";
 import { followUpRouter } from "./routers/followUp";
 import { pitchOutreachRouter } from "./routers/pitchOutreach";
@@ -138,7 +138,7 @@ export const appRouter = router({
         const month = input?.month ?? hkt.getUTCMonth() + 1;
         const db = await getDb();
 
-        const [stats, avgResp, waStats, pendingCount, fhStats, receivables, recentActivity, fhHealth] = await Promise.all([
+        const [stats, avgResp, waStats, pendingCount, fhStats, receivables, acceptedCalendar, fhHealth] = await Promise.all([
           // 1. Main KPI stats (revenue, ad spend, trend, source distribution)
           getDashboardStats(year, month),
           // 2. Average response time
@@ -186,8 +186,8 @@ export const appRouter = router({
             : Promise.resolve(null),
           // 6. Receivables / overdue
           getReceivablesSummary(20),
-          // 7. Recent activity timeline
-          getRecentActivity(15),
+          // 7. Accepted-quote calendar days for selected month
+          getAcceptedCalendar(year, month),
           // 8. FH health (DB last scrape + in-memory + watchdog)
           db
             ? db
@@ -212,7 +212,7 @@ export const appRouter = router({
             : Promise.resolve(null),
         ]);
 
-        return { stats, avgResp, waStats, pendingCount, fhStats, receivables, recentActivity, fhHealth };
+        return { stats, avgResp, waStats, pendingCount, fhStats, receivables, acceptedCalendar, fhHealth };
       }),
   }),
   quotes: quotesRouter,
