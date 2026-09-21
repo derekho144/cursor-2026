@@ -22,17 +22,18 @@ const FINAL_URL = "https://www.jdstudiohk.com/services/interior-photography";
 /** Pin first 3 headlines in Google Ads UI if possible (keyword + offer + CTA). */
 export const INTERIOR_RSA = {
   headlines: [
-    "室內攝影｜香港專業",
+    // Avoid full-width 「｜」 — Google Ads Symbols policy rejects it.
+    "室內攝影-香港專業",
     "地產盤攝影即日出圖",
     "WhatsApp即日報價",
-    "房地產攝影｜報價",
+    "房地產攝影-報價",
     "建築攝影服務香港",
     "商舖餐廳空間拍攝",
     "酒店室內攝影服務",
     "Airbnb空間專業拍",
     "室內設計項目拍攝",
     "JD Studio室內攝影",
-    "透明收費｜快速交付",
+    "透明收費-快速交付",
     "香港室內攝影師",
     "Interior Photo HK",
     "Property Photo HK",
@@ -40,7 +41,7 @@ export const INTERIOR_RSA = {
   ],
   descriptions: [
     "專業室內及建築攝影：地產樓盤、商舖餐廳、酒店與Airbnb。香港本地團隊，高質燈光，快速交付。",
-    "JD Studio 室內攝影｜服務1,250+企業。透明收費，WhatsApp即日報價，歡迎查詢拍攝方案。",
+    "JD Studio 室內攝影，服務1,250+企業。透明收費，WhatsApp即日報價，歡迎查詢拍攝方案。",
     "地產盤、房地產與建築空間拍攝。專業器材與燈光，適合推廣、招租及項目紀錄。",
     "Interior & architecture photography in Hong Kong. Property, retail & hotel specialists.",
   ],
