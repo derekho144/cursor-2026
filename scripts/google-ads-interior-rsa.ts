@@ -22,7 +22,7 @@ const FINAL_URL = "https://www.jdstudiohk.com/services/interior-photography";
 /** Pin first 3 headlines in Google Ads UI if possible (keyword + offer + CTA). */
 export const INTERIOR_RSA = {
   headlines: [
-    // Avoid full-width 「｜」 — Google Ads Symbols policy rejects it.
+    // Use ASCII hyphen only — Google Ads Symbols policy rejects full-width separators.
     "室內攝影-香港專業",
     "地產盤攝影即日出圖",
     "WhatsApp即日報價",
@@ -166,11 +166,15 @@ async function main() {
     `1. Ads → Search #3 → 室內攝影 → 回應式搜尋廣告 → 新增／編輯`,
     `2. 貼上標題與說明；路徑填 \`${INTERIOR_RSA.path1}\` / \`${INTERIOR_RSA.path2}\``,
     `3. 資產 → 網站連結：新增上表 4 條（或帳戶層共用）`,
-    `4. 建議釘選：標題1「室內攝影｜香港專業」、標題2「地產盤攝影即日出圖」、標題3「WhatsApp即日報價」`,
+    `4. 建議釘選：標題1「室內攝影-香港專業」、標題2「地產盤攝影即日出圖」、標題3「WhatsApp即日報價」`,
   ].join("\n");
-  writeFileSync("/opt/cursor/artifacts/interior-rsa-copy.md", md, "utf8");
-  writeFileSync("/workspace/interior-rsa-copy.md", md, "utf8");
-  console.log("\nWrote /opt/cursor/artifacts/interior-rsa-copy.md");
+  const outDir = process.env.INTERIOR_RSA_OUT_DIR || "/tmp";
+  try {
+    writeFileSync(`${outDir}/interior-rsa-copy.md`, md, "utf8");
+    console.log(`\nWrote ${outDir}/interior-rsa-copy.md`);
+  } catch (e) {
+    console.warn(`Skip writing copy md: ${String(e)}`);
+  }
 
   if (!apply) {
     console.log("\nDry copy only. Pass --apply to mutate Google Ads (needs credentials).");
