@@ -14,6 +14,20 @@
 | H1 | Merged with AI staging tagline | imagin: clean「室內攝影 Interior Photography」 |
 | Meta description | No numeric prices | Prices are citation anchors |
 
+## Fastest apply (recommended)
+
+The live page uses **one custom Code Block** (`#jd-interior-photography` + `.jd-int-*` CSS).
+
+1. Squarespace → Pages → `interior-photography` → Edit
+2. Open the existing **Code** block that contains `jd-interior-photography`
+3. **Replace entire contents** with:
+   `content/geo-aeo/interior-photography.squarespace-codeblock.html`
+   (from GitHub commit / raw SHA URL)
+4. Page Settings → SEO title + description (below)
+5. Save → **Publish**
+
+The codeblock already includes: new H1, definition sentence, visible pricing table, definition FAQ, and FAQPage/Service JSON-LD.
+
 ## Apply on Squarespace (preserve existing design)
 
 1. **SEO title**  
