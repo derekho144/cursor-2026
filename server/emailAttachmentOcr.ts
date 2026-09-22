@@ -6,7 +6,8 @@ import { createCanvas } from "@napi-rs/canvas";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createWorker, type Worker } from "tesseract.js";
 
-export const MAX_OCR_PAGES_PER_PDF = 3;
+/** Scanned / image PDFs: RFPs often put deliverables on pages 4–6. */
+export const MAX_OCR_PAGES_PER_PDF = 8;
 export const MIN_TEXT_LAYER_CHARS_FOR_OCR_SKIP = 40;
 export const OCR_LANGUAGES = ["eng", "chi_tra"] as const;
 
@@ -90,7 +91,7 @@ export async function ocrPdfBuffer(
     return { text: "", pagesOcrd: 0, truncated: false };
   }
   const maxPages = opts?.maxPages ?? MAX_OCR_PAGES_PER_PDF;
-  const maxChars = opts?.maxChars ?? 12_000;
+  const maxChars = opts?.maxChars ?? 20_000;
   const data = new Uint8Array(pdfBytes);
   const doc = await pdfjs
     .getDocument({

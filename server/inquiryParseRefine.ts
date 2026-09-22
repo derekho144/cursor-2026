@@ -65,7 +65,8 @@ export function buildInquiryClassifyText(
   let pdf = "";
   if (pdfIdx >= 0) {
     main = raw.slice(0, pdfIdx);
-    pdf = raw.slice(pdfIdx, pdfIdx + 1800);
+    // Prefer more PDF head — qty/deliverables often sit early in the brief
+    pdf = raw.slice(pdfIdx, pdfIdx + 3200);
   }
   // Prefer head of body + PDF extract head (briefs often put qty in attachment)
   const combined = [
@@ -85,7 +86,13 @@ export function hintServiceTypeFromText(text: string): InquiryServiceType | null
   if (/kol\b|influencer|網紅|網紅推廣|mi\s*推廣|social\s*media\s*content/.test(t)) {
     return "kol_mi";
   }
-  if (/drone|航拍|無人機|aerial\s*photo/.test(t)) return "drone";
+  if (/drone|航拍|無人機|aerial\s*photo/.test(t)) {
+    // Celebration / promo film + aerial → treat as video package (drone is a line item)
+    if (/慶賀|宣傳片|短片|影片製作|celebration|corporate\s*video|tvc|廣告片/.test(t)) {
+      return "video_production";
+    }
+    return "drone";
+  }
   if (/360\b|虛擬導覽|virtual\s*tour/.test(t)) return "360_photography";
   if (/jewelry|珠寶|首飾|鑽石/.test(t)) return "jewelry";
   if (/artwork|藝術品|畫作|sculpture/.test(t)) return "artwork";
