@@ -17,10 +17,20 @@ import {
 export const MAX_PDF_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8 MB
 export const MAX_IMAGE_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 export const MAX_WORD_ATTACHMENT_BYTES = 8 * 1024 * 1024;
-export const MAX_PDF_TEXT_CHARS = 12000;
+/** Per-file extract cap (text-layer or OCR). Long RFPs need more than a short email body. */
+export const MAX_PDF_TEXT_CHARS = 20000;
 export const MAX_PDF_ATTACHMENTS = 3;
 export const MAX_IMAGE_ATTACHMENTS = 3;
 export const MAX_WORD_ATTACHMENTS = 3;
+/**
+ * Marker must match AI prompt + inquiryParseRefine (do not rename casually).
+ * Briefs like celebration film + drone often put the real scope only in the PDF.
+ */
+export const PDF_ATTACHMENT_MARKER = "=== PDF ATTACHMENT TEXT ===";
+/** Default body+PDF budget passed into parseInquiryWithAI. */
+export const MERGED_BODY_MAX_CHARS = 24000;
+/** Always reserve this much room for attachment text when present. */
+export const MERGED_PDF_MIN_CHARS = 10000;
 
 export type EmailAttachmentInput = {
   filename?: string | null;
@@ -433,20 +443,28 @@ export async function extractTextFromPdfAttachments(
   };
 }
 
-/** Merge email body + attachment text for AI parse (keeps body first). */
+/**
+ * Merge email body + attachment text for AI parse.
+ * Keeps body first, but **reserves** room for PDF so long email threads cannot
+ * push the brief out of the prompt window (common RFP failure mode).
+ */
 export function mergeEmailBodyWithPdfText(
   bodyText: string,
   pdfCombinedText: string,
-  opts?: { maxTotalChars?: number }
+  opts?: { maxTotalChars?: number; minPdfChars?: number }
 ): string {
-  const maxTotal = opts?.maxTotalChars ?? 16000;
+  const maxTotal = opts?.maxTotalChars ?? MERGED_BODY_MAX_CHARS;
+  const minPdf = opts?.minPdfChars ?? MERGED_PDF_MIN_CHARS;
   const body = (bodyText ?? "").trim();
   const pdf = (pdfCombinedText ?? "").trim();
   if (!pdf) return body.slice(0, maxTotal);
-  const header =
-    "\n\n=== ATTACHMENT TEXT (extracted; use for requirements) ===\n";
-  const budget = Math.max(0, maxTotal - body.length - header.length);
-  if (budget <= 0) return body.slice(0, maxTotal);
-  const pdfSlice = pdf.length > budget ? pdf.slice(0, budget) : pdf;
-  return `${body}${header}${pdfSlice}`;
+
+  const header = `\n\n${PDF_ATTACHMENT_MARKER}\n`;
+  const pdfNeed = Math.min(pdf.length, Math.max(minPdf, Math.floor(maxTotal * 0.55)));
+  const headerLen = header.length;
+  const bodyBudget = Math.max(500, maxTotal - headerLen - pdfNeed);
+  const bodySlice = body.length > bodyBudget ? body.slice(0, bodyBudget) : body;
+  const pdfBudget = Math.max(0, maxTotal - bodySlice.length - headerLen);
+  const pdfSlice = pdf.length > pdfBudget ? pdf.slice(0, pdfBudget) : pdf;
+  return `${bodySlice}${header}${pdfSlice}`;
 }

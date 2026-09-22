@@ -36,11 +36,25 @@ describe("mergeEmailBodyWithPdfText", () => {
     expect(mergeEmailBodyWithPdfText("hello", "")).toBe("hello");
   });
 
-  it("appends pdf section", () => {
+  it("appends pdf section with canonical marker", () => {
     const merged = mergeEmailBodyWithPdfText("body", "pdf contents here");
     expect(merged).toContain("body");
-    expect(merged).toContain("ATTACHMENT TEXT");
+    expect(merged).toContain("=== PDF ATTACHMENT TEXT ===");
     expect(merged).toContain("pdf contents here");
+  });
+
+  it("reserves PDF budget when email body is very long", () => {
+    const body = "COVER ".repeat(5000); // ~30k
+    const pdf =
+      "JCRC 30周年慶賀片製作\n航拍大合照\n拍攝日 1 full day\nDeliverables: 3-min film + aerial group photo";
+    const merged = mergeEmailBodyWithPdfText(body, pdf, {
+      maxTotalChars: 24000,
+      minPdfChars: 10000,
+    });
+    expect(merged).toContain("=== PDF ATTACHMENT TEXT ===");
+    expect(merged).toContain("航拍大合照");
+    expect(merged).toContain("3-min film");
+    expect(merged.length).toBeLessThanOrEqual(24000);
   });
 });
 

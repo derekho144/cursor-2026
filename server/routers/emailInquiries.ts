@@ -37,6 +37,7 @@ import { getLearningAutoDraftGate } from "../pricingLearning";
 import {
   extractTextFromEmailAttachments,
   mergeEmailBodyWithPdfText,
+  MERGED_BODY_MAX_CHARS,
 } from "../emailPdfAttachments";
 import { arwRawDeliveryBillingRulesText } from "../../shared/arwRawDeliveryPricing";
 import {
@@ -901,6 +902,20 @@ drone photography/videography
   - unitPrice per hour: HKD 2,000-3,500
   - Add: "Post-Processing & Video Edit" flat HKD 1,500-3,000. Add: "Transportation Fee" HKD 320 (fixed).
   - Example: 2 hrs x HKD 2,500 + editing HKD 2,000 + transport HKD 320 = HKD 7,320.
+  - Aerial group photo / 航拍大合照: if brief asks for stills OR a dedicated aerial group shot (not only B-roll), add a separate line e.g. "Aerial Group Photo Capture & Retouch" (flat HKD 2,500-5,000 or per deliverable count if stated). Do NOT fold this into a single vague "drone package" line.
+
+video_production / ad_video / celebration film / 慶賀片 / 宣傳片 / TVC
+  - Prefer MULTIPLE line items mirroring the brief's deliverables — never one lump "Video Production" only.
+  - Typical split (include only what the brief asks for):
+      1) "Pre-Production (Script / Shot List / Coordination)" flat HKD 2,000-6,000
+      2) "On-site Video Crew / Filming" — PER DAY or PER HOUR (extract duration; default 1 full day = 8 hrs if missing → assumed)
+      3) "Drone / Aerial Capture" — separate if 航拍／無人機 mentioned (use drone rates above)
+      4) "Aerial / Large Group Photo" — separate if 大合照／group photo mentioned
+      5) "Post-Production (Edit / Colour / Sound)" flat or per cut HKD 4,000-15,000
+      6) "Motion Graphics / Titles / Subtitles" if requested
+      7) "Transportation Fee" HKD 320 (always when on-site)
+  - Example (celebration film + aerial group photo): Pre-prod + Full-day filming + Drone 2hrs + Aerial group photo + Post-prod + Transport — each its own suggestedItems row.
+  - If PDF lists runtime (e.g. 2–3 min), shots, locations, or number of interview cuts, put those numbers into item descriptions and assumptions[].
 
 menu_design (photography + design)
   - Main item: "Menu Item Photography" - billed PER IMAGE. Extract number of menu items. Default: 20 images.
@@ -930,6 +945,8 @@ IMPORTANT RULES FOR ALL SERVICE TYPES:
 7. HISTORICAL DATA above is for VALIDATION only — do NOT override the tiered unit prices in this section with historical totals. Always apply the TIERED PRICING rules above to calculate unit prices based on quantity.
 8. Prefer accurate understanding over guessing. Put unclear fields in missingFields[]. Never invent a shooting date.
 9. Not every email has an attachment — that is normal. If the body says details are in an attachment (e.g. 詳見附件 / see attached) but there is NO "=== PDF ATTACHMENT TEXT ===" section below, set confidence to "medium" or "low", add "attachmentText" to missingFields, and do NOT invent shootHours / shotCount / durationPackage defaults as if the brief were complete.
+10. MULTI-DELIVERABLE BRIEFS (CRITICAL for RFPs / 邀請報價 PDFs): If the attachment lists 2+ distinct outputs (e.g. 慶賀片 + 航拍大合照, photo + video, interview + highlight reel), you MUST emit SEPARATE suggestedItems for EACH deliverable and for pre-prod / shoot / drone / stills / post when mentioned. Do NOT collapse into a single package line. Put a Traditional Chinese summary of each deliverable into notes (max 280 chars — prioritise deliverable list).
+11. When "=== PDF ATTACHMENT TEXT ===" is present, treat it as the PRIMARY scope document — extract durations, locations, crew, deliverable lengths, and shot lists from it even if the email body is only a short cover note.
 ${CREW_BILLING_RULES}
 
 === TIERED PRICING (VOLUME DISCOUNT) - APPLY THESE EXACT TIERS ===
@@ -1013,7 +1030,7 @@ Email Subject: ${subject}
 Email Body:
 ${body}
 
-IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF or image attachments (text layer or OCR). Treat it as part of the client requirements (often more detailed than the email body). Prefer explicit quantities/dates/locations found in the attachment.
+IMPORTANT: If the body contains a section "=== PDF ATTACHMENT TEXT ===", that text was extracted from PDF / Word / image attachments (text layer or OCR). It is usually MORE authoritative than the short email cover. Mine it for EVERY deliverable, duration, location, crew size, and quantity. Prefer attachment numbers over body when they conflict. Build detailed suggestedItems from the PDF scope — not a single vague package.
 
 ${pricingContext}
 
@@ -1597,7 +1614,11 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     }
 
     const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
-    let aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+    let aiResult = await parseInquiryWithAI(
+      subject,
+      parseBody.slice(0, MERGED_BODY_MAX_CHARS),
+      fromEmail
+    );
     aiResult = enrichParsedWithAttachmentGate(aiResult, {
       subject,
       bodyText,
@@ -1864,7 +1885,11 @@ export const emailInquiriesRouter = router({
 
         // AI parse (body + PDF attachment text)
         const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
-        let aiResult = await parseInquiryWithAI(subject, parseBody.slice(0, 16000), fromEmail);
+        let aiResult = await parseInquiryWithAI(
+      subject,
+      parseBody.slice(0, MERGED_BODY_MAX_CHARS),
+      fromEmail
+    );
         aiResult = enrichParsedWithAttachmentGate(aiResult, {
           subject,
           bodyText,

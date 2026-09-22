@@ -25,6 +25,14 @@ describe("hintServiceTypeFromText", () => {
     expect(hintServiceTypeFromText("想找 KOL 推廣合作")).toBe("kol_mi");
     expect(hintServiceTypeFromText("需要產品攝影白底 20 張")).toBe("product");
   });
+
+  it("treats celebration film + aerial as video_production (not drone-only)", () => {
+    expect(
+      hintServiceTypeFromText(
+        "【報價邀請】JCRC 30周年慶賀片及航拍大合照拍攝製作服務"
+      )
+    ).toBe("video_production");
+  });
 });
 
 describe("refineInquiryParseWithExtractors", () => {
