@@ -3,7 +3,7 @@
 #   GitHub main (SoT) → sync JD SYS project → checkpoint → Publish jdsys.biz
 #
 # Requires: MANUS_API_KEY, MANUS_WEBSITE_ID
-# Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS PTxdA5w7AUDNxF2XREC0dk
+# Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS 7VkPFZNKqwNQihpncANHuQ
 #
 # Usage:
 #   bash scripts/manus-auto-deploy.sh
@@ -109,7 +109,7 @@ print(f"manus-auto-deploy: task precheck type={tt0 or '?'} status={st0 or '?'}")
 if tt0 and tt0 != "project":
     print(
         "manus-auto-deploy: refusing non-project task for production deploy "
-        f"(got task_type={tt0}). Use JD SYS project PTxdA5w7AUDNxF2XREC0dk.",
+        f"(got task_type={tt0}). Use JD SYS project 7VkPFZNKqwNQihpncANHuQ.",
         file=sys.stderr,
     )
     sys.exit(4)

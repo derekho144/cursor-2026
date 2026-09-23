@@ -9,16 +9,24 @@ export MANUS_API_KEY="test-key"
 unset MANUS_PROJECT_TASK_ID || true
 export MANUS_TASK_ID="gizF3phPFVB9M74wTTbBdS" # broken Ads standard task
 got="$(manus_resolve_project_task_id "$ROOT")"
-want="PTxdA5w7AUDNxF2XREC0dk"
+want="7VkPFZNKqwNQihpncANHuQ"
 if [[ "$got" != "$want" ]]; then
   echo "FAIL: expected $want got $got" >&2
   exit 1
 fi
 
-export MANUS_PROJECT_TASK_ID="PTxdA5w7AUDNxF2XREC0dk"
+export MANUS_PROJECT_TASK_ID="7VkPFZNKqwNQihpncANHuQ"
 got2="$(manus_resolve_project_task_id "$ROOT")"
 if [[ "$got2" != "$want" ]]; then
   echo "FAIL override: expected $want got $got2" >&2
+  exit 1
+fi
+
+# Retired error task must not stick even if still present in secrets
+export MANUS_PROJECT_TASK_ID="PTxdA5w7AUDNxF2XREC0dk"
+got3="$(manus_resolve_project_task_id "$ROOT")"
+if [[ "$got3" != "$want" ]]; then
+  echo "FAIL retired: expected fallback $want got $got3" >&2
   exit 1
 fi
 

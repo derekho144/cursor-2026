@@ -5,11 +5,12 @@
 #   GitHub main → sync JD SYS project → checkpoint → website.publish
 #
 # Canonical JD SYS project task id (override with MANUS_PROJECT_TASK_ID):
-#   PTxdA5w7AUDNxF2XREC0dk
+#   7VkPFZNKqwNQihpncANHuQ
+# Previous PTxdA5w7AUDNxF2XREC0dk hit unrecoverable error (2026-09) and was replaced.
 set -euo pipefail
 
-# Canonical production project on Manus (JD SYS).
-MANUS_JD_SYS_PROJECT_TASK_ID_DEFAULT="PTxdA5w7AUDNxF2XREC0dk"
+# Canonical production project task on Manus (JD SYS v2 project Fm48bwcxCqTxUfh6kJbk3c).
+MANUS_JD_SYS_PROJECT_TASK_ID_DEFAULT="7VkPFZNKqwNQihpncANHuQ"
 
 manus_load_env_file() {
   local root="${1:-}"
@@ -33,25 +34,27 @@ manus_credentials_available() {
 # Resolve the Manus *project* task used for production sync/publish.
 # Prefer MANUS_PROJECT_TASK_ID, then a project-looking MANUS_TASK_ID, else JD SYS default.
 # Never silently keep a broken standard Ads task as the deploy target.
+# Never keep the retired error task PTxdA5w7AUDNxF2XREC0dk.
 manus_resolve_project_task_id() {
   local root="${1:-}"
   manus_load_env_file "$root"
 
-  if [[ -n "${MANUS_PROJECT_TASK_ID:-}" ]]; then
+  local retired="PTxdA5w7AUDNxF2XREC0dk"
+
+  if [[ -n "${MANUS_PROJECT_TASK_ID:-}" && "${MANUS_PROJECT_TASK_ID}" != "$retired" ]]; then
     printf '%s\n' "$MANUS_PROJECT_TASK_ID"
     return 0
   fi
 
-  # If MANUS_TASK_ID is explicitly the JD SYS project (or another project id
-  # the operator set), keep it. Otherwise fall back to the canonical JD SYS id.
+  # If MANUS_TASK_ID is explicitly the current JD SYS project, keep it.
   local tid="${MANUS_TASK_ID:-}"
   if [[ "$tid" == "$MANUS_JD_SYS_PROJECT_TASK_ID_DEFAULT" ]]; then
     printf '%s\n' "$tid"
     return 0
   fi
 
-  # Legacy/wrong secret often points at a one-off standard Ads task.
-  # Always prefer JD SYS for production deploys.
+  # Legacy/wrong secret often points at a one-off standard Ads task or the
+  # retired error project task. Always prefer current JD SYS for production.
   printf '%s\n' "${MANUS_JD_SYS_PROJECT_TASK_ID_DEFAULT}"
 }
 

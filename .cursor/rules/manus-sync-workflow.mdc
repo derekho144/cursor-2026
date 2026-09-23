@@ -6,7 +6,8 @@ alwaysApply: true
 # JD Studio ↔ Manus production workflow
 
 **Single source of truth:** GitHub `main` (`derekho144/cursor-2026`).  
-**Production control plane:** Manus **JD SYS** project task `PTxdA5w7AUDNxF2XREC0dk` (override with `MANUS_PROJECT_TASK_ID`).
+**Production control plane:** Manus **JD SYS** project task `7VkPFZNKqwNQihpncANHuQ` (override with `MANUS_PROJECT_TASK_ID`).  
+Former task `PTxdA5w7AUDNxF2XREC0dk` is retired (unrecoverable error).
 
 Fixed path (do not invent alternatives):
 
