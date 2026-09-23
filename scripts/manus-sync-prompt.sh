@@ -14,7 +14,7 @@ cat <<EOF
 唯一來源：GitHub main（derekho144/cursor-2026）
 目標 commit：${SHA}（${FULL}）— ${MSG}
 
-請在 **JD SYS 專案**（7VkPFZNKqwNQihpncANHuQ）執行：
+請在 **JD SYS 專案**（8b23sC2fWWQJLaDHXQRwZX，agent manus-1.6-lite）執行：
 1. Pull / Sync GitHub main 到上述 commit
 2. 保存 checkpoint
 3. Publish 到 jdsys.biz
