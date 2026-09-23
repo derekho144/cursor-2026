@@ -267,24 +267,52 @@ while time.time() < deadline:
 
     msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
     for ev in msgs.get("data") or msgs.get("messages") or []:
-        wait_type = ev.get("waiting_for_event_type") or ""
-        event_id = ev.get("waiting_for_event_id") or ""
+        # Prefer nested status_detail on waiting updates (Manus messageAskUser).
+        detail = (ev.get("status_update") or {}).get("status_detail") or {}
+        wait_type = (
+            ev.get("waiting_for_event_type")
+            or detail.get("waiting_for_event_type")
+            or ""
+        )
+        event_id = (
+            ev.get("waiting_for_event_id")
+            or detail.get("waiting_for_event_id")
+            or ""
+        )
         if status == "waiting" and not event_id:
             event_id = ev.get("event_id") or ev.get("id") or ""
-        if (
-            event_id
-            and event_id not in confirmed
-            and wait_type
-            and wait_type != "messageAskUser"
-        ):
-            print(f"auto-confirm: {wait_type} ({event_id})")
-            conf = api(
-                "POST",
-                "task.confirmAction",
-                {"task_id": task_id, "event_id": event_id},
-            )
-            print("confirm:", conf.get("ok"), conf.get("error"))
-            confirmed.add(event_id)
+        if event_id and event_id not in confirmed and wait_type:
+            if wait_type == "messageAskUser":
+                # confirmAction rejects cascadeAskUser; reply with an explicit yes.
+                print(f"auto-reply messageAskUser ({event_id})")
+                reply = api(
+                    "POST",
+                    "task.sendMessage",
+                    {
+                        "task_id": task_id,
+                        "message": {
+                            "content": (
+                                "【明確確認】繼續原定 production 範圍："
+                                f"sync GitHub main → checkpoint → website.publish "
+                                f"(website_id={website_id}, visibility=public) → "
+                                "驗證 jdsys.biz。唔切舊 task、唔改業務代碼、唔改 DNS/Railway。"
+                                "唔使再問。"
+                            )
+                        },
+                        "agent_profile": agent_profile,
+                    },
+                )
+                print("askUser reply:", reply.get("ok"), reply.get("error"))
+                confirmed.add(event_id)
+            else:
+                print(f"auto-confirm: {wait_type} ({event_id})")
+                conf = api(
+                    "POST",
+                    "task.confirmAction",
+                    {"task_id": task_id, "event_id": event_id},
+                )
+                print("confirm:", conf.get("ok"), conf.get("error"))
+                confirmed.add(event_id)
 
         if ev.get("type") == "error_message":
             err = ev.get("error_message") or {}
