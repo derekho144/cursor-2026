@@ -1,0 +1,87 @@
+<!--
+  Reusable Squarespace page Code Injection / Code Block skeleton.
+  Replace {{SERVICE_NAME}}, {{SERVICE_SLUG}}, prices, and FAQ texts to match the page.
+  Keep FAQ text identical to visible on-page FAQ.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}#webpage",
+      "url": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}",
+      "name": "香港{{SERVICE_NAME}}｜JD Studio",
+      "description": "{{META_DESCRIPTION}}",
+      "inLanguage": "zh-HK",
+      "isPartOf": { "@type": "WebSite", "name": "JD Studio 香港商業攝影", "url": "https://www.jdstudiohk.com" }
+    },
+    {
+      "@type": "Service",
+      "@id": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}#service",
+      "name": "香港{{SERVICE_NAME}}服務",
+      "serviceType": "{{SERVICE_NAME_EN}}",
+      "description": "{{DEFINITION}}",
+      "provider": {
+        "@type": "LocalBusiness",
+        "name": "JD Studio",
+        "url": "https://www.jdstudiohk.com",
+        "telephone": "+852-9153-1976",
+        "email": "info.exposurehk@gmail.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "1 Tsat Po Street",
+          "addressLocality": "San Po Kong",
+          "addressRegion": "Kowloon",
+          "addressCountry": "HK"
+        }
+      },
+      "areaServed": "HK",
+      "url": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}",
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "香港{{SERVICE_NAME}}收費參考",
+        "itemListElement": [
+          {
+            "@type": "Offer",
+            "name": "{{OFFER_1_NAME}}",
+            "priceCurrency": "HKD",
+            "price": "{{OFFER_1_MIN}}",
+            "priceSpecification": {
+              "@type": "PriceSpecification",
+              "priceCurrency": "HKD",
+              "minPrice": "{{OFFER_1_MIN}}",
+              "unitText": "project"
+            },
+            "availability": "https://schema.org/InStock",
+            "url": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}"
+          }
+        ]
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "什麼是{{SERVICE_NAME}}？",
+          "acceptedAnswer": { "@type": "Answer", "text": "{{DEFINITION}}" }
+        },
+        {
+          "@type": "Question",
+          "name": "香港{{SERVICE_NAME}}收費如何計算？",
+          "acceptedAnswer": { "@type": "Answer", "text": "{{PRICING_ANSWER}}" }
+        }
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "主頁", "item": "https://www.jdstudiohk.com/" },
+        { "@type": "ListItem", "position": 2, "name": "{{SERVICE_NAME}}", "item": "https://www.jdstudiohk.com/services/{{SERVICE_SLUG}}" }
+      ]
+    }
+  ]
+}
+</script>
