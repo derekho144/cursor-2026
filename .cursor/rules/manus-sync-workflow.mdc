@@ -6,7 +6,9 @@ alwaysApply: true
 # JD Studio ↔ Manus production workflow
 
 **Single source of truth:** GitHub `main` (`derekho144/cursor-2026`).  
-**Production control plane:** Manus **JD SYS** project task `PTxdA5w7AUDNxF2XREC0dk` (override with `MANUS_PROJECT_TASK_ID`).
+**Production control plane:** Manus **JD SYS** project task `8b23sC2fWWQJLaDHXQRwZX` (override with `MANUS_PROJECT_TASK_ID`).  
+Prefer agent profile `manus-1.6-lite` (`MANUS_AGENT_PROFILE`) — full `manus-1.6` often hits `quota_limit`.  
+Retired unrecoverable-error tasks include `PTxdA5w7AUDNxF2XREC0dk` and `7VkPFZNKqwNQihpncANHuQ` (do not reuse).
 
 Fixed path (do not invent alternatives):
 

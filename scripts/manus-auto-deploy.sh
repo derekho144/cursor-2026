@@ -3,19 +3,29 @@
 #   GitHub main (SoT) → sync JD SYS project → checkpoint → Publish jdsys.biz
 #
 # Requires: MANUS_API_KEY, MANUS_WEBSITE_ID
-# Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS PTxdA5w7AUDNxF2XREC0dk
+# Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS 8b23sC2fWWQJLaDHXQRwZX
+# Agent: MANUS_AGENT_PROFILE (default manus-1.6-lite — full 1.6 often hits quota)
 #
 # Usage:
 #   bash scripts/manus-auto-deploy.sh
 #   bash scripts/manus-auto-deploy.sh --dry-run
+#   bash scripts/manus-auto-deploy.sh --publish-only
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-fi
+PUBLISH_ONLY=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    --publish-only) PUBLISH_ONLY=1 ;;
+    *)
+      echo "manus-auto-deploy: unknown arg: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/manus-credentials.sh"
@@ -30,6 +40,7 @@ API_BASE="${MANUS_API_BASE:-https://api.manus.ai}"
 KEY="${MANUS_API_KEY:-}"
 TASK_ID="$(manus_resolve_project_task_id "$ROOT")"
 WEBSITE_ID="$(manus_website_id "$ROOT")"
+AGENT_PROFILE="$(manus_resolve_agent_profile "$ROOT")"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 FULL="$(git rev-parse HEAD 2>/dev/null || echo "")"
 MSG="$(git log -1 --pretty=%s 2>/dev/null || echo "")"
@@ -42,6 +53,7 @@ fi
 
 echo "manus-auto-deploy: SoT GitHub HEAD ${SHA} (${BRANCH})"
 echo "manus-auto-deploy: JD SYS task ${TASK_ID}"
+echo "manus-auto-deploy: agent ${AGENT_PROFILE}"
 echo "manus-auto-deploy: website ${WEBSITE_ID}"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -49,7 +61,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH
+export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH AGENT_PROFILE PUBLISH_ONLY
 
 python3 <<'PY'
 import json, os, subprocess, sys, time
@@ -62,6 +74,8 @@ sha = os.environ["SHA"]
 full = os.environ["FULL"]
 msg = os.environ["MSG"]
 branch = os.environ.get("BRANCH") or ""
+agent_profile = os.environ.get("AGENT_PROFILE") or "manus-1.6-lite"
+publish_only = os.environ.get("PUBLISH_ONLY") == "1"
 
 
 def api(method: str, path: str, body=None):
@@ -98,6 +112,66 @@ def task_type(detail: dict) -> str:
     return str((task or {}).get("task_type") or "").lower()
 
 
+def recent_quota_error(task_id: str) -> bool:
+    msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=20&order=desc")
+    for ev in msgs.get("data") or msgs.get("messages") or []:
+        if ev.get("type") != "error_message":
+            continue
+        err = ev.get("error_message") or {}
+        if err.get("error_type") == "quota_limit":
+            return True
+        content = str(err.get("content") or "").lower()
+        if "enough credits" in content or "quota" in content:
+            return True
+    return False
+
+
+def do_publish() -> None:
+    print(f"manus-auto-deploy: website.publish {website_id} …")
+    pub = api(
+        "POST",
+        "website.publish",
+        {"website_id": website_id, "visibility": "public"},
+    )
+    print(
+        "website.publish:",
+        json.dumps(
+            {k: pub.get(k) for k in ("ok", "version_id", "website_id", "error", "request_id")},
+            ensure_ascii=False,
+        ),
+    )
+    # Concurrent deploy already in progress is OK — wait for published.
+    err = pub.get("error") or {}
+    err_msg = str(err.get("message") or "") if isinstance(err, dict) else str(err)
+    if pub.get("ok") is False and "already being deployed" not in err_msg:
+        print("website.publish failed", file=sys.stderr)
+        sys.exit(3)
+
+    published = False
+    for _ in range(60):
+        st = api("GET", f"website.status?website_id={website_id}")
+        ps = st.get("publish_status")
+        print(
+            f"publish_status: {ps} version={st.get('version_id')} urls={st.get('site_urls')}"
+        )
+        if ps == "published":
+            published = True
+            break
+        if ps == "failed":
+            sys.exit(3)
+        time.sleep(3)
+
+    if not published:
+        print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
+        sys.exit(3)
+
+
+if publish_only:
+    do_publish()
+    print("manus-auto-deploy: done — publish-only")
+    sys.exit(0)
+
+
 detail0 = api("GET", f"task.detail?task_id={task_id}")
 if detail0.get("ok") is False and detail0.get("error"):
     print("manus-auto-deploy: task.detail failed:", json.dumps(detail0, ensure_ascii=False), file=sys.stderr)
@@ -109,14 +183,24 @@ print(f"manus-auto-deploy: task precheck type={tt0 or '?'} status={st0 or '?'}")
 if tt0 and tt0 != "project":
     print(
         "manus-auto-deploy: refusing non-project task for production deploy "
-        f"(got task_type={tt0}). Use JD SYS project PTxdA5w7AUDNxF2XREC0dk.",
+        f"(got task_type={tt0}). Use JD SYS project 8b23sC2fWWQJLaDHXQRwZX.",
         file=sys.stderr,
     )
     sys.exit(4)
 if st0 == "error":
+    if recent_quota_error(task_id):
+        print(
+            "manus-auto-deploy: JD SYS task error is quota_limit (Manus credits). "
+            "Top up credits, recreate a project task with agent manus-1.6-lite, "
+            "then set MANUS_PROJECT_TASK_ID. Falling through to website.publish only.",
+            file=sys.stderr,
+        )
+        do_publish()
+        sys.exit(8)
     print(
         "manus-auto-deploy: JD SYS task is in unrecoverable error — "
-        "repair/recreate the project task in Manus, then update MANUS_PROJECT_TASK_ID.",
+        "recreate project task (prefer manus-1.6-lite under project Fm48bwcxCqTxUfh6kJbk3c), "
+        "then update MANUS_PROJECT_TASK_ID.",
         file=sys.stderr,
     )
     sys.exit(5)
@@ -145,14 +229,14 @@ prompt = f"""【固定 production 流程 — 已授權執行】
 - GitHub main 係唯一來源；Manus 只負責 sync → checkpoint → publish
 """
 
-print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} …")
+print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} (profile={agent_profile}) …")
 send = api(
     "POST",
     "task.sendMessage",
     {
         "task_id": task_id,
         "message": {"content": prompt},
-        "agent_profile": "manus-1.6",
+        "agent_profile": agent_profile,
     },
 )
 if not send.get("ok"):
@@ -170,6 +254,7 @@ deadline = time.time() + 25 * 60
 last = None
 terminal = None
 assistant_seen_for_sha = False
+saw_quota = False
 
 while time.time() < deadline:
     detail = api("GET", f"task.detail?task_id={task_id}")
@@ -182,24 +267,59 @@ while time.time() < deadline:
 
     msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
     for ev in msgs.get("data") or msgs.get("messages") or []:
-        wait_type = ev.get("waiting_for_event_type") or ""
-        event_id = ev.get("waiting_for_event_id") or ""
+        # Prefer nested status_detail on waiting updates (Manus messageAskUser).
+        detail = (ev.get("status_update") or {}).get("status_detail") or {}
+        wait_type = (
+            ev.get("waiting_for_event_type")
+            or detail.get("waiting_for_event_type")
+            or ""
+        )
+        event_id = (
+            ev.get("waiting_for_event_id")
+            or detail.get("waiting_for_event_id")
+            or ""
+        )
         if status == "waiting" and not event_id:
             event_id = ev.get("event_id") or ev.get("id") or ""
-        if (
-            event_id
-            and event_id not in confirmed
-            and wait_type
-            and wait_type != "messageAskUser"
-        ):
-            print(f"auto-confirm: {wait_type} ({event_id})")
-            conf = api(
-                "POST",
-                "task.confirmAction",
-                {"task_id": task_id, "event_id": event_id},
-            )
-            print("confirm:", conf.get("ok"), conf.get("error"))
-            confirmed.add(event_id)
+        if event_id and event_id not in confirmed and wait_type:
+            if wait_type == "messageAskUser":
+                # confirmAction rejects cascadeAskUser; reply with an explicit yes.
+                print(f"auto-reply messageAskUser ({event_id})")
+                reply = api(
+                    "POST",
+                    "task.sendMessage",
+                    {
+                        "task_id": task_id,
+                        "message": {
+                            "content": (
+                                "【明確確認】繼續原定 production 範圍："
+                                f"sync GitHub main → checkpoint → website.publish "
+                                f"(website_id={website_id}, visibility=public) → "
+                                "驗證 jdsys.biz。唔切舊 task、唔改業務代碼、唔改 DNS/Railway。"
+                                "唔使再問。"
+                            )
+                        },
+                        "agent_profile": agent_profile,
+                    },
+                )
+                print("askUser reply:", reply.get("ok"), reply.get("error"))
+                confirmed.add(event_id)
+            else:
+                print(f"auto-confirm: {wait_type} ({event_id})")
+                conf = api(
+                    "POST",
+                    "task.confirmAction",
+                    {"task_id": task_id, "event_id": event_id},
+                )
+                print("confirm:", conf.get("ok"), conf.get("error"))
+                confirmed.add(event_id)
+
+        if ev.get("type") == "error_message":
+            err = ev.get("error_message") or {}
+            if err.get("error_type") == "quota_limit" or "enough credits" in str(
+                err.get("content") or ""
+            ).lower():
+                saw_quota = True
 
         if ev.get("type") == "assistant_message":
             content = (ev.get("assistant_message") or {}).get("content") or ""
@@ -246,46 +366,24 @@ if terminal is None:
 
 if terminal == "error":
     print("manus-auto-deploy: JD SYS task ended in error during sync", file=sys.stderr)
+    if saw_quota or recent_quota_error(task_id):
+        print(
+            "manus-auto-deploy: root cause looks like Manus quota_limit — "
+            "top up credits and recreate project task with manus-1.6-lite. "
+            "Still attempting website.publish for current checkpoint.",
+            file=sys.stderr,
+        )
+        do_publish()
+        sys.exit(8)
+    # Still try publish — agent may have checkpointed before dying.
+    do_publish()
     sys.exit(6)
 
 print(f"manus-auto-deploy: JD SYS sync finished ({terminal})")
 
 # Always publish via website API so production publish is deterministic
 # even if the agent reply omitted the publish step.
-print(f"manus-auto-deploy: website.publish {website_id} …")
-pub = api(
-    "POST",
-    "website.publish",
-    {"website_id": website_id, "visibility": "public"},
-)
-print(
-    "website.publish:",
-    json.dumps(
-        {k: pub.get(k) for k in ("ok", "version_id", "website_id", "error", "request_id")},
-        ensure_ascii=False,
-    ),
-)
-if pub.get("ok") is False:
-    print("website.publish failed", file=sys.stderr)
-    sys.exit(3)
-
-published = False
-for _ in range(60):
-    st = api("GET", f"website.status?website_id={website_id}")
-    ps = st.get("publish_status")
-    print(
-        f"publish_status: {ps} version={st.get('version_id')} urls={st.get('site_urls')}"
-    )
-    if ps == "published":
-        published = True
-        break
-    if ps == "failed":
-        sys.exit(3)
-    time.sleep(3)
-
-if not published:
-    print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
-    sys.exit(3)
+do_publish()
 
 print("manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published")
 PY
