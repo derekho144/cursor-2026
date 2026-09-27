@@ -72,6 +72,26 @@ const SERVICE_OPTIONS = [
   { value: "other", label: "其他服務" },
 ];
 
+/** Must match SelectItem values below — unknown DB values would crash Radix Select. */
+const LEAD_SOURCE_VALUES = new Set([
+  "HelloToby",
+  "PRO360",
+  "FreelanceHunter",
+  "88DB",
+  "Instagram",
+  "Facebook",
+  "Google",
+  "Referral",
+  "Website",
+  "Repeat",
+  "Other",
+]);
+
+function normalizeLeadSource(raw: unknown): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return LEAD_SOURCE_VALUES.has(s) ? s : "";
+}
+
 /** Default extras for quote templates → 「額外資訊」fields (not line items). */
 const TEMPLATE_DEFAULT_EQUIPMENT =
   "CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2";
@@ -239,7 +259,7 @@ function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData 
     equipment: raw.equipment ?? "",
     team: raw.team ?? "",
     deliveryMethod: raw.deliveryMethod ?? "",
-    leadSource: raw.leadSource ?? "",
+    leadSource: normalizeLeadSource(raw.leadSource),
     notes: raw.notes ?? "",
     crewPhotographers: Number(raw.crewPhotographers) || 0,
     crewAssistants: Number(raw.crewAssistants) || 0,
@@ -500,6 +520,8 @@ export default function QuoteForm() {
   const [hasEditDraft, setHasEditDraft] = useState(() => !!(editDraftKey && safeLSGet(editDraftKey)));
   // Track whether server data has been loaded (to avoid saving empty form before data arrives)
   const editFormLoadedRef = useRef(!isEdit);
+  // Must wait for hydrate before rendering Selects — Radix Select throws if value="" with no matching item.
+  const [editHydrated, setEditHydrated] = useState(!isEdit);
   const [clientSearch, setClientSearch] = useState("");
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   // Restore selectedClientName from draft if available
@@ -732,6 +754,7 @@ export default function QuoteForm() {
             setSelectedClientName(parsed.clientName);
           }
           editFormLoadedRef.current = true;
+          setEditHydrated(true);
           return; // Use saved draft instead of server data
         } catch { /* fall through to server data */ }
       }
@@ -778,8 +801,8 @@ export default function QuoteForm() {
         crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
         crewOthers: Number((existingQuote as any).crewOthers ?? 0),
         deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
-        leadSource: (existingQuote as any).leadSource ?? "",
-        items: existingQuote.items.map((item) => ({
+        leadSource: normalizeLeadSource((existingQuote as any).leadSource),
+        items: (existingQuote.items ?? []).map((item) => ({
           id: crypto.randomUUID(),
           description: item.description,
           quantity: Number(item.quantity),
@@ -806,6 +829,7 @@ export default function QuoteForm() {
         setSelectedClientName(existingQuote.clientName);
       }
       editFormLoadedRef.current = true;
+      setEditHydrated(true);
     }
   }, [existingQuote, editDraftKey]);
 
@@ -1045,7 +1069,8 @@ export default function QuoteForm() {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  if (isEdit && loadingQuote) {
+  // Wait until edit form is hydrated — otherwise Selects render with value="" and Radix crashes.
+  if (isEdit && (loadingQuote || !editHydrated)) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -1136,8 +1161,8 @@ export default function QuoteForm() {
                       crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
                       crewOthers: Number((existingQuote as any).crewOthers ?? 0),
                       deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
-                      leadSource: (existingQuote as any).leadSource ?? "",
-                      items: existingQuote.items.map((item) => ({
+                      leadSource: normalizeLeadSource((existingQuote as any).leadSource),
+                      items: (existingQuote.items ?? []).map((item) => ({
                         id: crypto.randomUUID(),
                         description: item.description,
                         quantity: Number(item.quantity),
@@ -1150,6 +1175,7 @@ export default function QuoteForm() {
                     }));
                     if ((existingQuote as any).clientId) setSelectedClientName(existingQuote.clientName);
                     editFormLoadedRef.current = true;
+                    setEditHydrated(true);
                   }
                 }}
                 className="text-xs px-2 py-0.5 rounded hover:opacity-70 transition-opacity"
@@ -1417,7 +1443,7 @@ export default function QuoteForm() {
             {quotePricingMode(form.serviceType) === "time_crew" && (
               <FormField label="時長套餐">
                 <Select
-                  value={form.durationPackage || ""}
+                  value={form.durationPackage || undefined}
                   onValueChange={(v) =>
                     setForm((p) => ({
                       ...p,
@@ -1464,7 +1490,10 @@ export default function QuoteForm() {
               </FormField>
             )}
             <FormField label={<span>詢價來源 <span style={{color:'#ef4444',fontWeight:'bold'}}>*</span></span>}>
-              <Select value={form.leadSource || ""} onValueChange={(v) => setForm((p) => ({ ...p, leadSource: v }))}>
+              <Select
+                value={form.leadSource || undefined}
+                onValueChange={(v) => setForm((p) => ({ ...p, leadSource: v }))}
+              >
                 <SelectTrigger style={{...inputStyle, borderColor: !form.leadSource ? 'rgba(239,68,68,0.6)' : undefined}}>
                   <SelectValue placeholder="請選擇詢價來源（必填）" />
                 </SelectTrigger>
