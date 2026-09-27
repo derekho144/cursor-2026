@@ -32,10 +32,18 @@ Fixed path (do not invent alternatives):
 
 5. If the user pastes Manus’s “done” reply, re-verify `https://jdsys.biz`.
 
+## Hosting (hard ban)
+
+- `jdsys.biz` / `www.jdsys.biz` / `*.manus.space` for JD SYS must use **Manus managed hosting only**.
+- **Never** set origin / proxy / custom host to `*.up.railway.app` (or any Railway URL).
+- Recurring Cloudflare **502** with Host=`*.up.railway.app` means the Manus WebDev origin was wrongly pointed at Railway — remove it, republish, then run `bash scripts/manus-verify-hosting.sh`.
+- `manus-auto-deploy.sh` fails (exit 9) if post-publish verification sees Railway or non-200.
+
 ## Do not
 
 - Publish production from a new disposable Manus standard task when JD SYS is healthy.
 - Point `MANUS_TASK_ID` at Ads/experiment tasks for deploy — use `MANUS_PROJECT_TASK_ID` / JD SYS.
 - Treat Manus as source of truth over GitHub `main`.
+- “Fix” outages by attaching Railway as origin.
 
 Exceptions: pure Q&A with no code changes — skip commit/push/deploy.
