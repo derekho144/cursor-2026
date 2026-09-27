@@ -17,8 +17,10 @@ cat <<EOF
 請在 **JD SYS 專案**（8b23sC2fWWQJLaDHXQRwZX，agent manus-1.6-lite）執行：
 1. Pull / Sync GitHub main 到上述 commit
 2. 保存 checkpoint
-3. Publish 到 jdsys.biz
-4. 回報：synced_sha、checkpoint/version id、publish_status、site URLs
+3. 確認 origin **唔係** Railway（*.up.railway.app）；若係先移除並改回 Manus managed hosting
+4. Publish 到 jdsys.biz
+5. 驗證 jdsys.biz / www / jdsys.manus.space 全部 HTTPS 200 且唔含 railway.app
+6. 回報：synced_sha、checkpoint/version id、publish_status、site URLs、origin_host
 
-唔好另開標準 task 做 production；唔好改業務代碼。
+唔好另開標準 task 做 production；唔好改業務代碼；禁止 Railway origin。
 EOF

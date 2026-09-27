@@ -61,7 +61,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH AGENT_PROFILE PUBLISH_ONLY
+export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH AGENT_PROFILE PUBLISH_ONLY ROOT
 
 python3 <<'PY'
 import json, os, subprocess, sys, time
@@ -76,6 +76,7 @@ msg = os.environ["MSG"]
 branch = os.environ.get("BRANCH") or ""
 agent_profile = os.environ.get("AGENT_PROFILE") or "manus-1.6-lite"
 publish_only = os.environ.get("PUBLISH_ONLY") == "1"
+root = os.environ.get("ROOT") or "."
 
 
 def api(method: str, path: str, body=None):
@@ -126,7 +127,26 @@ def recent_quota_error(task_id: str) -> bool:
     return False
 
 
-def do_publish() -> None:
+def verify_hosting() -> None:
+    """Fail deploy if Cloudflare is proxying Railway (recurring 502 root cause)."""
+    print("manus-auto-deploy: verifying managed hosting (no Railway origin) …")
+    script = os.path.join(root, "scripts/manus-verify-hosting.sh")
+    # Allow brief CDN settle after publish.
+    last_code = 1
+    for attempt in range(6):
+        last_code = subprocess.run(["bash", script], cwd=root).returncode
+        if last_code == 0:
+            return
+        time.sleep(5)
+    print(
+        "manus-auto-deploy: hosting verification FAILED — Railway origin or non-200. "
+        f"Fix Manus WebDev origin for website {website_id}, then re-run --publish-only.",
+        file=sys.stderr,
+    )
+    sys.exit(9)
+
+
+def do_publish(*, verify: bool = True) -> None:
     print(f"manus-auto-deploy: website.publish {website_id} …")
     pub = api(
         "POST",
@@ -165,10 +185,13 @@ def do_publish() -> None:
         print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
         sys.exit(3)
 
+    if verify:
+        verify_hosting()
+
 
 if publish_only:
     do_publish()
-    print("manus-auto-deploy: done — publish-only")
+    print("manus-auto-deploy: done — publish-only (Manus hosting OK)")
     sys.exit(0)
 
 
@@ -216,17 +239,21 @@ prompt = f"""【固定 production 流程 — 已授權執行】
 1. Pull / Sync GitHub **main** 到本 JD SYS 專案，對齊上述 commit
 2. 確認工作區已包含該 commit 的改動（可用 git rev-parse / git log 核對）
 3. 保存 checkpoint（version）
-4. Publish 到 jdsys.biz production（website_id={website_id}）
-5. 完成後只回報四項：
+4. **Hosting 硬性檢查（必須先過）**：確認 website_id={website_id} 嘅 origin／proxy **唔係** *.up.railway.app。若係 Railway，先移除並改回純 Manus managed hosting，先至 publish。
+5. Publish 到 jdsys.biz production（website_id={website_id}, visibility=public）
+6. 驗證 https://jdsys.biz 、 https://www.jdsys.biz 、 https://jdsys.manus.space 全部 HTTPS 200，且頁面／502 Host **唔含** railway.app
+7. 完成後只回報：
    - synced_sha
    - checkpoint_or_version_id
    - publish_status
    - site_urls
+   - origin_host（必須係 Manus managed，唔可以係 Railway）
 
 規則：
 - 唔好另開無關標準 task 做 production 發佈
 - 唔好改業務代碼
-- GitHub main 係唯一來源；Manus 只負責 sync → checkpoint → publish
+- **禁止** 將 jdsys.biz／www／manus.space origin 指去 Railway
+- GitHub main 係唯一來源；Manus 只負責 sync → checkpoint → publish（managed hosting）
 """
 
 print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} (profile={agent_profile}) …")
@@ -385,5 +412,5 @@ print(f"manus-auto-deploy: JD SYS sync finished ({terminal})")
 # even if the agent reply omitted the publish step.
 do_publish()
 
-print("manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published")
+print("manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published (Manus hosting OK)")
 PY
