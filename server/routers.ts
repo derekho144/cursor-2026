@@ -214,6 +214,24 @@ export const appRouter = router({
 
         return { stats, avgResp, waStats, pendingCount, fhStats, receivables, acceptedCalendar, fhHealth };
       }),
+    /** ICS feed URL for Google Calendar (accepted quotes by shootingDate). */
+    googleCalendarFeed: protectedProcedure.query(async () => {
+      const {
+        buildAcceptedCalendarFeedUrl,
+        buildGoogleCalendarAddByUrlLink,
+        getCalendarFeedToken,
+        listAcceptedQuotesWithShootingDate,
+      } = await import("./acceptedCalendarIcs");
+      const { ENV } = await import("./_core/env");
+      const feedUrl = buildAcceptedCalendarFeedUrl(ENV.publicBaseUrl, getCalendarFeedToken());
+      const events = await listAcceptedQuotesWithShootingDate();
+      return {
+        feedUrl,
+        googleAddByUrl: buildGoogleCalendarAddByUrlLink(feedUrl),
+        eventCount: events.length,
+        calendarName: "JD Studio 拍攝",
+      };
+    }),
   }),
   quotes: quotesRouter,
   adExpenses: adExpensesRouter,

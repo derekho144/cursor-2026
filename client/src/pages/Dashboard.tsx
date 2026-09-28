@@ -7,6 +7,8 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from "recharts";
+import { CalendarPlus, Check, Copy, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { buildAcceptedMonthCells } from "@shared/acceptedMonthCells";
 
@@ -48,6 +50,23 @@ export default function Dashboard() {
   const receivables = dashData?.receivables;
   const acceptedCalendar = dashData?.acceptedCalendar ?? [];
   const fhHealth = dashData?.fhHealth;
+  const { data: gcalFeed } = trpc.dashboard.googleCalendarFeed.useQuery(undefined, {
+    enabled: !authLoading && !!user,
+    staleTime: 60_000,
+  });
+  const [feedCopied, setFeedCopied] = useState(false);
+
+  async function copyGoogleCalendarFeed() {
+    if (!gcalFeed?.feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(gcalFeed.feedUrl);
+      setFeedCopied(true);
+      toast.success("已複製日曆訂閱連結");
+      window.setTimeout(() => setFeedCopied(false), 2000);
+    } catch {
+      toast.error("複製失敗，請手動複製連結");
+    }
+  }
 
   const acceptedByDate = useMemo(() => {
     const map = new Map<string, typeof acceptedCalendar>();
@@ -448,14 +467,59 @@ export default function Dashboard() {
                 {acceptedCalendar.length > 0 ? ` · ${acceptedCalendar.length} 單` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{ background: "#d4a843" }}
-              />
-              有已接受報價
+            <div className="flex items-center gap-2 flex-wrap">
+              {gcalFeed?.feedUrl ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={copyGoogleCalendarFeed}
+                    className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded"
+                    style={{
+                      background: "rgba(212,168,67,0.12)",
+                      color: "#d4a843",
+                      border: "1px solid rgba(212,168,67,0.35)",
+                    }}
+                    title="複製 ICS 訂閱連結，貼到 Google Calendar → 新增日曆 → 透過網址"
+                  >
+                    {feedCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {feedCopied ? "已複製" : "複製 Google 日曆連結"}
+                  </button>
+                  <a
+                    href={gcalFeed.googleAddByUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded"
+                    style={{
+                      background: "rgba(255,255,255,0.04)",
+                      color: "#c8c0b0",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                    }}
+                    title="開啟 Google Calendar，用拍攝日期訂閱所有已接受報價"
+                  >
+                    <CalendarPlus className="h-3 w-3" />
+                    加入 Google Calendar
+                    <ExternalLink className="h-3 w-3 opacity-70" />
+                  </a>
+                  <span className="text-[10px] text-muted-foreground">
+                    拍攝日事件 {gcalFeed.eventCount} 單
+                  </span>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span
+                    className="inline-block w-2 h-2 rounded-full"
+                    style={{ background: "#d4a843" }}
+                  />
+                  有已接受報價
+                </div>
+              )}
             </div>
           </div>
+          {gcalFeed?.feedUrl ? (
+            <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+              訂閱「{gcalFeed.calendarName}」後，所有已接受且有拍攝日期嘅報價會以全日事件出現喺 Google Calendar；接受新單或改拍攝日後，Google 通常幾小時內自動更新。
+            </p>
+          ) : null}
 
           <AcceptedMonthCalendar
             year={selectedYear}
