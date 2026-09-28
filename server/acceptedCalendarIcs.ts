@@ -14,8 +14,6 @@ export type AcceptedShootCalendarEvent = {
   shootingLocation?: string | null;
   shootHours?: string | number | null;
   serviceType?: string | null;
-  total?: string | number | null;
-  currency?: string | null;
   notes?: string | null;
 };
 
@@ -110,10 +108,6 @@ export function buildAcceptedShootEventDescription(
   if (event.shootHours != null && String(event.shootHours).trim() !== "") {
     lines.push(`拍攝時數：${event.shootHours}`);
   }
-  if (event.total != null && String(event.total).trim() !== "") {
-    const cur = event.currency || "HKD";
-    lines.push(`金額：${cur} ${Number(event.total).toLocaleString()}`);
-  }
   if (quoteUrl) lines.push(`系統：${quoteUrl}`);
   if (event.notes) {
     const note = String(event.notes).trim().slice(0, 400);
@@ -204,8 +198,6 @@ export async function listAcceptedQuotesWithShootingDate(): Promise<
       shootingLocation: quotes.shootingLocation,
       shootHours: quotes.shootHours,
       serviceType: quotes.serviceType,
-      total: quotes.total,
-      currency: quotes.currency,
       notes: quotes.notes,
     })
     .from(quotes)
