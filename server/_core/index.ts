@@ -59,6 +59,31 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, ts: new Date().toISOString() });
   });
+
+  // ─── Google Calendar ICS: accepted quotes by shootingDate ───────────────
+  // Subscribe in Google Calendar → Settings → Add calendar → From URL
+  app.get("/api/calendar/accepted.ics", async (req, res) => {
+    try {
+      const {
+        getCalendarFeedToken,
+        timingSafeEqualToken,
+        renderAcceptedShootsIcsFeed,
+      } = await import("../acceptedCalendarIcs");
+      const token = typeof req.query.token === "string" ? req.query.token : "";
+      if (!timingSafeEqualToken(token, getCalendarFeedToken())) {
+        res.status(401).type("text/plain").send("Unauthorized");
+        return;
+      }
+      const ics = await renderAcceptedShootsIcsFeed();
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", 'inline; filename="jd-studio-shoots.ics"');
+      res.setHeader("Cache-Control", "no-cache, max-age=300");
+      res.status(200).send(ics);
+    } catch (err) {
+      console.error("[Calendar ICS] Error:", err);
+      res.status(500).type("text/plain").send("Calendar feed unavailable");
+    }
+  });
   // ─── Scheduled: keep-alive (Heartbeat cron, every 5 min) ─────────────────
   // Heartbeat cron pings this every 5 minutes to prevent Cloud Run cold starts
   app.post("/api/scheduled/keep-alive", (_req, res) => {

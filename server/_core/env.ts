@@ -40,4 +40,9 @@ export const ENV = {
   airwallexClientId: process.env.AIRWALLEX_CLIENT_ID ?? "",
   airwallexEnv: process.env.AIRWALLEX_ENV ?? "production",
   airwallexWebhookSecret: process.env.AIRWALLEX_WEBHOOK_SECRET ?? "",
+  /**
+   * Optional secret for Google Calendar ICS feed (?token=...).
+   * If empty, a stable token is derived from JWT_SECRET.
+   */
+  calendarFeedSecret: process.env.CALENDAR_FEED_SECRET ?? "",
 };
