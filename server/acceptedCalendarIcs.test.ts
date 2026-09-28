@@ -40,7 +40,7 @@ describe("accepted calendar ICS helpers", () => {
     ).toBe("JD202609-AF93 · Exposure HK · Derek");
   });
 
-  it("builds VEVENT as all-day shoot on shootingDate", () => {
+  it("builds VEVENT as all-day shoot on shootingDate without amount", () => {
     const vevent = buildAcceptedShootVEvent(
       {
         id: 42,
@@ -62,6 +62,8 @@ describe("accepted calendar ICS helpers", () => {
     expect(vevent).toContain("SUMMARY:JD202609-TEST · 測試客戶");
     expect(vevent).toContain("LOCATION:觀塘 Studio");
     expect(vevent).toContain("URL:https://jdsys.biz/quotes/42");
+    expect(vevent).not.toContain("金額");
+    expect(vevent).not.toMatch(/HKD|\$/);
     expect(vevent).toContain("END:VEVENT");
   });
 
