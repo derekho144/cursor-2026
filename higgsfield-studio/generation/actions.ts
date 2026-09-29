@@ -35,7 +35,9 @@ export async function clearPlatformCredentials() {
 }
 
 export async function hasPlatformCredentials() {
-  return (await readStoredCredentials()) !== null
+  return (
+    (await readStoredCredentials()) !== null || readEnvCredentials() !== null
+  )
 }
 
 export async function submitGeneration(plane: GenerationPlane) {
@@ -81,8 +83,19 @@ async function readStoredCredentials() {
   return decodeCredentials(jar.get(PLATFORM_KEY_COOKIE)?.value)
 }
 
+/** Optional shared server key (complete credential from open.higgsfield.ai). */
+function readEnvCredentials(): { apiKey: string } | null {
+  const apiKey = process.env.HF_API_KEY?.trim()
+  if (!apiKey) return null
+  try {
+    return parseCredentialInput({ api_key: apiKey })
+  } catch {
+    return null
+  }
+}
+
 async function readCredentials() {
-  const stored = await readStoredCredentials()
+  const stored = (await readStoredCredentials()) ?? readEnvCredentials()
   if (!stored) throw new MissingCredentialsError()
   const baseUrl = process.env.HF_API_BASE_URL
   if (!baseUrl) throw new Error("Missing HF_API_BASE_URL")
