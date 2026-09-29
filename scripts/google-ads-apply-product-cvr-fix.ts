@@ -440,6 +440,27 @@ async function addProductRsa(
     return;
   }
 
+  // Google Ads allows max 3 ENABLED RSAs per ad group — pause oldest if at cap
+  const enabled = (report.existing_rsas as any[]).filter((r) => r.status === "ENABLED");
+  if (enabled.length >= 3) {
+    const oldest = [...enabled].sort((a, b) => Number(a.adId ?? 0) - Number(b.adId ?? 0))[0];
+    if (oldest?.resourceName) {
+      console.log(`RSA: at cap (${enabled.length}) — pause oldest ${oldest.resourceName}`);
+      const pauseRes = await mutate(
+        env,
+        token,
+        "adGroupAds",
+        [{ update: { resourceName: oldest.resourceName, status: "PAUSED" }, updateMask: "status" }],
+        dryRun
+      );
+      report.rsa_paused_oldest = {
+        resource: oldest.resourceName,
+        ok: pauseRes.results?.filter((r) => r.resourceName).length ?? 0,
+        partial: pauseRes.partialFailureError?.message ?? null,
+      };
+    }
+  }
+
   const createOp = {
     create: {
       adGroup: PRODUCT_AD_GROUP_RN,
@@ -458,7 +479,7 @@ async function addProductRsa(
     },
   };
 
-  console.log(`RSA: ${dryRun ? "validate" : "create"} product-aligned ad (keep old ENABLED)`);
+  console.log(`RSA: ${dryRun ? "validate" : "create"} product-aligned ad`);
   const result = await mutate(env, token, "adGroupAds", [createOp], dryRun);
   report.rsa_mutate = {
     ok: result.results?.filter((r) => r.resourceName).length ?? 0,
