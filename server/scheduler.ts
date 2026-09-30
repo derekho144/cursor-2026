@@ -2,7 +2,7 @@
  * Background Scheduler Service
  *
  * Runs periodic tasks without requiring an authenticated HTTP request.
- * Handles: PRO360 auto-sync every 3 days, HelloToby/Google Ads auto-sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT).
+ * Handles: PRO360 auto-sync every 3 days, HelloToby/Google Ads auto-sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (08:00-21:00 HKT, discovery-first).
  */
 
 import { createAdSyncLog, getAdSyncLogs, getPro360Cookies, savePro360Cookies, getHelloTobyCookies, saveHelloTobyCookies, updateAdPlatformSyncStatus, upsertAdExpense, upsertAdTransaction, deleteAdTransactionsByPlatform } from "./db";
@@ -177,7 +177,7 @@ function getNextScanTime(lastScanAt: Date | null): Date {
  * Only runs during active hours (09:00-21:00 HKT) to avoid unnecessary API calls.
  */
 export async function runScheduledFreehunterScrape(): Promise<void> {
-  await withSchedulerLock("fh-scrape", 14 * 60 * 1000, async () => {
+  await withSchedulerLock("fh-scrape", 10 * 60 * 1000, async () => {
   if (!isWithinScanHours(8)) {
     console.log("[Scheduler] Freehunter scrape skipped (outside active hours 08:00-21:00 HKT)");
     return;
@@ -185,13 +185,23 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
 
   console.log("[Scheduler] Starting scheduled Freehunter job board scrape...");
   try {
-    // Wrap with a 12-minute global timeout to prevent the scraper from hanging
-    // and blocking the scheduler indefinitely (e.g. Playwright browser stuck on login)
-    const SCRAPE_TIMEOUT_MS = 12 * 60 * 1000;
+    // Discovery-first: do NOT fetch emails in the scheduled path.
+    // Email fetch (Playwright, up to 90s/job × N) was blowing the 12‑min wall and
+    // leaving the board stuck with no new inserts (seen 2026-09-28 → timeout fails).
+    // Watchdog / manual scrapeNow handle email fetch separately.
+    const SCRAPE_TIMEOUT_MS = 8 * 60 * 1000;
     const result = await Promise.race([
-      scrapeFreehunterBoard(true, 20),
+      scrapeFreehunterBoard({
+        fetchEmails: false,
+        maxJobs: 40,
+        skipPlaywrightBackup: false,
+        deadlineMs: 7 * 60 * 1000,
+      }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Freehunter scrape timed out after 12 minutes")), SCRAPE_TIMEOUT_MS)
+        setTimeout(
+          () => reject(new Error("Freehunter scrape timed out after 8 minutes")),
+          SCRAPE_TIMEOUT_MS
+        )
       ),
     ]);
     await recordFreehunterScrapeResult({
@@ -235,6 +245,11 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Scheduler] Freehunter scrape error:", err);
     await recordFreehunterScrapeResult({ ok: false, error: msg });
+    // Kill hung Playwright session so the next tick is not wedged
+    try {
+      const { closeFreehunterBrowserSession } = await import("./freehunter");
+      await closeFreehunterBrowserSession();
+    } catch (_) {}
     // Free the mutex early so the next 15-min tick (or Heartbeat) can retry
     await releaseLock("fh-scrape").catch(() => {});
   }

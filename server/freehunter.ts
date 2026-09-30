@@ -96,6 +96,11 @@ async function closeBrowserSession() {
   }
 }
 
+/** Force-close in-memory Playwright session (e.g. after scrape timeout). */
+export async function closeFreehunterBrowserSession(): Promise<void> {
+  await closeBrowserSession();
+}
+
 async function isBrowserSessionValid(): Promise<boolean> {
   if (!_browserSession || !_browserSession.isValid) return false;
   if (Date.now() - _browserSession.loginTime > SESSION_TTL_MS) {
