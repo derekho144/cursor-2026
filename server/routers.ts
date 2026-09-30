@@ -21,6 +21,7 @@ import { linkedinContentRouter } from "./routers/linkedinContent";
 import { employeesRouter } from "./routers/employees";
 import { pricingLearningRouter } from "./routers/pricingLearning";
 import { googleAdsRouter } from "./routers/googleAds";
+import { googleSearchConsoleRouter } from "./routers/googleSearchConsole";
 import { protectedProcedure } from "./_core/trpc";
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, isNull, and, gt } from "drizzle-orm";
@@ -248,6 +249,7 @@ export const appRouter = router({
   linkedinContent: linkedinContentRouter,
   pricingLearning: pricingLearningRouter,
   googleAds: googleAdsRouter,
+  googleSearchConsole: googleSearchConsoleRouter,
 });
 
 export type AppRouter = typeof appRouter;

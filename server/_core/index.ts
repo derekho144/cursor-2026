@@ -464,6 +464,105 @@ async function startServer() {
     }
   });
 
+  // ─── Google Search Console OAuth2 ───────────────────────────────────────
+  // Reuses GOOGLE_ADS_CLIENT_ID/SECRET; scope = webmasters.readonly
+  app.get("/api/google-search-console/auth-url", async (req, res) => {
+    const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
+    if (!clientId) {
+      res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
+      return;
+    }
+    const returnTo = (req.query.origin as string) || ENV.appBaseUrl;
+    let appOrigin = ENV.appBaseUrl;
+    try {
+      appOrigin = new URL(returnTo).origin;
+    } catch {
+      appOrigin = returnTo.replace(/\/$/, "");
+    }
+    const redirectUri = `${appOrigin}/api/google-search-console/oauth-callback`;
+    const { gscOAuthScope } = await import("../googleSearchConsole");
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: gscOAuthScope(),
+      access_type: "offline",
+      prompt: "consent",
+      state: returnTo,
+    });
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  });
+
+  app.get("/api/google-search-console/oauth-callback", async (req, res) => {
+    const code = req.query.code as string;
+    const state = req.query.state as string;
+    const error = req.query.error as string;
+    let appOrigin = ENV.appBaseUrl;
+    let returnPath = "/ad-sync";
+    if (state) {
+      try {
+        const u = new URL(state);
+        appOrigin = u.origin;
+        returnPath = u.pathname || "/ad-sync";
+      } catch {
+        appOrigin = state.replace(/\/$/, "");
+      }
+    }
+    const redirectBack = (params: string) =>
+      res.redirect(`${appOrigin}${returnPath}?${params}`);
+
+    if (error) {
+      redirectBack(`gsc_auth=error&msg=${encodeURIComponent(error)}`);
+      return;
+    }
+    if (!code) {
+      redirectBack("gsc_auth=error&msg=no_code");
+      return;
+    }
+
+    const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+    const redirectUri = `${appOrigin}/api/google-search-console/oauth-callback`;
+
+    try {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId!,
+          client_secret: clientSecret!,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }).toString(),
+      });
+      const tokenJson = (await tokenRes.json()) as {
+        refresh_token?: string;
+        error?: string;
+        error_description?: string;
+      };
+
+      if (!tokenJson.refresh_token) {
+        console.error("[GSC OAuth] No refresh_token:", JSON.stringify(tokenJson));
+        const msg =
+          "No refresh token received. Revoke JD Studio at https://myaccount.google.com/permissions then retry GSC authorize.";
+        redirectBack(`gsc_auth=error&msg=${encodeURIComponent(msg)}`);
+        return;
+      }
+
+      const { saveGscRefreshToken, touchGscCredentialVerified } = await import(
+        "../googleSearchConsole"
+      );
+      await saveGscRefreshToken(tokenJson.refresh_token);
+      await touchGscCredentialVerified();
+      console.log("[GSC OAuth] Refresh token saved (google_search_console)");
+      redirectBack("gsc_auth=success");
+    } catch (err: any) {
+      console.error("[GSC OAuth] Callback error:", err);
+      redirectBack(`gsc_auth=error&msg=${encodeURIComponent(err?.message ?? "Unknown error")}`);
+    }
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // tRPC API
