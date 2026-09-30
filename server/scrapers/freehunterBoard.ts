@@ -212,22 +212,22 @@ async function scrapeJobsWithPlaywright(
   const page = await context.newPage();
   try {
     console.log(`[FreehunterBoard] Navigating to ${categoryUrl}...`);
-    await page.goto(categoryUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.goto(categoryUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
 
     // Wait for job cards to render (CSR)
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
 
     // Try to wait for job links to appear
     try {
-      await page.waitForSelector('a[href*="/freelancejobs/"]', { timeout: 10000 });
+      await page.waitForSelector('a[href*="/freelancejobs/"]', { timeout: 8000 });
     } catch {
       console.warn("[FreehunterBoard] No job links found after waiting");
     }
 
     // Scroll down to trigger infinite scroll / load more jobs
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1500);
     }
 
     // Extract job data from DOM
@@ -298,34 +298,95 @@ async function scrapeJobsWithPlaywright(
     console.log(`[FreehunterBoard] Extracted ${jobs.length} jobs from DOM`);
     return jobs;
   } finally {
-    await page.close();
+    await page.close().catch(() => {});
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
+}
+
+export type ScrapeFreehunterBoardOptions = {
+  fetchEmails?: boolean;
+  maxJobs?: number;
+  /** Cap Playwright email fetches per run (scheduled scrapes should keep this low). */
+  maxEmailFetches?: number;
+  emailFetchTimeoutMs?: number;
+  /** Soft deadline — stop starting new email fetches after this many ms. */
+  deadlineMs?: number;
+  /** Skip category Playwright backup when API already returned jobs. */
+  skipPlaywrightBackup?: boolean;
+};
+
+/** @internal exported for unit tests */
+export function resolveScrapeOptions(
+  fetchEmailsOrOpts: boolean | ScrapeFreehunterBoardOptions = true,
+  maxJobsArg: number = 20
+): Required<
+  Pick<
+    ScrapeFreehunterBoardOptions,
+    | "fetchEmails"
+    | "maxJobs"
+    | "maxEmailFetches"
+    | "emailFetchTimeoutMs"
+    | "deadlineMs"
+    | "skipPlaywrightBackup"
+  >
+> {
+  if (typeof fetchEmailsOrOpts === "object" && fetchEmailsOrOpts) {
+    const o = fetchEmailsOrOpts;
+    const fetchEmails = o.fetchEmails ?? true;
+    return {
+      fetchEmails,
+      maxJobs: o.maxJobs ?? 20,
+      maxEmailFetches: o.maxEmailFetches ?? (fetchEmails ? 8 : 0),
+      emailFetchTimeoutMs: o.emailFetchTimeoutMs ?? 45_000,
+      deadlineMs: o.deadlineMs ?? 10 * 60 * 1000,
+      skipPlaywrightBackup: o.skipPlaywrightBackup ?? false,
+    };
+  }
+  const fetchEmails = Boolean(fetchEmailsOrOpts);
+  return {
+    fetchEmails,
+    maxJobs: maxJobsArg,
+    maxEmailFetches: fetchEmails ? 8 : 0,
+    emailFetchTimeoutMs: 45_000,
+    deadlineMs: 10 * 60 * 1000,
+    skipPlaywrightBackup: false,
+  };
 }
 
 /**
  * Main scraping function: fetch photography job listings and optionally fetch client emails.
  *
- * @param fetchEmails - If true, also fetch client email for each job (requires Premium)
- * @param maxJobs - Maximum number of new jobs to process (to avoid rate limiting)
+ * Scheduled scrapes should use `{ fetchEmails: false }` so discovery/insert finishes
+ * within the global timeout; email fetch is handled by watchdog / manual scrape.
+ *
+ * @param fetchEmailsOrOpts - boolean legacy flag, or options object
+ * @param maxJobs - Maximum number of new jobs to process (legacy 2nd arg)
  */
 export async function scrapeFreehunterBoard(
-  fetchEmails: boolean = true,
-  maxJobs: number = 20
+  fetchEmailsOrOpts: boolean | ScrapeFreehunterBoardOptions = true,
+  maxJobsArg: number = 20
 ): Promise<FreehunterBoardScrapeResult> {
+  const opts = resolveScrapeOptions(fetchEmailsOrOpts, maxJobsArg);
+  const startedAt = Date.now();
   const db = await getDb();
   if (!db) {
     return { success: false, jobs: [], newJobs: 0, emailsFetched: 0, error: "DB not available" };
   }
 
-  console.log("[FreehunterBoard] Starting job board scrape...");
+  console.log(
+    `[FreehunterBoard] Starting job board scrape (fetchEmails=${opts.fetchEmails}, maxJobs=${opts.maxJobs}, maxEmailFetches=${opts.maxEmailFetches})...`
+  );
 
-  // Ensure we have a valid browser session (needed for Playwright scraping and email fetching)
-  try {
-    await getOrLoginFreehunter();
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Login failed";
-    console.error("[FreehunterBoard] Login error:", msg);
-    return { success: false, jobs: [], newJobs: 0, emailsFetched: 0, error: `登入失敗: ${msg}` };
+  // Login only when we need authenticated email fetch (API + category page are public)
+  if (opts.fetchEmails && opts.maxEmailFetches > 0) {
+    try {
+      await getOrLoginFreehunter();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Login failed";
+      console.error("[FreehunterBoard] Login error:", msg);
+      return { success: false, jobs: [], newJobs: 0, emailsFetched: 0, error: `登入失敗: ${msg}` };
+    }
   }
 
   // ── Strategy: Use public API for comprehensive job discovery ──────
@@ -333,8 +394,8 @@ export async function scrapeFreehunterBoard(
   // We paginate using cursor-based pagination (lastId) to get all new jobs
   // since the last scrape. Then use AI scoring to filter relevant ones.
   //
-  // Additionally, scrape the photography category page (catalog_id=2) via
-  // Playwright to catch any jobs that may not appear in the API listing.
+  // Optionally scrape the photography category page (catalog_id=2) via
+  // Playwright as backup (can hang — always close browser; skip when API ok).
 
   // Get the highest job ID already in our DB to use as pagination stop
   // Use SQL MAX to get the true maximum jobId across ALL rows (not just the last 100)
@@ -355,23 +416,35 @@ export async function scrapeFreehunterBoard(
     console.warn(`[FreehunterBoard] API fetch failed:`, e);
   }
 
-  // 2. Also scrape the photography/video category page via Playwright (backup)
-  // This catches jobs that may not appear in the API listing
-  const categoryUrls = [
-    `${FREEHUNTER_BASE}/freelancejobs?catalog_id=2`, // 攝影及影音製作
-  ];
+  // 2. Playwright category backup — skip when API already found jobs or opted out
+  const shouldRunPlaywrightBackup =
+    !opts.skipPlaywrightBackup && allJobs.length === 0;
+  if (shouldRunPlaywrightBackup) {
+    const categoryUrls = [
+      `${FREEHUNTER_BASE}/freelancejobs?catalog_id=2`, // 攝影及影音製作
+    ];
 
-  for (const url of categoryUrls) {
-    try {
-      const jobs = await scrapeJobsWithPlaywright(url);
-      console.log(`[FreehunterBoard] Playwright ${url}: found ${jobs.length} jobs`);
-      allJobs.push(...jobs);
-
-      // Delay between category requests
-      await new Promise((r) => setTimeout(r, 2000));
-    } catch (e) {
-      console.warn(`[FreehunterBoard] Failed to scrape ${url}:`, e);
+    for (const url of categoryUrls) {
+      try {
+        const jobs = await Promise.race([
+          scrapeJobsWithPlaywright(url),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Playwright category scrape timed out after 60s")),
+              60_000
+            )
+          ),
+        ]);
+        console.log(`[FreehunterBoard] Playwright ${url}: found ${jobs.length} jobs`);
+        allJobs.push(...jobs);
+      } catch (e) {
+        console.warn(`[FreehunterBoard] Failed to scrape ${url}:`, e);
+      }
     }
+  } else if (allJobs.length > 0) {
+    console.log(
+      `[FreehunterBoard] Skipping Playwright category backup (API returned ${allJobs.length} jobs)`
+    );
   }
 
   if (allJobs.length === 0) {
@@ -399,7 +472,7 @@ export async function scrapeFreehunterBoard(
   }
 
   // Limit to maxJobs
-  const jobsToProcess = newJobsList.slice(0, maxJobs);
+  const jobsToProcess = newJobsList.slice(0, opts.maxJobs);
 
   // Insert new jobs into DB
   let emailsFetched = 0;
@@ -418,18 +491,27 @@ export async function scrapeFreehunterBoard(
     // Auto-action for high-confidence jobs (score >= threshold)
     const isHighConfidence = aiScore >= AUTO_ACTION_THRESHOLD;
 
-    // Always try to fetch client email for every new job (regardless of score or fetchEmails flag)
-    // Low-confidence jobs will stop at email_fetched for manual AI compose
-    // High-confidence jobs (>= 80%) will auto-send the first email
-    {
+    // Email fetch is optional — scheduled scrapes use fetchEmails=false to avoid 12‑min timeouts
+    const canFetchEmail =
+      opts.fetchEmails &&
+      emailsFetched < opts.maxEmailFetches &&
+      Date.now() - startedAt < opts.deadlineMs;
+
+    if (canFetchEmail) {
       try {
         await new Promise((r) => setTimeout(r, 1500)); // Rate limit: 1.5s between requests
-        // 90-second per-email timeout: if Playwright hangs, skip this job and continue
-        const EMAIL_FETCH_TIMEOUT_MS = 90 * 1000;
         const contact = await Promise.race([
           fetchFreehunterJobContact(parseInt(job.jobId, 10)),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Email fetch timed out after 90s for job ${job.jobId}`)), EMAIL_FETCH_TIMEOUT_MS)
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `Email fetch timed out after ${opts.emailFetchTimeoutMs}ms for job ${job.jobId}`
+                  )
+                ),
+              opts.emailFetchTimeoutMs
+            )
           ),
         ]);
         if (contact.email) {
@@ -446,7 +528,7 @@ export async function scrapeFreehunterBoard(
             console.log(`[FreehunterBoard] High confidence (${aiScore}%), auto-sending first email to ${clientEmail} for: ${job.title}`);
             try {
               // Step 1: Insert job first to get DB ID
-              const insertedId = await db.insert(freehunterJobs).values({
+              await db.insert(freehunterJobs).values({
                 jobId: job.jobId,
                 title: job.title,
                 clientName: job.clientName || null,

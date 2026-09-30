@@ -7,7 +7,11 @@ import { scrapeFreehunterBoard } from '../server/scrapers/freehunterBoard.js';
 async function main() {
   console.log('[Manual Trigger] Starting FH scrape...');
   try {
-    const result = await scrapeFreehunterBoard(true, 20);
+    // Discovery-first (same as scheduler); use scrapeNow UI for email fetch
+    const result = await scrapeFreehunterBoard({
+      fetchEmails: false,
+      maxJobs: 40,
+    });
     console.log('[Manual Trigger] Done:');
     console.log(`  - New jobs: ${result.newJobs}`);
     console.log(`  - Emails fetched: ${result.emailsFetched}`);
