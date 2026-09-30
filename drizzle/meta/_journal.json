@@ -456,6 +456,13 @@
       "when": 1789200000000,
       "tag": "0064_expense_post_production",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "5",
+      "when": 1789300000000,
+      "tag": "0065_gsc_platform_credential",
+      "breakpoints": true
     }
   ]
 }

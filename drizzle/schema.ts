@@ -206,7 +206,15 @@ export type InsertAdExpense = typeof adExpenses.$inferInsert;
 // ─── Platform Credentials (平台帳號憑證) ────────────────────────
 export const platformCredentials = mysqlTable("platform_credentials", {
   id: int("id").autoincrement().primaryKey(),
-  platform: mysqlEnum("platform", ["hellotoby", "360pro", "freehunter", "google_ads"]).notNull().unique(),
+  platform: mysqlEnum("platform", [
+    "hellotoby",
+    "360pro",
+    "freehunter",
+    "google_ads",
+    "google_search_console",
+  ])
+    .notNull()
+    .unique(),
   loginEmail: varchar("loginEmail", { length: 320 }),
   loginPassword: text("loginPassword"), // AES-256 encrypted
   accessToken: mediumtext("accessToken"),  // Firebase/OAuth access token (mediumtext for large encrypted storageState)
