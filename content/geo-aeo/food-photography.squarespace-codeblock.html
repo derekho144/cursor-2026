@@ -1,228 +1,226 @@
-
+<span id="jd-food-photography" aria-hidden="true"></span>
 <style>
-#jd-aeo-food-photography{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue','Microsoft JhengHei',sans-serif;color:#e5e7eb;background:transparent;max-width:920px;margin:0 auto;padding:8px 16px 32px;line-height:1.7}
-#jd-aeo-food-photography h2{color:#fff;font-size:1.35rem;font-weight:600;margin:1.5rem 0 .75rem}
-#jd-aeo-food-photography h3{color:#fbbf24;font-size:.95rem;font-weight:600;margin:1.1rem 0 .5rem;letter-spacing:.04em}
-#jd-aeo-food-photography p,#jd-aeo-food-photography li{color:#94a3b8;font-size:1rem}
-#jd-aeo-food-photography strong{color:#f8fafc}
-#jd-aeo-food-photography table{width:100%;border-collapse:collapse;margin:.75rem 0 1rem;font-size:.95rem}
-#jd-aeo-food-photography th,#jd-aeo-food-photography td{border:1px solid rgba(251,191,36,.25);padding:.65rem .75rem;text-align:left}
-#jd-aeo-food-photography th{background:rgba(251,191,36,.08);color:#fbbf24;font-weight:600}
-#jd-aeo-food-photography td{color:#cbd5e1}
-#jd-aeo-food-photography .jd-aeo-sub{color:#94a3b8;margin:.25rem 0 1rem;font-size:1.05rem}
-#jd-aeo-food-photography .jd-aeo-note{font-size:.85rem;color:#64748b}
-#jd-aeo-food-photography .jd-aeo-cta{display:inline-block;margin-top:1rem;padding:.7rem 1.1rem;background:#D4A843;color:#111;font-weight:700;text-decoration:none;border-radius:4px}
-#jd-aeo-food-photography a{color:#fbbf24}
-#jd-aeo-food-photography details{border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:.65rem .85rem;margin:.45rem 0;background:rgba(255,255,255,.02)}
-#jd-aeo-food-photography summary{cursor:pointer;color:#f1f5f9;font-weight:600}
+#jd-aeo-food-photography{
+  --ink:#060507;--line:rgba(255,255,255,.09);--text:#f4f1ec;--muted:#b8b0a6;--dim:#7a736c;
+  --ember:#ff7a45;--ember-soft:rgba(255,122,69,.16);--cream:#fff6ee;
+  box-sizing:border-box;width:100%;max-width:980px;margin:0 auto;
+  padding:56px 24px 72px;color:var(--text);position:relative;overflow:hidden;
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+  background:
+    radial-gradient(700px 360px at 12% -10%,rgba(255,122,69,.18),transparent 55%),
+    radial-gradient(540px 300px at 88% 8%,rgba(255,214,170,.08),transparent 50%),
+    radial-gradient(420px 260px at 70% 90%,rgba(255,122,69,.06),transparent 60%),
+    linear-gradient(165deg,#121014 0%,#080709 42%,#040405 100%);
+  border-radius:28px;
+}
+#jd-aeo-food-photography *{box-sizing:border-box}
+#jd-aeo-food-photography::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  mix-blend-mode:soft-light;z-index:0;
+}
+#jd-aeo-food-photography .jd-shell{position:relative;z-index:1}
+#jd-aeo-food-photography .jd-hero{display:grid;gap:18px;max-width:44rem}
+#jd-aeo-food-photography .jd-kicker{
+  margin:0;display:inline-flex;align-items:center;gap:10px;
+  font-size:11px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:var(--ember);
+  animation:jdFoodIn .7s ease both;
+}
+#jd-aeo-food-photography .jd-kicker::before{
+  content:"";width:28px;height:1px;background:linear-gradient(90deg,var(--ember),transparent);
+}
+#jd-aeo-food-photography h2.jd-title{
+  margin:0;font-size:clamp(2.15rem,5.4vw,3.5rem);font-weight:600;letter-spacing:-.04em;line-height:1.05;color:var(--cream);
+  animation:jdFoodIn .8s .05s ease both;
+}
+#jd-aeo-food-photography .jd-title span{
+  display:block;margin-top:.08em;
+  background:linear-gradient(105deg,#ffe0c2 0%,#ff7a45 48%,#ffc39a 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+#jd-aeo-food-photography .jd-sub{
+  margin:0;font-size:clamp(1rem,2vw,1.18rem);color:var(--muted);font-weight:400;max-width:32em;
+  animation:jdFoodIn .8s .1s ease both;
+}
+#jd-aeo-food-photography .jd-cta-wrap{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:6px;
+  animation:jdFoodIn .8s .16s ease both;
+}
+#jd-aeo-food-photography .jd-aeo-cta{
+  display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 26px;
+  border-radius:980px;background:var(--cream);color:#161210;font-size:.95rem;font-weight:600;text-decoration:none;
+  transition:transform .25s ease,background .25s ease,box-shadow .25s ease;
+  box-shadow:0 0 0 0 rgba(255,122,69,0);
+}
+#jd-aeo-food-photography .jd-aeo-cta:hover{
+  background:#fff;transform:translateY(-1px);box-shadow:0 12px 40px -18px rgba(255,122,69,.55);
+}
+#jd-aeo-food-photography .jd-cta-ghost{
+  display:inline-flex;align-items:center;min-height:50px;padding:0 12px;color:var(--muted);font-size:.95rem;text-decoration:none;
+  transition:color .25s ease;
+}
+#jd-aeo-food-photography .jd-cta-ghost:hover{color:var(--cream)}
+#jd-aeo-food-photography .jd-block{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+#jd-aeo-food-photography .jd-label{
+  margin:0 0 14px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+}
+#jd-aeo-food-photography .jd-def p{margin:0;font-size:1.06rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-food-photography .jd-def strong{color:var(--cream);font-weight:500}
+#jd-aeo-food-photography .jd-scope{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin:0;padding:0;list-style:none;counter-reset:scope;
+}
+#jd-aeo-food-photography .jd-scope li{
+  counter-increment:scope;position:relative;margin:0;padding:16px 16px 16px 52px;
+  border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);
+  color:var(--cream);font-size:.98rem;font-weight:500;
+  transition:border-color .25s ease,background .25s ease;
+}
+#jd-aeo-food-photography .jd-scope li:hover{border-color:rgba(255,122,69,.35);background:var(--ember-soft)}
+#jd-aeo-food-photography .jd-scope li::before{
+  content:counter(scope,decimal-leading-zero);position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  font-size:12px;letter-spacing:.08em;color:var(--ember);font-weight:500;
+}
+#jd-aeo-food-photography .jd-price-panel{display:grid;gap:12px}
+#jd-aeo-food-photography .jd-price-row{
+  display:grid;grid-template-columns:1.4fr auto;gap:16px;align-items:end;
+  padding:22px 22px 20px;border-radius:20px;border:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+  transition:border-color .25s ease,transform .25s ease;
+}
+#jd-aeo-food-photography .jd-price-row:hover{border-color:rgba(255,122,69,.3);transform:translateY(-1px)}
+#jd-aeo-food-photography .jd-price-row.feature{
+  border-color:rgba(255,122,69,.28);
+  background:linear-gradient(135deg,rgba(255,122,69,.12),rgba(255,255,255,.02));
+}
+#jd-aeo-food-photography .jd-price-name{margin:0;font-size:1.02rem;font-weight:500;color:var(--cream)}
+#jd-aeo-food-photography .jd-price-desc{margin:6px 0 0;font-size:.86rem;color:var(--dim)}
+#jd-aeo-food-photography .jd-price-amt{
+  margin:0;text-align:right;font-size:clamp(1.35rem,3vw,1.85rem);font-weight:600;letter-spacing:-.03em;color:var(--cream);line-height:1;
+}
+#jd-aeo-food-photography .jd-price-amt small{
+  display:block;margin-top:6px;font-size:.72rem;font-weight:400;letter-spacing:.04em;color:var(--dim);
+}
+#jd-aeo-food-photography .jd-note{margin:14px 0 0;font-size:.88rem;color:var(--dim)}
+#jd-aeo-food-photography .jd-note a{color:var(--ember);text-decoration:none}
+#jd-aeo-food-photography .jd-note a:hover{text-decoration:underline}
+#jd-aeo-food-photography details{margin:0;border-bottom:1px solid var(--line);background:transparent}
+#jd-aeo-food-photography details:first-of-type{border-top:1px solid var(--line)}
+#jd-aeo-food-photography summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;
+  padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--cream);
+}
+#jd-aeo-food-photography summary::-webkit-details-marker{display:none}
+#jd-aeo-food-photography summary:after{
+  content:"+";flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);font-weight:300;transition:border-color .25s,color .25s,background .25s;
+}
+#jd-aeo-food-photography details[open] summary:after{
+  content:"–";color:var(--ember);border-color:rgba(255,122,69,.45);background:var(--ember-soft);
+}
+#jd-aeo-food-photography details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--muted);font-weight:300}
+@keyframes jdFoodIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (max-width:720px){
+  #jd-aeo-food-photography{padding:40px 16px 56px;border-radius:18px}
+  #jd-aeo-food-photography .jd-scope{grid-template-columns:1fr}
+  #jd-aeo-food-photography .jd-price-row{grid-template-columns:1fr;gap:10px}
+  #jd-aeo-food-photography .jd-price-amt{text-align:left}
+}
+@media (max-width:420px){
+  #jd-aeo-food-photography .jd-cta-wrap{flex-direction:column;align-items:stretch}
+  #jd-aeo-food-photography .jd-aeo-cta{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  #jd-aeo-food-photography .jd-kicker,
+  #jd-aeo-food-photography h2.jd-title,
+  #jd-aeo-food-photography .jd-sub,
+  #jd-aeo-food-photography .jd-cta-wrap{animation:none}
+  #jd-aeo-food-photography .jd-price-row:hover{transform:none}
+}
 </style>
 
-<!-- Visible AEO/GEO blocks for /services/food-photography -->
 <section id="jd-aeo-food-photography" lang="zh-HK">
-  <h2>香港食物攝影服務</h2>
-  <p class="jd-aeo-sub">餐廳菜牌・外賣平台・食品品牌｜可配菜單設計</p>
-  <h3>什麼是食物攝影？</h3>
-  <p><strong>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。</strong>JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。</p>
-  <h3>服務範圍</h3>
-  <ul><li>餐廳菜牌拍攝</li>
-<li>外賣平台食物圖</li>
-<li>飲品／甜品特寫</li>
-<li>可另配菜單設計</li></ul>
-  <h3>香港食物攝影服務與收費參考</h3>
-  <table>
-    <thead><tr><th>項目</th><th>參考收費（HKD）</th></tr></thead>
-    <tbody>
-<tr><td>食物攝影套餐（入門）</td><td>約 HK$3,000 起</td></tr>
-<tr><td>餐廳／外賣常用套餐</td><td>約 HK$3,000–10,000</td></tr>
-<tr><td>菜單設計（可另配）</td><td>另行報價</td></tr>
-    </tbody>
-  </table>
-  <p class="jd-aeo-note">參考價；實際以報價為準。<a href="https://www.jdstudiohk.com/blog/food-photography-package-contents">套餐內容可參考《食物攝影套餐》</a></p>
-  <h3>常見問題</h3>
-  <details><summary>什麼是食物攝影？</summary><p>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。</p></details><details><summary>香港食物攝影套餐收費？</summary><p>香港食物攝影／菜牌拍攝入門套餐約 HK$3,000 起；餐廳或外賣常用套餐約 HK$3,000–10,000，視菜式數量與場景而定。實際以報價為準。</p></details><details><summary>是否適合 Foodpanda／Deliveroo？</summary><p>適合。影像可按外賣平台與社交媒體比例輸出，方便上架與推廣。</p></details><details><summary>可否連菜單設計一併做？</summary><p>可以。JD Studio 可另配菜單設計服務，詳見菜單設計頁，亦可一次過報價。</p></details><details><summary>如何預約食物攝影？</summary><p>歡迎 WhatsApp +852 9153 1976 查詢拍攝日期與套餐。</p></details>
-  <p><a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener">WhatsApp 即日報價</a></p>
-</section>
+  <div class="jd-shell">
+    <header class="jd-hero">
+      <p class="jd-kicker">JD Studio · Food Photography</p>
+      <h2 class="jd-title">香港食物攝影服務<span>讓菜式在鏡頭前變得可欲</span></h2>
+      <p class="jd-sub">餐廳菜牌・外賣平台・食品品牌｜可配菜單設計</p>
+      <div class="jd-cta-wrap">
+        <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 即日報價</a>
+        <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">查看套餐內容</a>
+      </div>
+    </header>
 
-<!--
-  Squarespace → Pages → food-photography → Code Injection (Header) 或頁頂 Code Block
-  AEO/GEO: FAQPage + Service + OfferCatalog for 食物攝影
--->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebPage",
-      "@id": "https://www.jdstudiohk.com/services/food-photography#webpage",
-      "url": "https://www.jdstudiohk.com/services/food-photography",
-      "name": "香港食物攝影｜餐廳菜牌拍攝收費｜JD Studio",
-      "description": "食物攝影是專門拍攝菜式、飲品與食品包裝的專業攝影服務。JD Studio 香港食物攝影／菜牌拍攝套餐約 HK$3,000 起，適合餐廳、咖啡店、甜品店及 Foodpanda／Deliveroo。WhatsApp 即日報價。",
-      "inLanguage": "zh-HK",
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "JD Studio 香港商業攝影",
-        "url": "https://www.jdstudiohk.com"
-      },
-      "about": {
-        "@id": "https://www.jdstudiohk.com/services/food-photography#service"
-      },
-      "mainEntity": {
-        "@id": "https://www.jdstudiohk.com/services/food-photography#service"
-      }
-    },
-    {
-      "@type": "Service",
-      "@id": "https://www.jdstudiohk.com/services/food-photography#service",
-      "name": "香港食物攝影服務",
-      "alternateName": [
-        "香港食物攝影",
-        "菜牌拍攝",
-        "餐廳食物攝影"
-      ],
-      "serviceType": "Food Photography",
-      "description": "食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。",
-      "provider": {
-        "@type": "LocalBusiness",
-        "name": "JD Studio",
-        "url": "https://www.jdstudiohk.com",
-        "telephone": "+852-9153-1976",
-        "email": "info.exposurehk@gmail.com",
-        "address": {
-          "@type": "PostalAddress",
-          "streetAddress": "1 Tsat Po Street",
-          "addressLocality": "San Po Kong",
-          "addressRegion": "Kowloon",
-          "addressCountry": "HK"
-        },
-        "areaServed": [
-          {
-            "@type": "City",
-            "name": "Hong Kong"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "Kowloon"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "Hong Kong Island"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "New Territories"
-          }
-        ]
-      },
-      "areaServed": "HK",
-      "url": "https://www.jdstudiohk.com/services/food-photography",
-      "hasOfferCatalog": {
-        "@type": "OfferCatalog",
-        "name": "香港食物攝影收費參考",
-        "itemListElement": [
-          {
-            "@type": "Offer",
-            "name": "食物攝影套餐（入門）",
-            "description": "入門食物攝影／菜牌拍攝套餐參考價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/food-photography",
-            "price": "3000",
-            "priceSpecification": {
-              "@type": "PriceSpecification",
-              "priceCurrency": "HKD",
-              "minPrice": "3000",
-              "unitText": "project"
-            }
-          },
-          {
-            "@type": "Offer",
-            "name": "餐廳／外賣常用套餐",
-            "description": "餐廳或外賣平台常用食物攝影套餐參考價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/food-photography",
-            "price": "3000",
-            "priceSpecification": {
-              "@type": "PriceSpecification",
-              "priceCurrency": "HKD",
-              "minPrice": "3000",
-              "unitText": "project"
-            }
-          },
-          {
-            "@type": "Offer",
-            "name": "菜單設計（可另配）",
-            "description": "可另配菜單設計服務，另行報價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/food-photography"
-          }
-        ]
-      }
-    },
-    {
-      "@type": "FAQPage",
-      "@id": "https://www.jdstudiohk.com/services/food-photography#faq",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "什麼是食物攝影？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "香港食物攝影套餐收費？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "香港食物攝影／菜牌拍攝入門套餐約 HK$3,000 起；餐廳或外賣常用套餐約 HK$3,000–10,000，視菜式數量與場景而定。實際以報價為準。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "是否適合 Foodpanda／Deliveroo？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "適合。影像可按外賣平台與社交媒體比例輸出，方便上架與推廣。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "可否連菜單設計一併做？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "可以。JD Studio 可另配菜單設計服務，詳見菜單設計頁，亦可一次過報價。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "如何預約食物攝影？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "歡迎 WhatsApp +852 9153 1976 查詢拍攝日期與套餐。"
-          }
-        }
-      ]
-    },
-    {
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "主頁",
-          "item": "https://www.jdstudiohk.com/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "食物攝影",
-          "item": "https://www.jdstudiohk.com/services/food-photography"
-        }
-      ]
-    }
-  ]
-}
-</script>
+    <div class="jd-block jd-def">
+      <p class="jd-label">什麼是食物攝影？</p>
+      <p><strong>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。</strong> JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。</p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">服務範圍</p>
+      <ul class="jd-scope">
+        <li>餐廳菜牌拍攝</li>
+        <li>外賣平台食物圖</li>
+        <li>飲品／甜品特寫</li>
+        <li>可另配菜單設計</li>
+      </ul>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">服務與收費參考</p>
+      <div class="jd-price-panel">
+        <div class="jd-price-row feature">
+          <div>
+            <p class="jd-price-name">食物攝影套餐（入門）</p>
+            <p class="jd-price-desc">適合小型菜牌／首批上架影像</p>
+          </div>
+          <p class="jd-price-amt">HK$3,000<small>起</small></p>
+        </div>
+        <div class="jd-price-row">
+          <div>
+            <p class="jd-price-name">餐廳／外賣常用套餐</p>
+            <p class="jd-price-desc">視菜式數量與場景而定</p>
+          </div>
+          <p class="jd-price-amt">HK$3,000–10,000<small>參考</small></p>
+        </div>
+        <div class="jd-price-row">
+          <div>
+            <p class="jd-price-name">菜單設計（可另配）</p>
+            <p class="jd-price-desc">拍攝＋設計一次過報價</p>
+          </div>
+          <p class="jd-price-amt">另行報價<small>可加配</small></p>
+        </div>
+      </div>
+      <p class="jd-note">參考價；實際以報價為準。<a href="https://www.jdstudiohk.com/blog/food-photography-package-contents">套餐內容可參考《食物攝影套餐》</a></p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">常見問題</p>
+      <details>
+        <summary>什麼是食物攝影？</summary>
+        <p>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 為香港餐廳與食品品牌提供誘人、一致且適合印刷／數碼使用的食物影像。</p>
+      </details>
+      <details>
+        <summary>香港食物攝影套餐收費？</summary>
+        <p>香港食物攝影／菜牌拍攝入門套餐約 HK$3,000 起；餐廳或外賣常用套餐約 HK$3,000–10,000，視菜式數量與場景而定。實際以報價為準。</p>
+      </details>
+      <details>
+        <summary>是否適合 Foodpanda／Deliveroo？</summary>
+        <p>適合。影像可按外賣平台與社交媒體比例輸出，方便上架與推廣。</p>
+      </details>
+      <details>
+        <summary>可否連菜單設計一併做？</summary>
+        <p>可以。JD Studio 可另配菜單設計服務，詳見菜單設計頁，亦可一次過報價。</p>
+      </details>
+      <details>
+        <summary>如何預約食物攝影？</summary>
+        <p>歡迎 WhatsApp +852 9153 1976 查詢拍攝日期與套餐。</p>
+      </details>
+    </div>
+
+    <div class="jd-cta-wrap" style="margin-top:36px">
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 即日報價</a>
+      <a class="jd-cta-ghost" href="mailto:info.exposurehk@gmail.com">info.exposurehk@gmail.com</a>
+    </div>
+  </div>
+</section>

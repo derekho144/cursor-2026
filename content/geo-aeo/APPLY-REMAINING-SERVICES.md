@@ -7,7 +7,7 @@
 | Page | File to paste |
 |---|---|
 | Product | `product-photography.squarespace-codeblock.html` |
-| Food | `food-photography.squarespace-codeblock.html` |
+| Food | `food-photography.squarespace-codeblock.html` + header `food-photography.schema.jsonld.html` |
 | Corporate event | `corporate-event.squarespace-codeblock.html` |
 | Party / event | `event-photography.squarespace-codeblock.html` |
 | Jewelry | `jewelry-photography.squarespace-codeblock.html` |
