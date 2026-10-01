@@ -1,27 +1,30 @@
-# Homepage lower-half — UI / UX brief
+# Homepage lower-half — visual-first UX
 
-**Goal:** Give visitors (and AI Overview) a clear path after the hero: who → what → price anchors → trust → how to start.
+**Reference spirit:** [Visual Department](https://visualdepartment.com) — image-led departments, short labels, sparse copy.  
+**Not a clone:** JD keeps ZH-first copy, visible price chips, WhatsApp CTA, and a short citable definition for AEO.
 
-## Current problem
-Live home after hero is mostly「信念」copy + partner logos — weak service navigation, no visible prices, no H1/definition for AEO.
+## Verdict
+Homepage lower half does **not** need a wall of text. Work should navigate; text only orients + converts.
 
-## UX journey (lower half)
-1. **Orientation** — short brand definition (citable)
-2. **Choose** — service map (8 links, one-line each)
-3. **Anchor** — 4 public price points
-4. **Trust** — E-E-A-T four cells
-5. **Next step** — 4-step process + FAQ + WhatsApp CTA
+## Journey (after existing Squarespace hero)
+1. **Statement** — one display line + ≤2-line definition（「是…」）
+2. **Service portals** — 8 image tiles (mosaic) with index + label + price chip
+3. **Selected work** — horizontal filmstrip (swipe)
+4. **Proof** — 3 short facts (not E-E-A-T essay grid)
+5. **FAQ** — 3 collapsed items only
+6. **Closing CTA** — full-bleed + WhatsApp
 
-## UI principles
-- One job per section
-- No hero badges / stat clutter in first fold of this block
-- Service rows = interaction containers (not decorative cards)
-- Dark cinematic shell aligned with service AEO blocks
-- Motion: light fade-in only
+## Borrow from Visual Department
+- Visual tiles as the service map
+- Huge statement, tiny supporting line
+- Hairline gaps, dark plane, quiet motion (hover dim/zoom)
 
-## Squarespace placement
-Paste `home-lower.squarespace-codeblock.html` as a Code Block **below** existing hero (and optional partners). Do not put JSON-LD in this file unless you also sync a visible FAQ (FAQ is already in the block — header schema optional later).
+## Keep for JD (HK SMB + SEO)
+- Real `<img alt>` + service links
+- Public price anchors on tiles
+- WhatsApp primary CTA
+- Short FAQ with matching numbers
 
 ## Files
 - `home-lower.squarespace-codeblock.html`
-- Update `pages/home.md` to match
+- `pages/home.md`

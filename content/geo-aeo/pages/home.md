@@ -1,29 +1,27 @@
-# Home — AEO/GEO hub + lower-half UI
+# Home — visual-first lower half + AEO hub
 
 **URL:** https://www.jdstudiohk.com/  
-**Lower block:** `home-lower.squarespace-codeblock.html` (`#jd-home-lower`)
+**Lower block:** `home-lower.squarespace-codeblock.html` (`#jdh`)  
+**UX brief:** `home-lower.ux.md`  
+**Design reference spirit:** visualdepartment.com (not a clone)
 
 ## Page role
-Entity hub — brand definition + service index + price anchors for AI citations and human navigation.
+Entity hub — short brand definition + image-led service portals + light price anchors.
 
 ## Recommended page structure
 1. Existing Squarespace hero / portfolio (keep)
-2. Optional「信念」short paragraph (keep or trim)
-3. **NEW lower half Code Block** (`#jd-home-lower`)
-4. Partners / footer (keep)
+2. Optional short「信念」or partners (keep or trim)
+3. **NEW visual lower Code Block** (`#jdh`)
+4. Footer (keep)
 
 ## Lower-half sections
-1. H2 + sub — 香港商業攝影與影片製作  
-2. Definition —「JD Studio 是香港專業商業攝影與影片製作公司…」  
-3. Service map — 8 linked rows with one-line defs  
-4. Price strip — 產品 HK$150 起 · 食物 HK$3,000 起 · 室內 HK$2,500 起 · 活動 HK$3,000 起  
-5. E-E-A-T — Experience / Expertise / Authority / Trust  
-6. Process — 用途 → 方案 → 拍攝 → 交付  
-7. FAQ (≥4) + WhatsApp CTA  
+1. Statement —「影像，令品牌被記住。」+ one definition sentence  
+2. Service portals — 8 image tiles with price chips  
+3. Selected work filmstrip  
+4. Proof — 2014 / 新蒲崗 / 一站式  
+5. FAQ (3) + full-bleed WhatsApp CTA  
 
 ## SEO
-- Prefer page H1: `JD Studio 香港商業攝影` (Squarespace text block above, if missing)
-- Meta should list main services + WhatsApp
-
-## UX note
-See `home-lower.ux.md` for journey rationale.
+- Prefer page H1 in Squarespace: `JD Studio 香港商業攝影`
+- Definition sentence must stay visible HTML text (not image-only)
+- Swap tile images via Squarespace CDN URLs as portfolio updates
