@@ -1018,28 +1018,63 @@ export default function AdSync() {
                     className="px-5 pb-4"
                     style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
                   >
-                    {/* Prominent reauth banner when token expired */}
-                    {googleAdsConnStatus !== null && !googleAdsConnStatus.success && (
+                    {/* Error banner — only push reauth for expired/invalid tokens (avoid auth loops) */}
+                    {googleAdsConnStatus !== null && !googleAdsConnStatus.success && (() => {
+                      const err = googleAdsConnStatus.error || "";
+                      const needsReauth =
+                        /invalid_grant|token.*(expir|revok)|No refresh token|unauthorized_client/i.test(err);
+                      const isPermission =
+                        /permission to access customer|login-customer-id|PERMISSION_DENIED/i.test(err);
+                      const isApiDisabled =
+                        /has not been used in project|is disabled|googleads\.googleapis\.com/i.test(err);
+                      const isOAuthTesting =
+                        /access_denied|未完成 Google 驗證|測試階段|test user/i.test(err);
+                      let title = "Google Ads API 連線失敗";
+                      let help = err;
+                      if (needsReauth) {
+                        help = "授權 Token 已失效，需要用有 Ads／MCC 權限嘅 Google 帳重新授權一次。";
+                      } else if (isOAuthTesting) {
+                        title = "OAuth 測試模式封鎖";
+                        help =
+                          "GCP OAuth 同意畫面仍係「測試」。請把授權用 Gmail 加做測試使用者，或改正式環境後再授權。唔好重複撳重新授權。";
+                      } else if (isApiDisabled) {
+                        title = "未啟用 Google Ads API";
+                        help =
+                          "請喺 GCP 專案啟用 Google Ads API（googleads.googleapis.com），等 1–2 分鐘後撳「重新測試」。唔使重新授權。";
+                      } else if (isPermission) {
+                        title = "Google 帳號冇權限讀此 Ads 帳戶";
+                        help =
+                          "Refresh token 已有，但授權帳號讀唔到客戶 4839352747（MCC 9876630892）。請用有該帳戶存取權嘅 Google 帳授權一次，或喺 Ads 加權限。";
+                      }
+                      return (
                       <div className="mt-3 mb-2 rounded-lg px-4 py-3 flex items-start gap-3" style={{ background: "rgba(229,57,53,0.1)", border: "1px solid rgba(229,57,53,0.3)" }}>
                         <WifiOff className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#e53935" }} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium" style={{ color: "#e53935" }}>Google Ads API 連線失敗</div>
-                          <div className="text-xs mt-0.5" style={{ color: "#aaa" }}>
-                            {googleAdsConnStatus.error?.includes("invalid_grant") || googleAdsConnStatus.error?.includes("Bad Request")
-                              ? "授權 Token 已過期，需要重新登入 Google 帳號以更新授權。"
-                              : googleAdsConnStatus.error}
-                          </div>
+                          <div className="text-sm font-medium" style={{ color: "#e53935" }}>{title}</div>
+                          <div className="text-xs mt-0.5" style={{ color: "#aaa" }}>{help}</div>
+                          {needsReauth || isPermission ? (
                           <button
                             onClick={handleGoogleReauth}
                             className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all hover:opacity-80"
                             style={{ background: "#7B8CFF", color: "#fff", fontWeight: 600 }}
                           >
                             <RefreshCw className="h-3 w-3" />
-                            立即重新授權 Google Ads
+                            {isPermission ? "用正確 Ads 帳號重新授權" : "立即重新授權 Google Ads"}
                           </button>
+                          ) : (
+                          <button
+                            onClick={() => testGoogleAdsConnectionMutation.mutate()}
+                            className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all hover:opacity-80"
+                            style={{ background: "#444", color: "#fff", fontWeight: 600 }}
+                          >
+                            <Wifi className="h-3 w-3" />
+                            重新測試（唔使再授權）
+                          </button>
+                          )}
                         </div>
                       </div>
-                    )}
+                      );
+                    })()}
                     <div className="flex items-center gap-2 mt-3 flex-wrap">
                       {googleAdsConnStatus === null || testGoogleAdsConnectionMutation.isPending ? (
                         <span className="flex items-center gap-1.5 text-xs" style={{ color: "#888" }}>
