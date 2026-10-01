@@ -11,4 +11,4 @@
 
 ## Notes
 - Homepage does **not** show price anchors; pricing stays on service pages / WhatsApp.
-- Tile images are a matched 4:5 catalogue set — swap to JD work with same crop when ready.
+- Tile images are JD Studio portfolio frames (Squarespace CDN), 4:5 cover crop.
