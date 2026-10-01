@@ -2,25 +2,29 @@
 
 **Block:** `home-lower.squarespace-codeblock.html` (`#jdh`)
 
-## Client notes
-- Layout OK; **no prices** on homepage tiles / FAQ.
-- Photos must feel like one catalogue (same ratio + shared grade), not mixed stock moods.
+## Rules
+- No prices on homepage tiles / FAQ
+- **Own work only** — JD Studio Squarespace CDN portfolio frames
+- Strict 4×2 wall, 4:5 cover crop, shared CSS grade
 
-## Art direction
-Prints hung in a dark room — museum label under each photo.
-- Words never sit on photos. Caption = service name only.
-- Strict 4×2 wall, 4:5 frames, generous gutters.
-- Gold = action only (section labels, hover hairline, WhatsApp).
-- Light shared CSS grade on all tiles so the wall reads as one set.
+## Tile sources (JD CDN)
+| Service | File |
+|---|---|
+| 產品攝影 | `A7R06570.jpg` (porcelain vase) |
+| 食物攝影 | hotel seafood / wine (`9酒店…`) |
+| 室內攝影 | `A7R00140.jpg` (Busy Bee boutique) |
+| 珠寶攝影 | `2101+A1.jpg` (diamond ring) |
+| 企業活動 | `DSC02621.jpg` (ZA International) |
+| 影片／TVC | `20250531+Lorry+I+am+Here_1.1.7.jpg` |
+| 派對活動 | `20190831-DSC05326-38.jpg` (formal dinner) |
+| 餐牌設計 | hotel dessert (`4酒店…`) |
+| Close | `AKE_Cariam-2-Product-Shot-0324.jpg` |
 
 ## Journey
-1. Statement + short「是…」definition  
-2. Service wall — 8 equal tiles, name only  
-3. FAQ ×3 (booking / location / how to start) — no price list  
-4. Close — WhatsApp + one calm photo  
-
-## Assets
-Cohesive Unsplash 4:5 set (`w=1400&h=1750&fit=crop&q=90`). Replace with JD portfolio crops when ready — keep 4:5 and similar lighting.
+1. Statement + short definition  
+2. Service wall — name only  
+3. FAQ ×3 (booking / location / start)  
+4. WhatsApp close  
 
 ## Squarespace
-One Code Block; section background `#050507`. Page H1 stays in Squarespace.
+One Code Block; section background `#050507`.
