@@ -40,12 +40,22 @@ Removed: filmstrip, stats row (2014／新蒲崗 now inside the definition), EN s
 | 派對活動 | 按時段報價（v2's HK$3,000 was the corporate figure） |
 | 餐牌設計 | 按項目報價 |
 
-## Assets
-- Same JD CDN library as v2, re-cast: the logo/flyer tiles are dropped; filmstrip frames now fill 影片 (east dessert still), 派對 (ZA opening, logo cropped out) and 餐牌 (Marco Polo). Close uses the driftwood still.
-- 室內 uses a 2× crop of the existing frame (lamp + lacquer + oak), so the Hang Lung logo is never shown.
-- Per-tile crop vars: `--p` object-position · `--z` zoom · `--o` zoom origin · `--b` brightness (bright event frames at .9).
-- PNG-sourced food frames load at 1000w／750w (lossless WebP from CDN is heavy); interior at 2500w for the 2× crop.
-- **Swap when available:** a clean, logo-free interior frame and a real film still for 影片／TVC (one `src` each).
+## Assets (standardized)
+All 8 tiles + close use a **matched Unsplash commercial set** (Unsplash License, free for commercial use), forced to the same **4:5** crop (`w=1200&h=1500&fit=crop`) so every frame has the same “室內攝影級” catalog standard — clean subject, no logo/flyer overlays, no random aspect ratios.
+
+| Tile | Unsplash id | Look |
+|---|---|---|
+| 產品攝影 | `photo-1523275335684-37898b6baf30` | white watch, ecommerce catalog |
+| 食物攝影 | `photo-1476224203421-9ac39bcb3327` | plated seafood |
+| 室內攝影 | `photo-1600607687939-ce8a6c25118c` | bright modern open-plan |
+| 珠寶攝影 | `photo-1605100804763-247f67b3557e` | diamond ring macro |
+| 企業活動 | `photo-1515187029135-18ee286d815b` | professional gathering |
+| 影片／TVC | `photo-1516035069371-29a1b244cc32` | cinema camera flat-lay |
+| 派對活動 | `photo-1511795409834-ef04bbd61622` | banquet table / florals |
+| 餐牌設計 | `photo-1414235077428-338989a2e8c0` | fine-dining plate |
+| Close | `photo-1600607687644-c7171b42498f` | bright bedroom interior |
+
+**Next:** replace each `src` with real JD portfolio shots cropped to 4:5 when ready — keep the same framing discipline.
 
 ## Squarespace paste
 - One Code Block; section background `#050507`, section padding minimal (block has its own rhythm).
