@@ -1,302 +1,230 @@
 <!--
-  Homepage LOWER HALF — visual-first (inspired by Visual Department spirit)
-  Paste as one Squarespace Code Block below existing hero.
-  Replace IMG URLs with your preferred portfolio shots if needed (Asset Library).
-  Keep page SEO H1 in Squarespace; this block uses H2.
+  JD Studio homepage — lower half · "Darkroom Catalogue"
+  Paste as ONE Squarespace Code Block below the existing hero; set that section's background to #050507.
+  Page H1 stays in Squarespace; this block starts at H2.
+  Swap a tile photo by replacing its src. Crop is per tile:
+  --p object-position · --z zoom · --o zoom origin · --b brightness (tames bright frames next to dark ones).
 -->
 <style>
 #jdh{
-  --bg:#050507;--ink:#f5f5f7;--mut:#a1a1a6;--dim:#6e6e73;--line:rgba(255,255,255,.09);--gold:#c9a962;
-  --ease:cubic-bezier(.2,.7,.2,1);
-  box-sizing:border-box;width:100%;max-width:100%;margin:0;color:var(--ink);position:relative;overflow:hidden;
+  --bg:#050507;--ink:#f5f5f7;--mut:#a1a1a6;--dim:#86868b;--line:rgba(255,255,255,.1);--gold:#c9a962;
+  --ease:cubic-bezier(.2,.7,.2,1);--gut:clamp(14px,2vw,28px);
+  box-sizing:border-box;width:100%;max-width:100%;margin:0;
+  padding:clamp(80px,11vw,152px) 0 clamp(88px,12vw,168px);
+  background:var(--bg);color:var(--ink);
   font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
-  -webkit-font-smoothing:antialiased;line-height:1.5;
-  background:
-    radial-gradient(900px 420px at 50% -8%,rgba(201,169,98,.08),transparent 55%),
-    linear-gradient(180deg,#0b0b0e 0%,#050507 45%,#030304 100%);
+  -webkit-font-smoothing:antialiased;line-height:1.6;
 }
 #jdh *{box-sizing:border-box}
-#jdh .wrap{max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
-#jdh .sec{padding:clamp(56px,9vw,120px) 0}
-#jdh .k{
-  margin:0 0 18px;font-size:11px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);
-}
-#jdh .hd{
-  display:flex;justify-content:space-between;align-items:baseline;gap:16px;
-  margin:0 0 28px;padding-top:16px;border-top:1px solid var(--line);
-}
-#jdh .hd .k{margin:0}
-#jdh .hd a{color:var(--gold);font-size:.88rem;text-decoration:none;letter-spacing:.02em}
-#jdh .hd a:hover{text-decoration:underline}
+#jdh h2,#jdh h3,#jdh p,#jdh a,#jdh summary{font-family:inherit;font-style:normal;text-transform:none}
+#jdh h2,#jdh h3,#jdh p{margin:0;letter-spacing:normal;line-height:inherit}
+#jdh ul,#jdh li{margin:0;padding:0;list-style:none}
+#jdh li::before{content:none}
+#jdh .wrap{max-width:1240px;margin:0 auto;padding:0 clamp(20px,5vw,48px)}
+#jdh .sec+.sec{margin-top:clamp(96px,12vw,168px)}
+#jdh .row{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--gut)}
+#jdh .rule{padding-top:18px;border-top:1px solid var(--line)}
+#jdh .k{margin:0;font-size:11px;font-weight:500;line-height:1.6;letter-spacing:.3em;color:var(--gold)}
+
+#jdh .intro{align-items:end;align-items:last baseline}
 #jdh .disp{
-  margin:0;font-size:clamp(2.35rem,5.8vw,5rem);font-weight:600;letter-spacing:-.04em;line-height:1.06;color:var(--ink);
-  animation:jdhIn .8s ease both;
+  grid-column:1/span 8;margin:0;color:var(--ink);
+  font-size:clamp(2.5rem,6.2vw,5.4rem);font-weight:300;line-height:1.14;letter-spacing:.02em;
+  font-feature-settings:"palt" 1;
 }
-#jdh .def{
-  margin:22px 0 0;max-width:34em;font-size:clamp(1rem,1.35vw,1.12rem);font-weight:300;line-height:1.75;color:var(--mut);
-  animation:jdhIn .9s .06s ease both;
-}
+#jdh .disp span{display:block}
+#jdh .def{grid-column:9/span 4;margin:0;font-size:1rem;line-height:1.9;font-weight:300;letter-spacing:.02em;color:var(--mut)}
+#jdh .def strong{font-weight:500;color:var(--ink)}
+#jdh .nw{white-space:nowrap}
 
-/* Service portals — image tiles, not text cards */
-#jdh .portals{
-  display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:minmax(220px,28vh);gap:4px;
+#jdh .hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin:0 0 clamp(24px,3vw,40px)}
+#jdh .hd p{margin:0;font-size:.78rem;letter-spacing:.08em;color:var(--dim)}
+#jdh .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(40px,4.6vw,64px) var(--gut)}
+#jdh .work{display:block;color:var(--ink);text-decoration:none;outline:none}
+#jdh .ph{position:relative;overflow:hidden;aspect-ratio:4/5;margin:0;background:#0e0e11}
+#jdh .ph img{
+  position:absolute;inset:0;width:100%;height:100%;max-width:none;
+  object-fit:cover;object-position:var(--p,50% 50%);
+  transform:scale(var(--z,1));transform-origin:var(--o,50% 50%);filter:brightness(var(--b,1));
+  transition:transform 1.4s var(--ease),filter .6s ease;
 }
-#jdh .t{
-  position:relative;display:block;overflow:hidden;color:#fff;text-decoration:none;background:#111;min-height:200px;
+#jdh .cap{margin-top:16px}
+#jdh .cap h3{
+  display:inline-block;margin:0;padding-bottom:3px;color:var(--ink);
+  font-size:clamp(1rem,1.25vw,1.1rem);font-weight:500;line-height:1.45;letter-spacing:.08em;
+  background:linear-gradient(var(--gold),var(--gold)) 0 100%/0 1px no-repeat;
+  transition:background-size .5s var(--ease);
 }
-#jdh .t img{
-  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-  transition:transform .9s var(--ease),filter .45s ease;
-}
-#jdh .t::after{
-  content:"";position:absolute;inset:0;
-  background:linear-gradient(180deg,rgba(0,0,0,.08) 20%,rgba(0,0,0,.78) 100%);
-  pointer-events:none;
-}
-#jdh .t .lab{position:absolute;left:18px;right:18px;bottom:16px;z-index:1}
-#jdh .t .n{display:block;font-size:11px;letter-spacing:.2em;color:var(--gold);font-weight:500}
-#jdh .t h3{margin:6px 0 0;font-size:clamp(1.2rem,2vw,1.85rem);font-weight:500;letter-spacing:-.02em;line-height:1.15}
-#jdh .t h3 small{
-  display:inline-block;margin-left:8px;font-size:10px;letter-spacing:.2em;opacity:.55;font-weight:400;vertical-align:middle;
-}
-#jdh .t .h{
-  display:block;margin-top:6px;font-size:.82rem;color:rgba(245,245,247,.78);opacity:0;transform:translateY(8px);
-  transition:opacity .35s ease,transform .45s var(--ease);
-}
-#jdh .t .chip{
-  position:absolute;top:14px;right:14px;z-index:1;padding:5px 9px;
-  border:1px solid rgba(201,169,98,.4);border-radius:4px;background:rgba(0,0,0,.5);
-  font-size:11px;letter-spacing:.02em;color:var(--gold);backdrop-filter:blur(6px);
-}
-#jdh .t:hover img,#jdh .t:focus-visible img{transform:scale(1.05)}
-#jdh .t:hover .h,#jdh .t:focus-visible .h{opacity:1;transform:none}
+#jdh .cap p{margin:4px 0 0;font-size:.8rem;line-height:1.5;letter-spacing:.04em;color:var(--mut)}
+#jdh .work:hover .ph img,#jdh .work:focus-visible .ph img{transform:scale(calc(var(--z,1) * 1.04))}
+#jdh .work:hover h3,#jdh .work:focus-visible h3{background-size:100% 1px}
+#jdh .work:focus-visible .ph{outline:1px solid var(--gold);outline-offset:4px}
 @media (hover:hover){
-  #jdh .portals:hover .t:not(:hover) img{filter:brightness(.48) saturate(.85)}
+  #jdh .grid:has(.work:hover) .work:not(:hover) img{filter:brightness(calc(var(--b,1) * .42)) saturate(.6)}
 }
-#jdh .t:nth-child(1){grid-column:span 7;grid-row:span 2}
-#jdh .t:nth-child(2),#jdh .t:nth-child(3){grid-column:span 5}
-#jdh .t:nth-child(4),#jdh .t:nth-child(5),#jdh .t:nth-child(6){grid-column:span 4}
-#jdh .t:nth-child(7){grid-column:span 7}
-#jdh .t:nth-child(8){grid-column:span 5}
 
-/* Filmstrip */
-#jdh .film-wrap{padding-left:0}
-#jdh .film{
-  display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;
-  padding:0 clamp(16px,4vw,40px) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;
-}
-#jdh .film::-webkit-scrollbar{display:none}
-#jdh .film figure{flex:0 0 auto;margin:0;scroll-snap-align:start;width:min(42vw,420px)}
-#jdh .film img{display:block;width:100%;height:clamp(280px,48vh,480px);object-fit:cover;background:#111}
-#jdh .film figcaption{margin-top:10px;font-size:.82rem;color:var(--dim)}
-#jdh .film .more{
-  flex:0 0 auto;width:min(36vw,280px);min-height:clamp(280px,48vh,480px);
-  display:grid;place-items:center;border:1px solid var(--line);text-decoration:none;color:var(--ink);
-  font-size:1.05rem;letter-spacing:.02em;scroll-snap-align:start;transition:border-color .25s,color .25s;
-}
-#jdh .film .more:hover{border-color:rgba(201,169,98,.5);color:var(--gold)}
-
-/* Proof */
-#jdh .stats{
-  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 28px;margin:0;padding:0;list-style:none;
-}
-#jdh .stats li{margin:0}
-#jdh .stats strong{
-  display:block;font-size:clamp(1.45rem,2.8vw,2.35rem);font-weight:500;letter-spacing:-.03em;line-height:1.15;
-}
-#jdh .stats span{display:block;margin-top:8px;font-size:.88rem;color:var(--dim);line-height:1.5}
-
-/* FAQ */
-#jdh .faq{max-width:760px}
-#jdh details{margin:0;border-bottom:1px solid var(--line)}
-#jdh details:first-of-type{border-top:1px solid var(--line)}
+#jdh .faq{align-items:baseline}
+#jdh .faq .k{grid-column:1/span 4}
+#jdh .qa{grid-column:5/-1;border-bottom:1px solid var(--line)}
+#jdh details+details{border-top:1px solid var(--line)}
 #jdh summary{
-  list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;
-  padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--ink);
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:24px;
+  padding:22px 0;color:var(--ink);font-size:clamp(1rem,1.3vw,1.12rem);font-weight:400;line-height:1.5;letter-spacing:.04em;
 }
+#jdh details:first-child summary{padding-top:0}
 #jdh summary::-webkit-details-marker{display:none}
-#jdh summary:after{
-  content:"+";width:28px;height:28px;border:1px solid var(--line);border-radius:50%;
-  display:grid;place-items:center;color:var(--mut);font-weight:300;flex:0 0 auto;
+#jdh summary::after{
+  content:"+";flex:0 0 auto;color:var(--dim);font-size:1.3rem;font-weight:300;line-height:1;
+  transition:transform .35s var(--ease),color .25s ease;
 }
-#jdh details[open] summary:after{content:"–";color:var(--gold);border-color:rgba(201,169,98,.4)}
-#jdh details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--mut);font-weight:300}
+#jdh summary:hover::after{color:var(--ink)}
+#jdh details[open] summary::after{transform:rotate(45deg);color:var(--gold)}
+#jdh summary:focus-visible{outline:1px solid var(--gold);outline-offset:6px}
+#jdh details p{margin:0;padding:0 0 24px;max-width:38em;font-size:.95rem;line-height:1.9;font-weight:300;letter-spacing:.02em;color:var(--mut)}
+#jdh details a{color:var(--gold);text-decoration:none}
+#jdh details a:hover{text-decoration:underline}
 
-/* Closing CTA */
-#jdh .cta{
-  position:relative;min-height:min(70vh,640px);display:flex;align-items:flex-end;padding:0;overflow:hidden;
+#jdh .end{align-items:end}
+#jdh .ask{grid-column:1/span 5}
+#jdh .ask h2{
+  margin:0;color:var(--ink);font-size:clamp(2.1rem,4.4vw,3.6rem);font-weight:300;line-height:1.18;letter-spacing:.02em;
+  font-feature-settings:"palt" 1;
 }
-#jdh .cta>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-#jdh .cta::after{
-  content:"";position:absolute;inset:0;
-  background:linear-gradient(180deg,rgba(5,5,7,.15) 0%,rgba(5,5,7,.88) 72%,rgba(5,5,7,.96) 100%);
-}
-#jdh .cta .wrap{position:relative;z-index:1;width:100%;padding-top:clamp(80px,12vw,160px);padding-bottom:clamp(40px,7vw,88px)}
-#jdh .cta .disp{font-size:clamp(2rem,4.5vw,3.6rem)}
-#jdh .cta .sub{margin:14px 0 0;max-width:28em;font-size:1.05rem;font-weight:300;color:rgba(245,245,247,.78)}
-#jdh .cta-row{margin-top:28px;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+#jdh .ask p{margin:18px 0 0;max-width:22em;font-size:1rem;line-height:1.85;font-weight:300;letter-spacing:.02em;color:var(--mut)}
+#jdh .acts{display:flex;flex-wrap:wrap;align-items:center;gap:16px 32px;margin-top:36px}
 #jdh .btn{
-  display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 28px;
-  border-radius:4px;background:var(--gold);color:#111;font-size:.95rem;font-weight:500;text-decoration:none;
-  transition:transform .25s var(--ease),background .25s;
+  display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 32px;border-radius:2px;
+  background:var(--gold);color:#0b0b0d;font-size:.95rem;font-weight:500;letter-spacing:.08em;text-decoration:none;
+  transition:background-color .3s ease;
 }
-#jdh .btn:hover{background:#d8bb79;transform:translateY(-1px)}
-#jdh .ghost{color:rgba(245,245,247,.8);font-size:.95rem;text-decoration:none}
-#jdh .ghost:hover{color:#fff}
-
-@keyframes jdhIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-
-@media (max-width:900px){
-  #jdh .portals{grid-template-columns:1fr 1fr;grid-auto-rows:auto}
-  #jdh .t{grid-column:span 1!important;grid-row:auto!important;aspect-ratio:1/1;min-height:0}
-  #jdh .t:nth-child(-n+3){grid-column:1/-1!important;aspect-ratio:16/10}
-  #jdh .t .h{opacity:1;transform:none}
-  #jdh .film figure{width:78vw}
-  #jdh .film img{height:auto;aspect-ratio:4/5}
-  #jdh .film .more{width:70vw;min-height:auto;aspect-ratio:4/5}
-  #jdh .stats{grid-template-columns:1fr;gap:22px}
-  #jdh .cta{min-height:78svh}
-  #jdh .btn{width:100%}
-  #jdh .cta-row{flex-direction:column;align-items:stretch}
-  #jdh .ghost{text-align:center}
+#jdh .btn:hover{background:#d8bd7e}
+#jdh .ghost{
+  padding:4px 0;border-bottom:1px solid var(--line);color:var(--ink);font-size:.95rem;letter-spacing:.06em;text-decoration:none;
+  transition:border-color .3s ease;
 }
-@media (hover:none){#jdh .t .h{opacity:1;transform:none}}
+#jdh .ghost:hover{border-color:var(--gold)}
+#jdh .btn:focus-visible,#jdh .ghost:focus-visible{outline:1px solid var(--gold);outline-offset:4px}
+#jdh .end .ph{grid-column:7/-1;aspect-ratio:3/2}
+
+@media (max-width:899px){
+  #jdh .disp{grid-column:1/-1}
+  #jdh .def{grid-column:1/-1;max-width:30em;margin-top:28px}
+  #jdh .cap{margin-top:12px}
+  #jdh .faq .k,#jdh .qa{grid-column:1/-1}
+  #jdh .faq .k{margin-bottom:20px}
+  #jdh .ask,#jdh .end .ph{grid-column:1/-1}
+  #jdh .end .ph{order:-1;margin-bottom:40px}
+}
+@media (max-width:699px){
+  #jdh .grid{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:40px}
+}
+@media (max-width:599px){
+  #jdh .cap h3{font-size:.98rem;letter-spacing:.06em}
+  #jdh .cap p{font-size:.76rem}
+  #jdh .acts{flex-direction:column;align-items:stretch}
+  #jdh .ghost{align-self:center}
+}
 @media (prefers-reduced-motion:reduce){
-  #jdh .disp,#jdh .def{animation:none}
-  #jdh .t img,#jdh .t .h{transition:none}
+  #jdh .ph img,#jdh .cap h3,#jdh summary::after{transition:none}
+  #jdh .work:hover .ph img,#jdh .work:focus-visible .ph img{transform:scale(var(--z,1))}
 }
 .sqs-block-content #jdh{width:100%}
 </style>
 
-<section id="jdh" lang="zh-HK" aria-label="JD Studio 主頁服務導覽">
-  <!-- S1 Statement -->
-  <div class="sec wrap">
-    <p class="k">JD Studio · Hong Kong · Since 2014</p>
-    <h2 class="disp">影像，令品牌被記住。</h2>
-    <p class="def"><strong style="color:var(--ink);font-weight:500">JD Studio 是香港專業商業攝影與影片製作公司，</strong>位於九龍新蒲崗，拍攝產品、食物、室內、珠寶、企業／派對活動及企業影片／TVC。</p>
-  </div>
+<section id="jdh" lang="zh-HK" aria-label="JD Studio 服務與作品">
+  <div class="wrap">
 
-  <!-- S2 Service portals -->
-  <div class="sec wrap" style="padding-top:0">
-    <div class="hd">
-      <p class="k">服務 / Services</p>
-      <a href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 報價 →</a>
-    </div>
-    <nav class="portals" aria-label="JD Studio 攝影服務">
-      <a class="t" href="https://www.jdstudiohk.com/services/product-photography">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1583571179585-05J807Z0Q4350DMX1A8V/hong-kong-ecommerce-product-photography.jpg?format=1500w" alt="香港產品攝影 — 白底電商主圖" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">HK$150 起／張</span>
-        <span class="lab"><span class="n">01</span><h3>產品攝影<small>PRODUCT</small></h3><span class="h">白底・細節・電商主圖</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/food-photography">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590350460-S4SL1T3H610CVEN0NFKR/1%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1500w" alt="香港食物攝影作品" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">HK$3,000 起</span>
-        <span class="lab"><span class="n">02</span><h3>食物攝影<small>FOOD</small></h3><span class="h">餐牌・社交・品牌菜式</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/interior-photography">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/604abf1f-42f7-4c4b-a37a-7d97e8f4b933/%E8%9E%A2%E5%B9%95%E6%88%AA%E5%9C%96+2026-09-21+20.54.jpg?format=1500w" alt="香港室內攝影作品" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">HK$2,500 起</span>
-        <span class="lab"><span class="n">03</span><h3>室內攝影<small>INTERIORS</small></h3><span class="h">酒店・餐廳・地產空間</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/jewelry-photography">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862118074-B7IE3HMA0SZ545OQPJW6/AKE_Cariam-2-Product-Shot-0475.jpg?format=1500w" alt="香港珠寶攝影作品" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">查詢報價</span>
-        <span class="lab"><span class="n">04</span><h3>珠寶攝影<small>JEWELRY</small></h3><span class="h">微距・光澤・反光控制</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/corporate-event">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1768565738899-VD7JOVMLDG7GC0RU4NHE/DSC02621.jpg?format=1500w" alt="香港企業活動攝影" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">HK$3,000 起</span>
-        <span class="lab"><span class="n">05</span><h3>企業活動<small>CORPORATE</small></h3><span class="h">發佈會・年會・論壇</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/video-project">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1a116a6f-216c-4e10-8f4c-5137faa799cf/original.webp?format=1500w" alt="香港企業影片／TVC" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">查詢報價</span>
-        <span class="lab"><span class="n">06</span><h3>影片／TVC<small>FILM</small></h3><span class="h">TVC・企業片・社交短片</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/services/event-photography">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1585227738473-2OXNT59NY8J8TXHD10RQ/Untitled-1.png?format=1500w" alt="香港派對活動攝影" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">HK$3,000 起</span>
-        <span class="lab"><span class="n">07</span><h3>派對活動<small>EVENTS</small></h3><span class="h">派對・開幕・私人聚會</span></span>
-      </a>
-      <a class="t" href="https://www.jdstudiohk.com/-menu-design">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590354213-7SEI4I6Y2TBZ3VM9W1DH/3%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1500w" alt="餐牌／菜單設計" width="1500" height="1000" loading="lazy" decoding="async">
-        <span class="chip">查詢報價</span>
-        <span class="lab"><span class="n">08</span><h3>餐牌設計<small>MENU</small></h3><span class="h">攝影＋排版一站式</span></span>
-      </a>
+    <header class="sec row intro">
+      <h2 class="disp"><span>影像，</span><span>令品牌被記住。</span></h2>
+      <p class="def"><strong>JD Studio 是香港專業商業攝影及<span class="nw">影片製作公司，</span></strong><span class="nw">2014 年成立，</span><span class="nw">於九龍新蒲崗自設影樓。</span></p>
+    </header>
+
+    <nav class="sec" aria-labelledby="jdh-svc">
+      <div class="hd rule">
+        <h2 class="k" id="jdh-svc">服務一覽</h2>
+        <p>公開參考起價</p>
+      </div>
+      <ul class="grid">
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/product-photography">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1583571179585-05J807Z0Q4350DMX1A8V/hong-kong-ecommerce-product-photography.jpg?format=1500w" alt="香港產品攝影作品：深色背景護膚品系列" width="1500" height="1043" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>產品攝影</h3><p>HK$150 起／張</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/food-photography">
+            <div class="ph" style="--p:72% 50%"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590350460-S4SL1T3H610CVEN0NFKR/1%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1000w" alt="香港食物攝影作品：漢堡與薯條" width="1000" height="666" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>食物攝影</h3><p>HK$3,000 起</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/interior-photography">
+            <div class="ph" style="--p:100% 100%;--z:2;--o:100% 100%"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/604abf1f-42f7-4c4b-a37a-7d97e8f4b933/%E8%9E%A2%E5%B9%95%E6%88%AA%E5%9C%96+2026-09-21+20.54.jpg?format=2500w" alt="香港室內攝影作品：檯燈、墨綠飾面與木作細節" width="1888" height="1234" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>室內攝影</h3><p>HK$2,500 起</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/jewelry-photography">
+            <div class="ph" style="--p:66% 50%"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862118074-B7IE3HMA0SZ545OQPJW6/AKE_Cariam-2-Product-Shot-0475.jpg?format=1500w" alt="香港珠寶攝影作品：黑石上的串珠手鏈" width="1080" height="720" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>珠寶攝影</h3><p>按件報價</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/corporate-event">
+            <div class="ph" style="--b:.9"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1768565739647-CE7FTVWMVMUPFPAU2DYA/DSC02639.jpg?format=1500w" alt="香港企業活動攝影：嘉賓交流現場" width="1500" height="1001" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>企業活動</h3><p>HK$3,000 起</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/video-project">
+            <div class="ph" style="--p:56% 50%"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590357606-YKNTNHTIXE828I3UI2FZ/4%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1000w" alt="JD Studio 商業影像：酒店甜品畫面" width="1000" height="657" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>影片／TVC</h3><p>HK$20,000 起</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/event-photography">
+            <div class="ph" style="--p:90% 50%;--b:.9"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1768565738899-VD7JOVMLDG7GC0RU4NHE/DSC02621.jpg?format=1500w" alt="香港派對活動攝影：開幕派對簽名牆" width="1500" height="1001" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>派對活動</h3><p>按時段報價</p></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/-menu-design">
+            <div class="ph" style="--p:50% 62%"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590350032-IB3RG8VEU9A2JHVAJ86Y/2%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=750w" alt="餐牌設計作品：酒店下午茶套餐" width="750" height="1136" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>餐牌設計</h3><p>按項目報價</p></div>
+          </a>
+        </li>
+      </ul>
     </nav>
-  </div>
 
-  <!-- S3 Selected work -->
-  <div class="sec film-wrap">
-    <div class="wrap">
-      <div class="hd">
-        <p class="k">近作 / Selected work</p>
-        <span style="color:var(--dim);font-size:.82rem">← 滑動 →</span>
+    <div class="sec row rule faq">
+      <h2 class="k">常見問題</h2>
+      <div class="qa">
+        <details>
+          <summary>收費大概如何？</summary>
+          <p>公開參考起價：產品攝影約 HK$150／張、食物攝影約 HK$3,000、室內攝影約 HK$2,500、企業活動約 HK$3,000、影片／TVC 約 HK$20,000；珠寶按件、派對活動按時段、餐牌設計按項目報價。實際以用途、數量與場地為準。</p>
+        </details>
+        <details>
+          <summary>影樓在哪裡？</summary>
+          <p>JD Studio 影樓位於九龍新蒲崗；亦可到店舖、餐廳、酒店或活動現場拍攝。</p>
+        </details>
+        <details>
+          <summary>如何開始查詢？</summary>
+          <p>WhatsApp <a href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">+852 9153 1976</a>，簡單說明用途、日期與數量（可附參考圖），我們會盡快回覆方案與報價。</p>
+        </details>
       </div>
     </div>
-    <div class="film" role="list">
-      <figure role="listitem">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590350032-IB3RG8VEU9A2JHVAJ86Y/2%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1000w" alt="食物攝影近作" width="800" height="1000" loading="lazy" decoding="async">
-        <figcaption>酒店餐飲 · 食物攝影</figcaption>
-      </figure>
-      <figure role="listitem">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862124159-CD27A08I38XM89CGPBAA/AKE_Cariam-2-Product-Shot-0324.jpg?format=1000w" alt="珠寶攝影近作" width="800" height="1000" loading="lazy" decoding="async">
-        <figcaption>珠寶品牌 · 產品細節</figcaption>
-      </figure>
-      <figure role="listitem">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1768565739647-CE7FTVWMVMUPFPAU2DYA/DSC02639.jpg?format=1000w" alt="企業活動近作" width="800" height="1000" loading="lazy" decoding="async">
-        <figcaption>企業活動 · 現場紀錄</figcaption>
-      </figure>
-      <figure role="listitem">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590357606-YKNTNHTIXE828I3UI2FZ/4%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=1000w" alt="餐飲攝影近作" width="800" height="1000" loading="lazy" decoding="async">
-        <figcaption>餐牌影像 · 食物攝影</figcaption>
-      </figure>
-      <figure role="listitem">
-        <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862128215-IOSVKP2J7EOV866B9XHN/AKE_Cariam-2-Product-Shot-0348.jpg?format=1000w" alt="珠寶攝影近作二" width="800" height="1000" loading="lazy" decoding="async">
-        <figcaption>珠寶 · 微距質感</figcaption>
-      </figure>
-      <a class="more" href="https://www.jdstudiohk.com/services/product-photography" role="listitem">看更多作品 →</a>
-    </div>
-  </div>
 
-  <!-- S4 Proof -->
-  <div class="sec wrap" style="padding-top:clamp(40px,6vw,72px)">
-    <ul class="stats">
-      <li><strong>2014</strong><span>成立於香港</span></li>
-      <li><strong>新蒲崗</strong><span>自設商業影樓</span></li>
-      <li><strong>一站式</strong><span>攝影・影片・後期交付</span></li>
-    </ul>
-  </div>
-
-  <!-- S5 FAQ (short) -->
-  <div class="sec wrap" style="padding-top:0">
-    <p class="k">常見問題</p>
-    <div class="faq">
-      <details>
-        <summary>收費大概如何？</summary>
-        <p>公開參考：產品攝影約 HK$150 起／張；食物攝影約 HK$3,000 起；室內攝影約 HK$2,500 起；活動攝影約 HK$3,000 起。實際以用途、數量與場地報價為準。</p>
-      </details>
-      <details>
-        <summary>影樓在哪裡？</summary>
-        <p>JD Studio 位於九龍新蒲崗；亦可安排到店、餐廳或活動現場拍攝。</p>
-      </details>
-      <details>
-        <summary>如何開始查詢？</summary>
-        <p>WhatsApp +852 9153 1976，簡單說明用途、時間與數量（可傳參考圖），即可初步報價。</p>
-      </details>
-    </div>
-  </div>
-
-  <!-- S6 Closing CTA -->
-  <div class="cta">
-    <img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1768565750842-XP99QK3EPHWOT2JSENSU/DSC02647.jpg?format=2500w" alt="JD Studio 商業拍攝現場" width="2500" height="1400" loading="lazy" decoding="async">
-    <div class="wrap">
-      <h2 class="disp">有拍攝計劃？</h2>
-      <p class="sub">傳張參考圖，我們盡快回覆方案與報價。</p>
-      <div class="cta-row">
-        <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
-        <a class="ghost" href="https://www.jdstudiohk.com/contact-us">聯絡我們 →</a>
+    <div class="sec row end">
+      <div class="ask">
+        <h2>有拍攝計劃？</h2>
+        <p>傳張參考圖，我們盡快回覆方案與報價。</p>
+        <div class="acts">
+          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
+          <a class="ghost" href="https://www.jdstudiohk.com/contact-us">聯絡我們 →</a>
+        </div>
       </div>
+      <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862128215-IOSVKP2J7EOV866B9XHN/AKE_Cariam-2-Product-Shot-0348.jpg?format=1500w" alt="JD Studio 珠寶靜物攝影：漂流木與珍珠手鏈" width="1080" height="720" loading="lazy" decoding="async"></div>
     </div>
+
   </div>
 </section>
