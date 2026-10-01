@@ -2,8 +2,8 @@
   JD Studio homepage — lower half · "Darkroom Catalogue"
   Paste as ONE Squarespace Code Block below the existing hero; set that section's background to #050507.
   Page H1 stays in Squarespace; this block starts at H2.
-  Tile photos: standardized 4:5 Unsplash commercial set (free license).
-  Replace any src with your own JD portfolio later — keep vertical 4:5 crops for consistency.
+  No prices on homepage. Tile photos: cohesive premium 4:5 set (Unsplash / replace with JD 4:5 crops).
+  Images share a light grade filter so the wall reads as one catalogue.
 -->
 <style>
 #jdh{
@@ -55,13 +55,19 @@
   background:linear-gradient(var(--gold),var(--gold)) 0 100%/0 1px no-repeat;
   transition:background-size .5s var(--ease);
 }
-#jdh .cap p{margin:4px 0 0;font-size:.8rem;line-height:1.5;letter-spacing:.04em;color:var(--mut)}
-#jdh .work:hover .ph img,#jdh .work:focus-visible .ph img{transform:scale(calc(var(--z,1) * 1.04))}
+#jdh .ph img{
+  filter:saturate(.9) contrast(1.04) brightness(.97);
+  transition:transform 1.4s var(--ease),filter .55s ease;
+}
+#jdh .work:hover .ph img,#jdh .work:focus-visible .ph img{
+  transform:scale(1.04);filter:saturate(.95) contrast(1.05) brightness(1);
+}
+@media (hover:hover){
+  #jdh .grid:has(.work:hover) .work:not(:hover) img{filter:saturate(.55) contrast(1) brightness(.42)}
+}
 #jdh .work:hover h3,#jdh .work:focus-visible h3{background-size:100% 1px}
 #jdh .work:focus-visible .ph{outline:1px solid var(--gold);outline-offset:4px}
-@media (hover:hover){
-  #jdh .grid:has(.work:hover) .work:not(:hover) img{filter:brightness(calc(var(--b,1) * .42)) saturate(.6)}
-}
+
 
 #jdh .faq{align-items:baseline}
 #jdh .faq .k{grid-column:1/span 4}
@@ -142,55 +148,55 @@
     <nav class="sec" aria-labelledby="jdh-svc">
       <div class="hd rule">
         <h2 class="k" id="jdh-svc">服務一覽</h2>
-        <p>公開參考起價</p>
+        <p>點選進入服務頁</p>
       </div>
       <ul class="grid">
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/product-photography">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1200&h=1500&q=85" alt="產品攝影示例：簡約智能手錶白底商業產品圖" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>產品攝影</h3><p>HK$150 起／張</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1633793565985-c52033d0e9f4?auto=format&fit=crop&w=1400&h=1750&q=90" alt="產品攝影：深色背景護膚品靜物" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>產品攝影</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/food-photography">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?auto=format&fit=crop&w=1200&h=1500&q=85" alt="食物攝影示例：高級海鮮擺盤" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>食物攝影</h3><p>HK$3,000 起</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1400&h=1750&q=90" alt="食物攝影：精緻餐廳擺盤" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>食物攝影</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/interior-photography">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&h=1500&q=85" alt="室內攝影示例：明亮現代開放式客廳與廚房" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>室內攝影</h3><p>HK$2,500 起</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1400&h=1750&q=90" alt="室內攝影：明亮現代客廳" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>室內攝影</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/jewelry-photography">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1200&h=1500&q=85" alt="珠寶攝影示例：鑽石戒指微距細節" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>珠寶攝影</h3><p>按件報價</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1400&h=1750&q=90" alt="珠寶攝影：金色頸鏈細節" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>珠寶攝影</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/corporate-event">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=1200&h=1500&q=85" alt="企業活動攝影示例：專業交流聚會現場" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>企業活動</h3><p>HK$3,000 起</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1400&h=1750&q=90" alt="企業活動攝影：會議現場" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>企業活動</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/video-project">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&h=1500&q=85" alt="影片製作示例：電影級相機與鏡頭器材" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>影片／TVC</h3><p>HK$20,000 起</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=1400&h=1750&q=90" alt="影片製作：電影放映氣氛" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>影片／TVC</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/services/event-photography">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1200&h=1500&q=85" alt="派對活動攝影示例：宴會長桌與花藝佈置" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>派對活動</h3><p>按時段報價</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1400&h=1750&q=90" alt="派對活動攝影：宴席花藝" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>派對活動</h3></div>
           </a>
         </li>
         <li>
           <a class="work" href="https://www.jdstudiohk.com/-menu-design">
-            <div class="ph"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&h=1500&q=85" alt="餐牌影像示例：精緻餐廳菜式擺盤" width="1200" height="1500" loading="lazy" decoding="async"></div>
-            <div class="cap"><h3>餐牌設計</h3><p>按項目報價</p></div>
+            <div class="ph"><img src="https://images.unsplash.com/photo-1551218808-94e220e084d2?auto=format&fit=crop&w=1400&h=1750&q=90" alt="餐牌影像：餐廳菜式細節" width="1400" height="1750" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>餐牌設計</h3></div>
           </a>
         </li>
       </ul>
@@ -200,8 +206,8 @@
       <h2 class="k">常見問題</h2>
       <div class="qa">
         <details>
-          <summary>收費大概如何？</summary>
-          <p>公開參考起價：產品攝影約 HK$150／張、食物攝影約 HK$3,000、室內攝影約 HK$2,500、企業活動約 HK$3,000、影片／TVC 約 HK$20,000；珠寶按件、派對活動按時段、餐牌設計按項目報價。實際以用途、數量與場地為準。</p>
+          <summary>拍攝需要提前多久預約？</summary>
+          <p>視項目類型而定。影樓產品／食物拍攝通常可於數日內安排；活動與影片項目建議盡早預留檔期。WhatsApp 告知用途與日期，我們會盡快回覆可做時間。</p>
         </details>
         <details>
           <summary>影樓在哪裡？</summary>
@@ -217,13 +223,13 @@
     <div class="sec row end">
       <div class="ask">
         <h2>有拍攝計劃？</h2>
-        <p>傳張參考圖，我們盡快回覆方案與報價。</p>
+        <p>傳張參考圖或簡單說明用途，我們盡快回覆。</p>
         <div class="acts">
-          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
+          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 查詢</a>
           <a class="ghost" href="https://www.jdstudiohk.com/contact-us">聯絡我們 →</a>
         </div>
       </div>
-      <div class="ph"><img src="https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1400&h=1750&q=85" alt="商業空間攝影示例：明亮簡約睡房" width="1400" height="1750" loading="lazy" decoding="async"></div>
+      <div class="ph"><img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&h=1750&q=90" alt="空間攝影：現代建築與生活場景" width="1400" height="1750" loading="lazy" decoding="async"></div>
     </div>
 
   </div>
