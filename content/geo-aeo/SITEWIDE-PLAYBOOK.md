@@ -19,7 +19,7 @@
 | **Clean H1 = primary keyword** | Entity clarity | H1 = `香港{服務}`；副標放差異化（AI／交付／器材） |
 | **Meta description with numbers** | Citation anchors | Include 1–3 price anchors already published on site/blog |
 | **Internal links** service ↔ pricing blog | Reinforces topical authority | Each service page links to its pricing guide blog |
-| **E-E-A-T** | Trust for YMYL-ish commercial queries | Keep real clients, years, WhatsApp, address |
+| **E-E-A-T** | Trust for YMYL-ish commercial queries | Experience（年份／項目數）、Expertise（流程／器材）、Authoritativeness（可核對 Blog／內鏈）、Trustworthiness（電話、電郵、地址、交付天數）。只用站內已公開事實，勿編造評價 |
 
 **Do not:** keyword-stuff; invent fake prices/reviews; redesign whole site; publish `jdsys.biz` for this workstream.
 

@@ -66,7 +66,22 @@
   margin:0 0 14px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
 }
 #jd-aeo-food-photography .jd-def p{margin:0;font-size:1.06rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-food-photography .jd-def p+p{margin-top:12px}
 #jd-aeo-food-photography .jd-def strong{color:var(--cream);font-weight:500}
+#jd-aeo-food-photography .jd-eeat{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;padding:0;list-style:none;
+  border:1px solid var(--line);border-radius:18px;overflow:hidden;
+  background:rgba(255,255,255,.02);
+}
+#jd-aeo-food-photography .jd-eeat li{
+  margin:0;padding:18px 18px 16px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+}
+#jd-aeo-food-photography .jd-eeat li:nth-child(2n){border-right:0}
+#jd-aeo-food-photography .jd-eeat li:nth-last-child(-n+2){border-bottom:0}
+#jd-aeo-food-photography .jd-eeat strong{
+  display:block;margin-bottom:6px;font-size:.92rem;font-weight:500;color:var(--cream);
+}
+#jd-aeo-food-photography .jd-eeat span{display:block;font-size:.88rem;line-height:1.55;color:var(--dim)}
 #jd-aeo-food-photography .jd-scope{
   display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin:0;padding:0;list-style:none;counter-reset:scope;
 }
@@ -125,6 +140,10 @@
 @media (max-width:720px){
   #jd-aeo-food-photography{padding:40px 16px 56px;border-radius:18px}
   #jd-aeo-food-photography .jd-scope{grid-template-columns:1fr}
+  #jd-aeo-food-photography .jd-eeat{grid-template-columns:1fr}
+  #jd-aeo-food-photography .jd-eeat li{border-right:0}
+  #jd-aeo-food-photography .jd-eeat li:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  #jd-aeo-food-photography .jd-eeat li:last-child{border-bottom:0}
   #jd-aeo-food-photography .jd-price-row{grid-template-columns:1fr;gap:10px}
   #jd-aeo-food-photography .jd-price-amt{text-align:left}
 }
@@ -144,93 +163,116 @@
 <section id="jd-aeo-food-photography" lang="zh-HK">
   <div class="jd-shell">
     <header class="jd-hero">
-      <p class="jd-kicker">JD Studio · 自 2014</p>
-      <h2 class="jd-title">香港食物攝影服務<span>餐廳攝影 · 飲品拍攝 · 餐牌設計</span></h2>
-      <p class="jd-sub">適合餐廳、咖啡店、甜品店、酒吧、酒店餐飲及食品品牌；堂食餐牌、Foodpanda／Deliveroo、社交媒體都用得着。</p>
+      <p class="jd-kicker">JD Studio · Hong Kong · 自 2014</p>
+      <h2 class="jd-title">香港食物攝影服務<span>餐廳菜牌拍攝 · 外賣平台 · 餐牌設計</span></h2>
+      <p class="jd-sub">服務餐廳、咖啡店、甜品店、酒吧、酒店餐飲及食品品牌；適用堂食餐牌、Foodpanda／Deliveroo、網站與社交媒體。</p>
       <div class="jd-cta-wrap">
-        <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 查詢報價</a>
-        <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">套餐詳情（Blog）</a>
+        <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp +852 9153 1976</a>
+        <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">公開套餐指南</a>
       </div>
     </header>
 
     <div class="jd-block jd-def">
-      <p class="jd-label">服務說明</p>
-      <p><strong>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。</strong> JD Studio 提供食物攝影、飲品拍攝、餐牌設計及外賣平台圖片製作，幫商戶建立更清晰、更吸引的餐飲形象；可按菜單數量、拍攝場地、造型需求及交付用途報價。</p>
+      <p class="jd-label">什麼是食物攝影？</p>
+      <p><strong>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。</strong> JD Studio 自 2014 年於香港提供商業攝影，累積超過 500 個餐飲相關拍攝項目；團隊包括攝影師、食物造型及後期，使用 Phase One、Canon、Profoto 等器材，輸出適合印刷與數碼渠道的食物影像。</p>
+      <p>我們同時提供<a class="jd-inline" href="https://www.jdstudiohk.com/-menu-design">餐牌／菜單設計</a>及外賣平台圖片製作。收費、時數與張數以網站公開文章《<a class="jd-inline" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">食物攝影套餐包括什麼？</a>》為準，實際項目另行報價。</p>
     </div>
 
     <div class="jd-block">
-      <p class="jd-label">可以做什麼</p>
-      <ul class="jd-scope">
-        <li>堂食餐牌／菜單拍攝</li>
-        <li>Foodpanda、Deliveroo 上架圖</li>
-        <li>飲品、甜品特寫</li>
-        <li>餐牌設計一併做（見<a class="jd-inline" href="https://www.jdstudiohk.com/-menu-design">菜單設計頁</a>）</li>
+      <p class="jd-label">經驗 · 專業 · 可信（E-E-A-T）</p>
+      <ul class="jd-eeat">
+        <li>
+          <strong>Experience｜實務經驗</strong>
+          <span>2014 成立；500+ 餐飲客戶／食物攝影項目經驗；可上門餐廳或於新蒲崗影樓拍攝。</span>
+        </li>
+        <li>
+          <strong>Expertise｜專業流程</strong>
+          <span>控光、食物造型、精細修圖；套餐清楚列明拍攝時數、精修張數、地點與使用權範圍。</span>
+        </li>
+        <li>
+          <strong>Authoritativeness｜可核對資訊</strong>
+          <span>套餐價目與交付說明刊登於 JD Studio Blog；並與<a class="jd-inline" href="https://www.jdstudiohk.com/-menu-design">菜單設計服務頁</a>互相連結。</span>
+        </li>
+        <li>
+          <strong>Trustworthiness｜聯絡與交付</strong>
+          <span>WhatsApp +852 9153 1976 · info.exposurehk@gmail.com · 一般 5–7 工作天交相（急件另議）。</span>
+        </li>
       </ul>
     </div>
 
     <div class="jd-block">
-      <p class="jd-label">套餐與收費（對齊 2026 Blog）</p>
+      <p class="jd-label">服務範圍</p>
+      <ul class="jd-scope">
+        <li>堂食餐牌／菜單拍攝</li>
+        <li>Foodpanda、Deliveroo 上架圖</li>
+        <li>飲品、甜品特寫</li>
+        <li>餐牌設計加配（見菜單設計頁）</li>
+      </ul>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">香港食物攝影服務與收費參考</p>
       <div class="jd-price-panel">
         <div class="jd-price-row">
           <div>
             <p class="jd-price-name">基本套餐</p>
-            <p class="jd-price-desc">約 2 小時 · 10 張精修 · 工作室拍攝</p>
+            <p class="jd-price-desc">約 2 小時 · 10 張精修 · 工作室 · 網站／社交媒體使用權</p>
           </div>
-          <p class="jd-price-amt">HK$3,000–5,000<small>參考</small></p>
+          <p class="jd-price-amt">HK$3,000–5,000<small>公開參考價</small></p>
         </div>
         <div class="jd-price-row feature">
           <div>
-            <p class="jd-price-name">標準套餐（較多人揀）</p>
-            <p class="jd-price-desc">約 4 小時 · 20 張精修 · 餐廳或工作室</p>
+            <p class="jd-price-name">標準套餐（多數餐廳選擇）</p>
+            <p class="jd-price-desc">約 4 小時 · 20 張精修 · 餐廳或工作室 · 全渠道（含印刷）</p>
           </div>
-          <p class="jd-price-amt">HK$5,000–8,000<small>參考</small></p>
+          <p class="jd-price-amt">HK$5,000–8,000<small>公開參考價</small></p>
         </div>
         <div class="jd-price-row">
           <div>
             <p class="jd-price-name">高級套餐</p>
-            <p class="jd-price-desc">約 8 小時 · 40 張精修 · 場景／創意修圖</p>
+            <p class="jd-price-desc">約 8 小時 · 40 張精修 · 場景設計／創意修圖 · 全渠道＋獨家版權可議</p>
           </div>
-          <p class="jd-price-amt">HK$8,000–10,000+<small>參考</small></p>
+          <p class="jd-price-amt">HK$8,000–10,000+<small>公開參考價</small></p>
         </div>
         <div class="jd-price-row">
           <div>
             <p class="jd-price-name">餐牌設計加配</p>
-            <p class="jd-price-desc">拍攝後可一併做堂食／外賣用餐牌</p>
+            <p class="jd-price-desc">拍攝後可一併製作堂食／外賣用餐牌</p>
           </div>
-          <p class="jd-price-amt">另行報價<small>可加配</small></p>
+          <p class="jd-price-amt">另行報價<small>見菜單設計頁</small></p>
         </div>
       </div>
-      <p class="jd-note">實際以菜式數量、場地同用途報價為準。詳見《<a href="https://www.jdstudiohk.com/blog/food-photography-package-contents">食物攝影套餐包括什麼？</a>》；餐牌設計見<a href="https://www.jdstudiohk.com/-menu-design">菜單設計服務</a>。</p>
+      <p class="jd-note">以上為網站公開參考價，實際以菜式數量、場地、造型與用途報價為準。來源：<a href="https://www.jdstudiohk.com/blog/food-photography-package-contents">jdstudiohk.com/blog/food-photography-package-contents</a> · <a href="https://www.jdstudiohk.com/-menu-design">菜單設計</a></p>
     </div>
 
     <div class="jd-block">
       <p class="jd-label">常見問題</p>
       <details>
         <summary>什麼是食物攝影？</summary>
-        <p>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 同時可做飲品拍攝、餐牌設計同外賣平台圖片，方便堂食、上架同推廣一齊用。</p>
+        <p>食物攝影是專門拍攝菜式、飲品與食品包裝，用於菜單、外賣平台與品牌推廣的專業攝影服務。JD Studio 自 2014 年為香港餐飲客戶提供食物攝影、飲品拍攝、餐牌設計及外賣平台圖片製作。</p>
       </details>
       <details>
-        <summary>香港食物攝影一般怎樣收費？</summary>
-        <p>按菜式數量、拍攝場地、造型同後期要求計。Blog 公開參考：基本約 HK$3,000–5,000（2 小時／10 張）、標準約 HK$5,000–8,000（4 小時／20 張）、高級約 HK$8,000–10,000+（8 小時／40 張）。你可先提供菜單數量同用途，我們再報實際價。</p>
+        <summary>香港食物攝影套餐收費如何？</summary>
+        <p>按菜式數量、拍攝場地、造型與後期要求計算。公開參考：基本約 HK$3,000–5,000（2 小時／10 張精修）、標準約 HK$5,000–8,000（4 小時／20 張）、高級約 HK$8,000–10,000+（8 小時／40 張）。詳見《食物攝影套餐包括什麼？》；報價前請提供菜單數量與用途。</p>
       </details>
       <details>
-        <summary>可以在餐廳拍攝嗎？適合 Foodpanda／Deliveroo 嗎？</summary>
-        <p>可以。標準同高級套餐支援到餐廳拍攝；影樓則較易控光同背景。外賣平台圖可按平台同社交媒體比例輸出，方便上架。</p>
+        <summary>是否適合 Foodpanda／Deliveroo？可在餐廳拍攝嗎？</summary>
+        <p>適合。影像可按外賣平台與社交媒體比例輸出。標準及高級套餐支援到客戶餐廳拍攝；工作室拍攝則較易控制燈光與背景，適合標準化產品圖。</p>
       </details>
       <details>
-        <summary>拍攝前要準備什麼？多久交相？</summary>
-        <p>建議先備好菜單清單、拍攝數量、參考風格、用途同場地資料。一般約 5–7 個工作天交相；配合餐牌更新或上架時程可先講明，亦可加急（另議）。菜單設計頁亦有提到約 3–5 天交付安排，實際以項目為準。</p>
+        <summary>拍攝前要準備什麼？多久交付？</summary>
+        <p>請準備菜單清單、拍攝數量、參考風格、使用用途及場地資料。一般於拍攝後約 5–7 個工作天交付；急件可加急（另議）。後期包括調色、光暗、去瑕及食物造型美化，範圍視所選套餐而定。</p>
       </details>
       <details>
-        <summary>可唔可以連餐牌設計一併做？</summary>
-        <p>可以。拍攝同<a class="jd-inline" href="https://www.jdstudiohk.com/-menu-design">餐牌／菜單設計</a>可一次過報價；如果你要更新堂食餐牌、外賣圖或品牌視覺，拍攝前一併講會較順。</p>
+        <summary>可否連餐牌設計一併做？如何查詢？</summary>
+        <p>可以。拍攝與<a class="jd-inline" href="https://www.jdstudiohk.com/-menu-design">餐牌／菜單設計</a>可一次過報價。查詢：WhatsApp +852 9153 1976 或電郵 info.exposurehk@gmail.com；工作室位於九龍新蒲崗。</p>
       </details>
     </div>
 
     <div class="jd-cta-wrap" style="margin-top:36px">
-      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 9153 1976</a>
-      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/-menu-design">去菜單設計頁</a>
-      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">讀套餐指南</a>
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
+      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">核對公開套餐價</a>
+      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/-menu-design">菜單設計服務</a>
     </div>
   </div>
 </section>
