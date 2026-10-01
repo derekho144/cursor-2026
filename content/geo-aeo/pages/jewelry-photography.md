@@ -1,34 +1,29 @@
-# Jewelry photography — AEO/GEO spec
+# Jewelry photography — AEO/GEO + E-E-A-T spec
 
 **URL:** https://www.jdstudiohk.com/services/jewelry-photography  
-**Primary KW:** 珠寶攝影 / 首飾攝影 / 戒指拍攝
+**Primary KW:** 珠寶攝影 / 首飾攝影 / 戒指拍攝  
+**Pricing source:** https://www.jdstudiohk.com/blog/hong-kong-product-photography-pricing-standards  
+**Related:** `/services/product-photography`  
+**Anchor:** `#jd-jewelry-photography`
 
-## SEO
-- **Title:** `香港珠寶攝影｜首飾戒指手錶拍攝｜JD Studio`
-- **Description:** `珠寶攝影是專門拍攝首飾、戒指、耳環、吊墜、手鍊及手錶的專業微距攝影服務。JD Studio 香港珠寶攝影著重切面火彩、金屬質感與電商細節，歡迎查詢報價。`
+## AEO / GEO order
+1. H2 香港珠寶攝影服務  
+2. Sub 客群／品類  
+3. Definition「是專門…」+ 可核對來源  
+4. E-E-A-T 四格  
+5. 服務範圍  
+6. 可見收費參考（按件／系列／手錶；級距引用產品攝影 Blog，勿虛構珠寶固定價）  
+7. FAQ：Q1 定義、Q2 收費  
+8. WhatsApp + 內鏈  
 
-## H1 / sub
-- **H1:** `香港珠寶攝影服務`
-- **Sub:** `戒指・耳環・吊墜・手鍊・手錶｜微距火彩・電商細節`
-
-## Definition
-> **珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。** JD Studio 為珠寶品牌、設計師與電商商戶提供清潔白底、細節特寫及品牌形象照。
-
-## Visible pricing table
-| 項目 | 參考收費（HKD） |
+## E-E-A-T (site-published only)
+| Signal | Facts |
 |---|---|
-| 單件基本珠寶照 | 按件報價（參考產品攝影按張級距） |
-| 系列／多件套餐 | 可享系列優惠，另行報價 |
-| 手錶／高反光金屬 | 另行報價 |
+| Experience | 2014；新蒲崗影樓；電商／品牌產品攝影經驗 |
+| Expertise | 微距、控光、火彩／金屬反光、白底＋細節 |
+| Authoritativeness | 鏈接產品攝影收費 Blog；不編造未公開珠寶價 |
+| Trustworthiness | WhatsApp、電郵、交付約 5–7 天（產品攝影公開參考） |
 
-註：頁面可寫「收費按件數、材質反光難度與精修程度計算；歡迎 WhatsApp 免費報價」，並顯示上表。勿虛構未公開的固定價。
-
-## FAQ
-1. 什麼是珠寶攝影？  
-2. 收費如何計算？  
-3. 能否拍出手錶／鑽石火彩？  
-4. 是否適合電商平台？  
-5. 如何預約？  
-
-## Schema
-Service + FAQPage + Breadcrumb; Offer optional with `priceSpecification` text-only minPrice omitted if no public fixed rate — then use Offer with `description` only OR link to product pricing blog for base rates.
+## Files
+- `jewelry-photography.squarespace-codeblock.html`
+- `jewelry-photography.schema.jsonld.html`

@@ -1,7 +1,4 @@
-<!--
-  Squarespace → Pages → jewelry-photography → Code Injection (Header) 或頁頂 Code Block
-  AEO/GEO: FAQPage + Service + OfferCatalog for 珠寶攝影
--->
+<!-- Paste in Squarespace: Page Settings → Advanced → Page Header Code Injection -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -11,37 +8,26 @@
       "@id": "https://www.jdstudiohk.com/services/jewelry-photography#webpage",
       "url": "https://www.jdstudiohk.com/services/jewelry-photography",
       "name": "香港珠寶攝影｜首飾戒指手錶拍攝｜JD Studio",
-      "description": "珠寶攝影是專門拍攝首飾、戒指、耳環、吊墜、手鍊及手錶的專業微距攝影服務。JD Studio 香港珠寶攝影著重切面火彩、金屬質感與電商細節，歡迎查詢報價。",
+      "description": "珠寶攝影是專門拍攝首飾、戒指、耳環、吊墜、手鍊及手錶的專業微距攝影服務。JD Studio 著重切面火彩、金屬質感與電商細節；收費按件報價，級距可參考產品攝影按張約 HK$150–500。WhatsApp +852 9153 1976。",
       "inLanguage": "zh-HK",
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "JD Studio 香港商業攝影",
-        "url": "https://www.jdstudiohk.com"
-      },
-      "about": {
-        "@id": "https://www.jdstudiohk.com/services/jewelry-photography#service"
-      },
-      "mainEntity": {
-        "@id": "https://www.jdstudiohk.com/services/jewelry-photography#service"
-      }
+      "isPartOf": { "@type": "WebSite", "name": "JD Studio 香港商業攝影", "url": "https://www.jdstudiohk.com" },
+      "about": { "@id": "https://www.jdstudiohk.com/services/jewelry-photography#service" },
+      "mainEntity": { "@id": "https://www.jdstudiohk.com/services/jewelry-photography#service" }
     },
     {
       "@type": "Service",
       "@id": "https://www.jdstudiohk.com/services/jewelry-photography#service",
       "name": "香港珠寶攝影服務",
-      "alternateName": [
-        "首飾攝影",
-        "戒指拍攝",
-        "手錶攝影"
-      ],
+      "alternateName": ["首飾攝影", "戒指拍攝", "手錶攝影", "珠寶微距攝影"],
       "serviceType": "Jewelry Photography",
-      "description": "珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。JD Studio 為珠寶品牌、設計師與電商商戶提供清潔白底、細節特寫及品牌形象照。",
+      "description": "珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。JD Studio 自 2014 年於香港提供商業攝影，為珠寶品牌、設計師與電商商戶輸出清潔白底、細節特寫及品牌形象照。",
       "provider": {
         "@type": "LocalBusiness",
         "name": "JD Studio",
         "url": "https://www.jdstudiohk.com",
         "telephone": "+852-9153-1976",
         "email": "info.exposurehk@gmail.com",
+        "foundingDate": "2014",
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "1 Tsat Po Street",
@@ -50,22 +36,10 @@
           "addressCountry": "HK"
         },
         "areaServed": [
-          {
-            "@type": "City",
-            "name": "Hong Kong"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "Kowloon"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "Hong Kong Island"
-          },
-          {
-            "@type": "AdministrativeArea",
-            "name": "New Territories"
-          }
+          { "@type": "City", "name": "Hong Kong" },
+          { "@type": "AdministrativeArea", "name": "Kowloon" },
+          { "@type": "AdministrativeArea", "name": "Hong Kong Island" },
+          { "@type": "AdministrativeArea", "name": "New Territories" }
         ]
       },
       "areaServed": "HK",
@@ -77,15 +51,16 @@
           {
             "@type": "Offer",
             "name": "單件基本珠寶照",
-            "description": "單件基本珠寶攝影按件報價，級距可參考產品攝影按張收費。",
+            "description": "按件報價；級距可參考產品攝影按張約 HK$150–500／張（公開 Blog）。",
             "priceCurrency": "HKD",
             "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/jewelry-photography"
+            "url": "https://www.jdstudiohk.com/services/jewelry-photography",
+            "priceSpecification": { "@type": "PriceSpecification", "priceCurrency": "HKD", "minPrice": "150", "maxPrice": "500", "unitText": "image" }
           },
           {
             "@type": "Offer",
             "name": "系列／多件套餐",
-            "description": "多件或系列珠寶拍攝可享系列優惠。",
+            "description": "多件或系列珠寶拍攝可享系列優惠；數量較多可參考按時計費。",
             "priceCurrency": "HKD",
             "availability": "https://schema.org/InStock",
             "url": "https://www.jdstudiohk.com/services/jewelry-photography"
@@ -108,60 +83,35 @@
         {
           "@type": "Question",
           "name": "什麼是珠寶攝影？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。JD Studio 為珠寶品牌、設計師與電商商戶提供清潔白底、細節特寫及品牌形象照。"
-          }
+          "acceptedAnswer": { "@type": "Answer", "text": "珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。JD Studio 為珠寶品牌、設計師與電商商戶提供清潔白底、細節特寫及品牌形象照。" }
         },
         {
           "@type": "Question",
           "name": "珠寶攝影收費如何計算？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "收費按件數、材質反光難度與精修程度計算；單件基本照按件報價，系列可享優惠。歡迎 WhatsApp 免費報價。"
-          }
+          "acceptedAnswer": { "@type": "Answer", "text": "收費按件數、材質反光難度與精修程度計算；單件基本照按件報價，系列可享優惠。基礎級距可參考《香港產品攝影收費》（按張約 HK$150–500；JD Studio 基本約 HK$300–500／張）。歡迎 WhatsApp +852 9153 1976 免費報價。" }
         },
         {
           "@type": "Question",
           "name": "能否拍出鑽石火彩／手錶質感？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "可以。JD Studio 以微距與控光呈現切面火彩、金屬反光與精細工藝細節。"
-          }
+          "acceptedAnswer": { "@type": "Answer", "text": "可以。JD Studio 以微距與控光呈現切面火彩、金屬反光與精細工藝細節；手錶及高反光金屬因燈光要求較高，一般另行報價。" }
         },
         {
           "@type": "Question",
           "name": "是否適合電商平台？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "適合。可輸出清潔白底與細節圖，方便電商與廣告使用。"
-          }
+          "acceptedAnswer": { "@type": "Answer", "text": "適合。可輸出清潔白底與細節圖，方便網店、廣告與平台上架使用；交付格式可按用途說明安排。" }
         },
         {
           "@type": "Question",
-          "name": "如何預約？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "WhatsApp +852 9153 1976。"
-          }
+          "name": "如何預約？多久交付？",
+          "acceptedAnswer": { "@type": "Answer", "text": "WhatsApp +852 9153 1976 或電郵 info.exposurehk@gmail.com，提供件數、材質與用途即可初步報價。交付天數可參考產品攝影約 5–7 個工作天；工作室位於九龍新蒲崗。" }
         }
       ]
     },
     {
       "@type": "BreadcrumbList",
       "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "主頁",
-          "item": "https://www.jdstudiohk.com/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "珠寶攝影",
-          "item": "https://www.jdstudiohk.com/services/jewelry-photography"
-        }
+        { "@type": "ListItem", "position": 1, "name": "主頁", "item": "https://www.jdstudiohk.com/" },
+        { "@type": "ListItem", "position": 2, "name": "珠寶攝影", "item": "https://www.jdstudiohk.com/services/jewelry-photography" }
       ]
     }
   ]
