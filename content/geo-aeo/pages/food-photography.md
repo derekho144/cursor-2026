@@ -1,37 +1,26 @@
-# Food photography — AEO/GEO + E-E-A-T spec
+# Food photography — AEO/GEO + E-E-A-T (pro UI)
 
 **URL:** https://www.jdstudiohk.com/services/food-photography  
-**Primary KW:** 食物攝影 / 香港食物攝影 / 菜牌拍攝  
+**Anchor:** `#jd-food-photography`  
 **Blog:** https://www.jdstudiohk.com/blog/food-photography-package-contents  
-**Related:** https://www.jdstudiohk.com/-menu-design  
-**Anchor:** `#jd-food-photography`
+**Related:** `/-menu-design`, `/services/product-photography`, `/contact-us`
 
-## AEO / GEO block order
-1. H2 = 香港食物攝影服務  
-2. Sub = 客群／用途  
-3. Definition（「是專門…」）+ 可引用事實  
-4. E-E-A-T 事實格（Experience / Expertise / Authoritativeness / Trustworthiness）  
-5. 服務範圍  
-6. 可見收費參考（與 Blog 套餐表一致）  
-7. FAQ ≥5：Q1 定義、Q2 收費  
-8. WhatsApp CTA + 內鏈  
+## Block order
+1. Brand kicker + H2 + sub + CTA  
+2. Definition「是專門…」  
+3. Stats (500+ / 2014 / 3–5 / Menu) with source notes  
+4. E-E-A-T four cells  
+5. Scope  
+6. Visible pricing (Blog tiers)  
+7. Related links  
+8. FAQ Q1 定義 / Q2 收費  
+9. CTA  
 
-## E-E-A-T sources (published on site — do not invent)
-| Signal | Facts used |
-|---|---|
-| Experience | 2014 成立；500+ 餐飲／食物攝影項目；上門或新蒲崗影樓 |
-| Expertise | Phase One / Canon / Profoto；攝影師＋造型＋後期；時數／張數／使用權 |
-| Authoritativeness | Blog 公開套餐表；鏈到 `/-menu-design` |
-| Trustworthiness | WhatsApp +852 9153 1976；info.exposurehk@gmail.com；5–7 工作天交付 |
-
-## Pricing (Blog 2026)
-| 套餐 | 參考 |
-|---|---|
-| 基本 | HK$3,000–5,000 · 2h · 10 張 |
-| 標準 | HK$5,000–8,000 · 4h · 20 張 |
-| 高級 | HK$8,000–10,000+ · 8h · 40 張 |
-| 餐牌設計 | 另行報價 |
+## Delivery honesty
+- Menu-design page: ~3–5 working days  
+- Package blog: ~5–7 working days  
+- On-page FAQ states both; do not collapse into one invented number.
 
 ## Files
-- UI: `food-photography.squarespace-codeblock.html`
-- Schema: `food-photography.schema.jsonld.html`（FAQ 文字必須與頁面一致）
+- `food-photography.squarespace-codeblock.html`
+- `food-photography.schema.jsonld.html`
