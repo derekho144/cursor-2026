@@ -1,385 +1,53 @@
 <span id="jd-event-full" aria-hidden="true"></span>
-
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600&display=swap');
-
-#jd-aeo-corporate-event {
-  --jd-bg: #050507;
-  --jd-bg-elev: rgba(255, 255, 255, 0.035);
-  --jd-line: rgba(255, 255, 255, 0.08);
-  --jd-text: #f5f5f7;
-  --jd-muted: #a1a1a6;
-  --jd-dim: #6e6e73;
-  --jd-accent: #c9a962;
-  --jd-accent-soft: rgba(201, 169, 98, 0.14);
-  --jd-radius: 18px;
-  --jd-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  box-sizing: border-box;
-  font-family: "SF Pro Display", "SF Pro Text", "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-  color: var(--jd-text);
-  background:
-    radial-gradient(1200px 520px at 50% -10%, rgba(201, 169, 98, 0.10), transparent 55%),
-    radial-gradient(800px 400px at 100% 30%, rgba(255, 255, 255, 0.03), transparent 50%),
-    linear-gradient(180deg, #0a0a0c 0%, var(--jd-bg) 40%, #030304 100%);
-  max-width: 980px;
-  margin: 0 auto;
-  padding: clamp(40px, 7vw, 88px) clamp(20px, 4vw, 40px) clamp(56px, 8vw, 96px);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  position: relative;
-  overflow: hidden;
-  border-radius: 28px;
+#jd-aeo-corporate-event{
+  --bg:#050507;--line:rgba(255,255,255,.08);--text:#f5f5f7;--muted:#a1a1a6;--dim:#6e6e73;--gold:#c9a962;
+  box-sizing:border-box;width:100%;max-width:980px;margin:0 auto;
+  padding:48px 24px 64px;color:var(--text);position:relative;overflow:visible;
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+  background:radial-gradient(900px 420px at 50% -8%,rgba(201,169,98,.10),transparent 55%),linear-gradient(180deg,#0a0a0c 0%,#050507 45%,#030304 100%);
+  border-radius:24px;
 }
-
-#jd-aeo-corporate-event *,
-#jd-aeo-corporate-event *::before,
-#jd-aeo-corporate-event *::after {
-  box-sizing: border-box;
-}
-
-#jd-aeo-corporate-event::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse at 50% 0%, black 20%, transparent 70%);
-  pointer-events: none;
-  opacity: 0.45;
-}
-
-#jd-aeo-corporate-event .jd-shell {
-  position: relative;
-  z-index: 1;
-}
-
-#jd-aeo-corporate-event .jd-kicker {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--jd-accent);
-  margin: 0 0 18px;
-  opacity: 0;
-  animation: jdFadeUp 0.9s var(--jd-ease) 0.05s forwards;
-}
-
-#jd-aeo-corporate-event h2.jd-title {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3.35rem);
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.08;
-  color: var(--jd-text);
-  max-width: 14ch;
-  opacity: 0;
-  animation: jdFadeUp 0.95s var(--jd-ease) 0.12s forwards;
-}
-
-#jd-aeo-corporate-event .jd-sub {
-  margin: 18px 0 0;
-  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
-  font-weight: 400;
-  color: var(--jd-muted);
-  letter-spacing: -0.01em;
-  max-width: 34em;
-  opacity: 0;
-  animation: jdFadeUp 0.95s var(--jd-ease) 0.2s forwards;
-}
-
-#jd-aeo-corporate-event .jd-def {
-  margin: 36px 0 0;
-  padding: 28px 0 0;
-  border-top: 1px solid var(--jd-line);
-  opacity: 0;
-  animation: jdFadeUp 1s var(--jd-ease) 0.28s forwards;
-}
-
-#jd-aeo-corporate-event .jd-def h3,
-#jd-aeo-corporate-event .jd-pricing h3,
-#jd-aeo-corporate-event .jd-faq h3,
-#jd-aeo-corporate-event .jd-scope h3 {
-  margin: 0 0 14px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--jd-dim);
-}
-
-#jd-aeo-corporate-event .jd-def p {
-  margin: 0;
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
-  line-height: 1.75;
-  color: var(--jd-muted);
-  font-weight: 300;
-  max-width: 46em;
-}
-
-#jd-aeo-corporate-event .jd-def strong {
-  color: var(--jd-text);
-  font-weight: 500;
-}
-
-#jd-aeo-corporate-event .jd-scope {
-  margin-top: 48px;
-}
-
-#jd-aeo-corporate-event .jd-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-#jd-aeo-corporate-event .jd-chips li {
-  margin: 0;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--jd-line);
-  background: var(--jd-bg-elev);
-  color: var(--jd-text);
-  font-size: 0.92rem;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: border-color 0.35s var(--jd-ease), background 0.35s var(--jd-ease), transform 0.35s var(--jd-ease);
-}
-
-#jd-aeo-corporate-event .jd-chips li:hover {
-  border-color: rgba(201, 169, 98, 0.35);
-  background: var(--jd-accent-soft);
-  transform: translateY(-1px);
-}
-
-#jd-aeo-corporate-event .jd-pricing {
-  margin-top: 56px;
-}
-
-#jd-aeo-corporate-event .jd-price-panel {
-  margin-top: 8px;
-  border: 1px solid var(--jd-line);
-  border-radius: var(--jd-radius);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
-  overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
-}
-
-#jd-aeo-corporate-event .jd-price-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 16px;
-  align-items: baseline;
-  padding: 22px 24px;
-  border-bottom: 1px solid var(--jd-line);
-}
-
-#jd-aeo-corporate-event .jd-price-row:last-child {
-  border-bottom: 0;
-}
-
-#jd-aeo-corporate-event .jd-price-name {
-  margin: 0;
-  font-size: 1.02rem;
-  font-weight: 500;
-  color: var(--jd-text);
-  letter-spacing: -0.015em;
-}
-
-#jd-aeo-corporate-event .jd-price-amt {
-  margin: 0;
-  text-align: right;
-  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  color: var(--jd-text);
-  font-variant-numeric: tabular-nums;
-}
-
-#jd-aeo-corporate-event .jd-price-amt span {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.78rem;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--jd-dim);
-}
-
-#jd-aeo-corporate-event .jd-note {
-  margin: 16px 0 0;
-  font-size: 0.88rem;
-  color: var(--jd-dim);
-}
-
-#jd-aeo-corporate-event a {
-  color: var(--jd-accent);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.25s var(--jd-ease), color 0.25s var(--jd-ease);
-}
-
-#jd-aeo-corporate-event a:hover {
-  border-bottom-color: rgba(201, 169, 98, 0.5);
-}
-
-#jd-aeo-corporate-event .jd-faq {
-  margin-top: 56px;
-}
-
-#jd-aeo-corporate-event details {
-  border-bottom: 1px solid var(--jd-line);
-  padding: 0;
-  margin: 0;
-  background: transparent;
-}
-
-#jd-aeo-corporate-event details:first-of-type {
-  border-top: 1px solid var(--jd-line);
-}
-
-#jd-aeo-corporate-event summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 4px;
-  font-size: 1.05rem;
-  font-weight: 500;
-  letter-spacing: -0.015em;
-  color: var(--jd-text);
-  transition: color 0.25s var(--jd-ease);
-}
-
-#jd-aeo-corporate-event summary::-webkit-details-marker {
-  display: none;
-}
-
-#jd-aeo-corporate-event summary::after {
-  content: "+";
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid var(--jd-line);
-  display: grid;
-  place-items: center;
-  font-size: 1.1rem;
-  font-weight: 300;
-  color: var(--jd-muted);
-  transition: transform 0.35s var(--jd-ease), border-color 0.35s var(--jd-ease), color 0.35s var(--jd-ease);
-}
-
-#jd-aeo-corporate-event details[open] summary::after {
-  content: "–";
-  transform: rotate(180deg);
-  border-color: rgba(201, 169, 98, 0.4);
-  color: var(--jd-accent);
-}
-
-#jd-aeo-corporate-event details p {
-  margin: 0;
-  padding: 0 4px 22px;
-  font-size: 0.98rem;
-  line-height: 1.75;
-  color: var(--jd-muted);
-  font-weight: 300;
-  max-width: 52em;
-}
-
-#jd-aeo-corporate-event .jd-cta-wrap {
-  margin-top: 40px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-}
-
-#jd-aeo-corporate-event .jd-aeo-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  padding: 0 26px;
-  border-radius: 980px;
-  background: var(--jd-text);
-  color: #111;
-  font-size: 0.95rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  text-decoration: none;
-  border: 0;
-  transition: transform 0.35s var(--jd-ease), background 0.35s var(--jd-ease), box-shadow 0.35s var(--jd-ease);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-}
-
-#jd-aeo-corporate-event .jd-aeo-cta:hover {
-  background: #ffffff;
-  border-bottom-color: transparent;
-  transform: scale(1.02);
-}
-
-#jd-aeo-corporate-event .jd-cta-ghost {
-  display: inline-flex;
-  align-items: center;
-  min-height: 48px;
-  padding: 0 18px;
-  color: var(--jd-muted);
-  font-size: 0.95rem;
-  font-weight: 400;
-  border-bottom: 0;
-}
-
-#jd-aeo-corporate-event .jd-cta-ghost:hover {
-  color: var(--jd-text);
-  border-bottom-color: transparent;
-}
-
-@keyframes jdFadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (max-width: 640px) {
-  #jd-aeo-corporate-event .jd-price-row {
-    grid-template-columns: 1fr;
-    gap: 6px;
-    padding: 18px 18px;
-  }
-  #jd-aeo-corporate-event .jd-price-amt {
-    text-align: left;
-  }
-  #jd-aeo-corporate-event h2.jd-title {
-    max-width: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #jd-aeo-corporate-event .jd-kicker,
-  #jd-aeo-corporate-event h2.jd-title,
-  #jd-aeo-corporate-event .jd-sub,
-  #jd-aeo-corporate-event .jd-def {
-    animation: none;
-    opacity: 1;
-  }
+#jd-aeo-corporate-event *{box-sizing:border-box}
+#jd-aeo-corporate-event .jd-shell{width:100%;max-width:100%}
+#jd-aeo-corporate-event .jd-kicker{margin:0 0 14px;font-size:12px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+#jd-aeo-corporate-event h2.jd-title{margin:0;max-width:none;font-size:clamp(1.9rem,4.8vw,3.1rem);font-weight:600;letter-spacing:-.03em;line-height:1.12;color:var(--text);white-space:normal;word-break:normal}
+#jd-aeo-corporate-event .jd-sub{margin:14px 0 0;font-size:clamp(1rem,2vw,1.2rem);color:var(--muted);font-weight:400}
+#jd-aeo-corporate-event .jd-def{margin:32px 0 0;padding-top:24px;border-top:1px solid var(--line)}
+#jd-aeo-corporate-event .jd-label{margin:0 0 12px;font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+#jd-aeo-corporate-event .jd-def p{margin:0;font-size:1.05rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-corporate-event .jd-def strong{color:var(--text);font-weight:500}
+#jd-aeo-corporate-event .jd-scope{margin-top:40px}
+#jd-aeo-corporate-event .jd-chips{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+#jd-aeo-corporate-event .jd-chips li{margin:0;padding:10px 14px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.035);color:var(--text);font-size:.92rem}
+#jd-aeo-corporate-event .jd-pricing{margin-top:44px}
+#jd-aeo-corporate-event .jd-price-panel{margin-top:8px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));overflow:hidden}
+#jd-aeo-corporate-event .jd-price-row{display:flex;justify-content:space-between;gap:16px;align-items:baseline;padding:20px 22px;border-bottom:1px solid var(--line)}
+#jd-aeo-corporate-event .jd-price-row:last-child{border-bottom:0}
+#jd-aeo-corporate-event .jd-price-name{margin:0;font-size:1rem;font-weight:500;color:var(--text)}
+#jd-aeo-corporate-event .jd-price-amt{margin:0;text-align:right;font-size:1.25rem;font-weight:500;letter-spacing:-.02em;color:var(--text);white-space:nowrap}
+#jd-aeo-corporate-event .jd-price-amt small{display:block;margin-top:4px;font-size:.75rem;font-weight:400;color:var(--dim);letter-spacing:0}
+#jd-aeo-corporate-event .jd-note{margin:14px 0 0;font-size:.88rem;color:var(--dim)}
+#jd-aeo-corporate-event .jd-note a{color:var(--gold);text-decoration:none}
+#jd-aeo-corporate-event .jd-faq{margin-top:44px}
+#jd-aeo-corporate-event details{margin:0;border-bottom:1px solid var(--line);background:transparent}
+#jd-aeo-corporate-event details:first-of-type{border-top:1px solid var(--line)}
+#jd-aeo-corporate-event summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--text)}
+#jd-aeo-corporate-event summary::-webkit-details-marker{display:none}
+#jd-aeo-corporate-event summary:after{content:"+";width:28px;height:28px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--muted);font-weight:300}
+#jd-aeo-corporate-event details[open] summary:after{content:"–";color:var(--gold);border-color:rgba(201,169,98,.4)}
+#jd-aeo-corporate-event details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-corporate-event .jd-cta-wrap{margin-top:36px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+#jd-aeo-corporate-event .jd-aeo-cta{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 24px;border-radius:980px;background:#f5f5f7;color:#111;font-size:.95rem;font-weight:500;text-decoration:none}
+#jd-aeo-corporate-event .jd-cta-ghost{display:inline-flex;align-items:center;min-height:48px;padding:0 12px;color:var(--muted);font-size:.95rem;text-decoration:none}
+@media (max-width:640px){
+  #jd-aeo-corporate-event{padding:36px 16px 48px;border-radius:16px}
+  #jd-aeo-corporate-event .jd-price-row{flex-direction:column;gap:6px}
+  #jd-aeo-corporate-event .jd-price-amt{text-align:left;white-space:normal}
 }
 </style>
 
-<!-- Visible AEO/GEO blocks for /services/corporate-event -->
 <section id="jd-aeo-corporate-event" lang="zh-HK">
   <div class="jd-shell">
     <p class="jd-kicker">JD Studio · Hong Kong</p>
@@ -387,12 +55,12 @@
     <p class="jd-sub">會議・展覽・論壇・發布會・晚宴｜專業活動紀錄</p>
 
     <div class="jd-def">
-      <h3>什麼是企業活動攝影？</h3>
+      <p class="jd-label">什麼是企業活動攝影？</p>
       <p><strong>企業活動攝影是專門記錄會議、展覽、新聞發布會、頒獎禮及周年晚宴等商業場合的專業攝影服務。</strong> JD Studio 為香港企業提供現場活動攝影、重點環節紀錄與精修交付，適合品牌推廣、新聞發放與內部紀錄。</p>
     </div>
 
     <div class="jd-scope">
-      <h3>服務範圍</h3>
+      <p class="jd-label">服務範圍</p>
       <ul class="jd-chips">
         <li>會議／論壇</li>
         <li>展覽／開幕</li>
@@ -403,26 +71,26 @@
     </div>
 
     <div class="jd-pricing">
-      <h3>香港企業活動攝影服務與收費參考</h3>
-      <div class="jd-price-panel" role="table" aria-label="企業活動攝影收費參考">
-        <div class="jd-price-row" role="row">
+      <p class="jd-label">香港企業活動攝影服務與收費參考</p>
+      <div class="jd-price-panel">
+        <div class="jd-price-row">
           <p class="jd-price-name">企業活動攝影（2–4 小時入門）</p>
-          <p class="jd-price-amt">HK$3,000–6,000<span>參考價</span></p>
+          <p class="jd-price-amt">HK$3,000–6,000<small>參考價</small></p>
         </div>
-        <div class="jd-price-row" role="row">
+        <div class="jd-price-row">
           <p class="jd-price-name">企業活動攝影（半日至全日）</p>
-          <p class="jd-price-amt">HK$6,000–12,000<span>參考價</span></p>
+          <p class="jd-price-amt">HK$6,000–12,000<small>參考價</small></p>
         </div>
-        <div class="jd-price-row" role="row">
+        <div class="jd-price-row">
           <p class="jd-price-name">大型／多人手活動攝影</p>
-          <p class="jd-price-amt">HK$15,000 起<span>參考價</span></p>
+          <p class="jd-price-amt">HK$15,000 起<small>參考價</small></p>
         </div>
       </div>
-      <p class="jd-note">實際以報價為準。<a href="https://www.jdstudiohk.com/blog/hong-kong-corporate-event-photography-pricing">收費細節見《香港企業活動攝影收費》</a></p>
+      <p class="jd-note">實際以報價為準。收費細節見《<a href="https://www.jdstudiohk.com/blog/hong-kong-corporate-event-photography-pricing">香港企業活動攝影收費</a>》</p>
     </div>
 
     <div class="jd-faq">
-      <h3>常見問題</h3>
+      <p class="jd-label">常見問題</p>
       <details>
         <summary>什麼是企業活動攝影？</summary>
         <p>企業活動攝影是專門記錄會議、展覽、新聞發布會、頒獎禮及周年晚宴等商業場合的專業攝影服務。JD Studio 為香港企業提供現場活動攝影、重點環節紀錄與精修交付，適合品牌推廣、新聞發放與內部紀錄。</p>
@@ -446,188 +114,8 @@
     </div>
 
     <div class="jd-cta-wrap">
-      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener">WhatsApp 即日報價</a>
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 即日報價</a>
       <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/hong-kong-corporate-event-photography-pricing">查看收費指南</a>
     </div>
   </div>
 </section>
-
-<!--
-  Squarespace → Pages → corporate-event → Code Block
-  Keep #jd-event-full marker. AEO/GEO: FAQPage + Service + OfferCatalog
--->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebPage",
-      "@id": "https://www.jdstudiohk.com/services/corporate-event#webpage",
-      "url": "https://www.jdstudiohk.com/services/corporate-event",
-      "name": "香港企業活動攝影｜會議展覽晚宴收費｜JD Studio",
-      "description": "企業活動攝影是專門拍攝會議、展覽、發布會、頒獎禮及晚宴的專業活動攝影服務。JD Studio 香港企業活動攝影套餐約 HK$3,000 起（視時數與人手）。WhatsApp 查詢報價。",
-      "inLanguage": "zh-HK",
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "JD Studio 香港商業攝影",
-        "url": "https://www.jdstudiohk.com"
-      },
-      "about": {
-        "@id": "https://www.jdstudiohk.com/services/corporate-event#service"
-      },
-      "mainEntity": {
-        "@id": "https://www.jdstudiohk.com/services/corporate-event#service"
-      }
-    },
-    {
-      "@type": "Service",
-      "@id": "https://www.jdstudiohk.com/services/corporate-event#service",
-      "name": "香港企業活動攝影服務",
-      "alternateName": [
-        "活動攝影",
-        "香港活動拍攝",
-        "企業活動拍攝",
-        "活動攝影公司"
-      ],
-      "serviceType": "Corporate Event Photography",
-      "description": "企業活動攝影是專門記錄會議、展覽、新聞發布會、頒獎禮及周年晚宴等商業場合的專業攝影服務。JD Studio 為香港企業提供現場活動攝影、重點環節紀錄與精修交付，適合品牌推廣、新聞發放與內部紀錄。",
-      "provider": {
-        "@type": "LocalBusiness",
-        "name": "JD Studio",
-        "url": "https://www.jdstudiohk.com",
-        "telephone": "+852-9153-1976",
-        "email": "info.exposurehk@gmail.com",
-        "address": {
-          "@type": "PostalAddress",
-          "streetAddress": "1 Tsat Po Street",
-          "addressLocality": "San Po Kong",
-          "addressRegion": "Kowloon",
-          "addressCountry": "HK"
-        },
-        "areaServed": [
-          { "@type": "City", "name": "Hong Kong" },
-          { "@type": "AdministrativeArea", "name": "Kowloon" },
-          { "@type": "AdministrativeArea", "name": "Hong Kong Island" },
-          { "@type": "AdministrativeArea", "name": "New Territories" }
-        ]
-      },
-      "areaServed": "HK",
-      "url": "https://www.jdstudiohk.com/services/corporate-event",
-      "hasOfferCatalog": {
-        "@type": "OfferCatalog",
-        "name": "香港企業活動攝影收費參考",
-        "itemListElement": [
-          {
-            "@type": "Offer",
-            "name": "企業活動攝影（2–4 小時入門）",
-            "description": "2 至 4 小時企業活動攝影入門參考價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/corporate-event",
-            "price": "3000",
-            "priceSpecification": {
-              "@type": "PriceSpecification",
-              "priceCurrency": "HKD",
-              "minPrice": "3000",
-              "unitText": "project"
-            }
-          },
-          {
-            "@type": "Offer",
-            "name": "企業活動攝影（半日至全日）",
-            "description": "半日至全日企業活動攝影參考價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/corporate-event",
-            "price": "6000",
-            "priceSpecification": {
-              "@type": "PriceSpecification",
-              "priceCurrency": "HKD",
-              "minPrice": "6000",
-              "unitText": "project"
-            }
-          },
-          {
-            "@type": "Offer",
-            "name": "大型／多人手活動攝影",
-            "description": "大型活動或多攝影師配置參考價。",
-            "priceCurrency": "HKD",
-            "availability": "https://schema.org/InStock",
-            "url": "https://www.jdstudiohk.com/services/corporate-event",
-            "price": "15000",
-            "priceSpecification": {
-              "@type": "PriceSpecification",
-              "priceCurrency": "HKD",
-              "minPrice": "15000",
-              "unitText": "project"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "@type": "FAQPage",
-      "@id": "https://www.jdstudiohk.com/services/corporate-event#faq",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "什麼是企業活動攝影？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "企業活動攝影是專門記錄會議、展覽、新聞發布會、頒獎禮及周年晚宴等商業場合的專業攝影服務。JD Studio 為香港企業提供現場活動攝影、重點環節紀錄與精修交付，適合品牌推廣、新聞發放與內部紀錄。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "香港企業活動攝影收費如何計算？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "香港企業活動攝影一般按時數與人手計算：2–4 小時入門約 HK$3,000–6,000；半日至全日約 HK$6,000–12,000；大型或多人手約 HK$15,000 起。實際以活動規模報價為準。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "適合拍攝哪些企業活動？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "適合會議、展覽、論壇、新聞發布會、頒獎禮、周年晚宴及品牌推廣活動等商業場合。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "活動攝影與派對攝影有何分別？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "企業活動攝影側重商業場合與品牌紀錄；派對／私人活動攝影則側重百日宴、生日會、開幕與私人宴會等。可按活動性質選擇對應服務頁。"
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "如何預約活動攝影？",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "歡迎 WhatsApp +852 9153 1976 提供活動日期、地點與時數，即可初步報價。"
-          }
-        }
-      ]
-    },
-    {
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "主頁",
-          "item": "https://www.jdstudiohk.com/"
-        },
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": "企業活動攝影",
-          "item": "https://www.jdstudiohk.com/services/corporate-event"
-        }
-      ]
-    }
-  ]
-}
-</script>
