@@ -226,13 +226,14 @@ export default function AdSync() {
       window.history.replaceState({}, "", window.location.pathname);
     }
     if (gscAuth === "success") {
-      toast.success("✅ Google Search Console 授權成功！已可讀取 jdstudiohk.com 自然搜尋數據。");
+      toast.success("✅ Google Search Console 授權成功！正在驗證連線…");
       window.history.replaceState({}, "", window.location.pathname);
+      void utils.googleSearchConsole.testConnection.invalidate();
     } else if (gscAuth === "error") {
       toast.error(`Search Console 授權失敗：${msg ?? "未知錯誤"}`);
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, []);
+  }, [utils]);
 
   const handleGoogleReauth = () => {
     const returnTo = `${window.location.origin}${window.location.pathname}`;
@@ -1132,47 +1133,114 @@ export default function AdSync() {
             style={{ background: "#141414", border: "1px solid rgba(212,168,67,0.18)" }}
           >
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium" style={{ color: "#e8e8e8" }}>
                   Google Search Console
                 </div>
                 <div className="text-xs mt-1" style={{ color: "#888" }}>
                   連接 www.jdstudiohk.com 以對比 AEO/GEO 自然搜尋（clicks／impressions／CTR）
                 </div>
-                <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#aaa" }}>
-                  {gscConnQuery.isLoading ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      檢查授權中…
-                    </>
-                  ) : gscConnQuery.data?.success ? (
-                    <>
-                      <CheckCircle2 className="h-3 w-3" style={{ color: "#4caf50" }} />
-                      <span style={{ color: "#4caf50" }}>
-                        已授權
-                        {gscConnQuery.data.hasJdstudio
-                          ? "（已見 jdstudiohk.com property）"
-                          : "（請確認 GSC 已加入 jdstudiohk.com）"}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-3 w-3" style={{ color: "#e53935" }} />
-                      <span style={{ color: "#e53935" }}>
-                        未授權{gscConnQuery.data?.error ? `：${gscConnQuery.data.error}` : ""}
-                      </span>
-                    </>
-                  )}
-                </div>
+                {gscConnQuery.isLoading ? (
+                  <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#aaa" }}>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    檢查授權中…
+                  </div>
+                ) : gscConnQuery.data?.success ? (
+                  <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#4caf50" }}>
+                    <CheckCircle2 className="h-3 w-3" />
+                    已授權
+                    {gscConnQuery.data.hasJdstudio
+                      ? "（已見 jdstudiohk.com property）"
+                      : "（請確認 GSC 已加入 jdstudiohk.com）"}
+                  </div>
+                ) : (() => {
+                  const err = gscConnQuery.data?.error || gscConnQuery.error?.message || "";
+                  const needsReauth =
+                    !err ||
+                    /invalid_grant|token.*(expir|revok)|No refresh token|Missing GSC refresh token|unauthorized_client/i.test(
+                      err
+                    );
+                  const isApiDisabled =
+                    /has not been used in project|is disabled|searchconsole\.googleapis\.com/i.test(err);
+                  const isOAuthTesting =
+                    /access_denied|未完成 Google 驗證|測試階段|test user/i.test(err);
+                  let title = "Search Console 連線失敗";
+                  let help = err || "尚未授權";
+                  if (isApiDisabled) {
+                    title = "未啟用 Search Console API";
+                    help =
+                      "授權可能已成功，但 GCP 專案未開 Search Console API。請先啟用 API，等 1–2 分鐘後撳「重新測試」。唔好再重複連接／授權。";
+                  } else if (isOAuthTesting) {
+                    title = "OAuth 測試模式封鎖";
+                    help =
+                      "請把授權用 Gmail 加做 GCP 測試使用者後再連一次。唔好不停重複授權。";
+                  } else if (needsReauth) {
+                    title = "未授權 Search Console";
+                    help = err || "需要用有 jdstudiohk.com GSC 權限嘅 Google 帳連接一次。";
+                  }
+                  return (
+                    <div
+                      className="mt-3 rounded-lg px-3 py-2.5 flex items-start gap-2"
+                      style={{ background: "rgba(229,57,53,0.1)", border: "1px solid rgba(229,57,53,0.3)" }}
+                    >
+                      <WifiOff className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: "#e53935" }} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium" style={{ color: "#e53935" }}>
+                          {title}
+                        </div>
+                        <div className="text-xs mt-0.5 break-words" style={{ color: "#aaa" }}>
+                          {help}
+                        </div>
+                        {isApiDisabled && (
+                          <a
+                            href="https://console.developers.google.com/apis/api/searchconsole.googleapis.com/overview?project=427790896235"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs mt-2 hover:opacity-80"
+                            style={{ color: "#D4A843" }}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            開啟並啟用 Search Console API
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-              <button
-                onClick={handleGscAuth}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all hover:opacity-80"
-                style={{ background: "#D4A843", color: "#111", fontWeight: 600 }}
-              >
-                <RefreshCw className="h-3 w-3" />
-                {gscConnQuery.data?.success ? "重新授權 Search Console" : "連接 Search Console"}
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!gscConnQuery.data?.success &&
+                  /has not been used in project|is disabled|searchconsole\.googleapis\.com/i.test(
+                    gscConnQuery.data?.error || gscConnQuery.error?.message || ""
+                  ) && (
+                    <button
+                      onClick={() => gscConnQuery.refetch()}
+                      disabled={gscConnQuery.isFetching}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all hover:opacity-80 disabled:opacity-50"
+                      style={{ background: "#444", color: "#fff", fontWeight: 600 }}
+                    >
+                      {gscConnQuery.isFetching ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Wifi className="h-3 w-3" />
+                      )}
+                      重新測試
+                    </button>
+                  )}
+                {(gscConnQuery.data?.success ||
+                  !/has not been used in project|is disabled|searchconsole\.googleapis\.com/i.test(
+                    gscConnQuery.data?.error || gscConnQuery.error?.message || ""
+                  )) && (
+                  <button
+                    onClick={handleGscAuth}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all hover:opacity-80"
+                    style={{ background: "#D4A843", color: "#111", fontWeight: 600 }}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    {gscConnQuery.data?.success ? "重新授權 Search Console" : "連接 Search Console"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
