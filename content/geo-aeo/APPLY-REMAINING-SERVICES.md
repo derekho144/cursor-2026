@@ -11,6 +11,7 @@
 | Corporate event | `corporate-event.squarespace-codeblock.html` |
 | Party / event | `event-photography.squarespace-codeblock.html` |
 | Jewelry | `jewelry-photography.squarespace-codeblock.html` |
+| Art photography | `art-photography.squarespace-codeblock.html` + header `art-photography.schema.jsonld.html` |
 
 Interior is already live — **do not replace** interior pack.
 

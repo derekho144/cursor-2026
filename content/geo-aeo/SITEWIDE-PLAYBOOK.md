@@ -39,7 +39,7 @@ Legend: ✅ strong · 🟡 partial · ❌ weak
 | `/services/video-project` | ❌ | ❌ | ❌ | ❌ | 🟡 | ❌ | **P0** |
 | `/services/corporate-event` | 🟡 | ❌ | ✅ | ✅ | ✅ | ❌ | P1 |
 | `/services/event-photography` | 🟡 | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
-| `/services/art-photography` | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | P2 |
+| `/services/art-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | Paste |
 | `/services/gallery` (AI) | ❌ | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
 | `/-menu-design` | ❌ | ❌ | 🟡 | ❌ | ❌ | ❌ | P1 |
 | `/contact-us` | — | — | ❌ | ❌ | ❌ | — | P2 |

@@ -1,0 +1,278 @@
+<span id="jd-art-photography" aria-hidden="true"></span>
+<style>
+#jd-aeo-art-photography{
+  --bg:#050507;--line:rgba(255,255,255,.08);--text:#f5f5f7;--muted:#a1a1a6;--dim:#6e6e73;--gold:#c9a962;--gold-soft:rgba(201,169,98,.14);
+  box-sizing:border-box;width:100%;max-width:980px;margin:0 auto;
+  padding:56px 24px 72px;color:var(--text);position:relative;overflow:hidden;
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+  background:
+    radial-gradient(820px 380px at 50% -12%,rgba(201,169,98,.11),transparent 58%),
+    radial-gradient(520px 280px at 92% 18%,rgba(255,255,255,.03),transparent 60%),
+    linear-gradient(180deg,#0b0b0e 0%,#050507 48%,#030304 100%);
+  border-radius:24px;
+}
+#jd-aeo-art-photography *{box-sizing:border-box}
+#jd-aeo-art-photography .jd-shell{position:relative;z-index:1;width:100%}
+#jd-aeo-art-photography .jd-kicker{
+  margin:0 0 16px;font-size:12px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+  animation:jdArtFade .7s ease both;
+}
+#jd-aeo-art-photography h2.jd-title{
+  margin:0;font-size:clamp(2rem,5vw,3.25rem);font-weight:600;letter-spacing:-.035em;line-height:1.1;color:var(--text);
+  animation:jdArtFade .8s .05s ease both;
+}
+#jd-aeo-art-photography .jd-title em{
+  font-style:normal;display:block;margin-top:.12em;
+  background:linear-gradient(120deg,#f3e3b0 0%,#c9a962 45%,#f0d48a 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+#jd-aeo-art-photography .jd-sub{
+  margin:16px 0 0;max-width:36em;font-size:clamp(1rem,2vw,1.2rem);color:var(--muted);font-weight:400;
+  animation:jdArtFade .8s .1s ease both;
+}
+#jd-aeo-art-photography .jd-cta-wrap{
+  margin-top:28px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+  animation:jdArtFade .8s .16s ease both;
+}
+#jd-aeo-art-photography .jd-aeo-cta{
+  display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 26px;
+  border-radius:980px;background:#f5f5f7;color:#111;font-size:.95rem;font-weight:500;text-decoration:none;
+  transition:transform .25s ease,background .25s ease;
+}
+#jd-aeo-art-photography .jd-aeo-cta:hover{background:#fff;transform:translateY(-1px)}
+#jd-aeo-art-photography .jd-cta-ghost{
+  display:inline-flex;align-items:center;min-height:48px;padding:0 14px;color:var(--muted);font-size:.95rem;text-decoration:none;
+  transition:color .25s ease;
+}
+#jd-aeo-art-photography .jd-cta-ghost:hover{color:var(--text)}
+#jd-aeo-art-photography .jd-block{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+#jd-aeo-art-photography .jd-label{margin:0 0 14px;font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+#jd-aeo-art-photography .jd-def p{margin:0;font-size:1.05rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-art-photography .jd-def strong{color:var(--text);font-weight:500}
+#jd-aeo-art-photography .jd-rows{display:grid;gap:0}
+#jd-aeo-art-photography .jd-row{
+  display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:16px 28px;
+  padding:22px 0;border-bottom:1px solid var(--line);align-items:start;
+}
+#jd-aeo-art-photography .jd-row:last-child{border-bottom:0;padding-bottom:0}
+#jd-aeo-art-photography .jd-row h3{margin:0;font-size:1.05rem;font-weight:500;letter-spacing:-.01em;color:var(--text)}
+#jd-aeo-art-photography .jd-row p{margin:0;font-size:.96rem;line-height:1.7;color:var(--muted);font-weight:300}
+#jd-aeo-art-photography .jd-process{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:8px;
+}
+#jd-aeo-art-photography .jd-step{padding:4px 0}
+#jd-aeo-art-photography .jd-step-num{
+  display:block;margin-bottom:10px;font-size:12px;letter-spacing:.14em;color:var(--gold);font-weight:500;
+}
+#jd-aeo-art-photography .jd-step h4{margin:0 0 6px;font-size:.98rem;font-weight:500;color:var(--text)}
+#jd-aeo-art-photography .jd-step p{margin:0;font-size:.86rem;line-height:1.55;color:var(--dim)}
+#jd-aeo-art-photography .jd-quotes{display:grid;gap:18px}
+#jd-aeo-art-photography .jd-quote{margin:0;padding:0}
+#jd-aeo-art-photography .jd-quote p{
+  margin:0;font-size:1.02rem;line-height:1.7;color:var(--muted);font-weight:300;
+}
+#jd-aeo-art-photography .jd-quote footer{
+  margin-top:10px;font-size:.82rem;letter-spacing:.04em;color:var(--dim);
+}
+#jd-aeo-art-photography .jd-rating{margin:0 0 18px;font-size:.92rem;color:var(--muted)}
+#jd-aeo-art-photography .jd-rating strong{color:var(--gold);font-weight:600}
+#jd-aeo-art-photography .jd-price-panel{
+  margin-top:8px;border:1px solid var(--line);border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));overflow:hidden;
+}
+#jd-aeo-art-photography .jd-price-row{
+  display:flex;justify-content:space-between;gap:16px;align-items:baseline;
+  padding:20px 22px;border-bottom:1px solid var(--line);
+}
+#jd-aeo-art-photography .jd-price-row:last-child{border-bottom:0}
+#jd-aeo-art-photography .jd-price-name{margin:0;font-size:1rem;font-weight:500;color:var(--text)}
+#jd-aeo-art-photography .jd-price-amt{margin:0;text-align:right;font-size:1.05rem;font-weight:500;color:var(--text);white-space:nowrap}
+#jd-aeo-art-photography .jd-price-amt small{display:block;margin-top:4px;font-size:.75rem;font-weight:400;color:var(--dim)}
+#jd-aeo-art-photography .jd-note{margin:14px 0 0;font-size:.88rem;color:var(--dim)}
+#jd-aeo-art-photography .jd-note a{color:var(--gold);text-decoration:none}
+#jd-aeo-art-photography .jd-chips{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+#jd-aeo-art-photography .jd-chips li{
+  margin:0;padding:10px 14px;border:1px solid var(--line);border-radius:999px;
+  background:rgba(255,255,255,.035);color:var(--text);font-size:.92rem;
+}
+#jd-aeo-art-photography details{margin:0;border-bottom:1px solid var(--line);background:transparent}
+#jd-aeo-art-photography details:first-of-type{border-top:1px solid var(--line)}
+#jd-aeo-art-photography summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;
+  padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--text);
+}
+#jd-aeo-art-photography summary::-webkit-details-marker{display:none}
+#jd-aeo-art-photography summary:after{
+  content:"+";flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);font-weight:300;transition:border-color .25s,color .25s;
+}
+#jd-aeo-art-photography details[open] summary:after{content:"–";color:var(--gold);border-color:rgba(201,169,98,.4)}
+#jd-aeo-art-photography details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--muted);font-weight:300}
+@keyframes jdArtFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (max-width:760px){
+  #jd-aeo-art-photography{padding:40px 16px 56px;border-radius:16px}
+  #jd-aeo-art-photography .jd-row{grid-template-columns:1fr;gap:8px;padding:18px 0}
+  #jd-aeo-art-photography .jd-process{grid-template-columns:1fr 1fr;gap:18px 12px}
+  #jd-aeo-art-photography .jd-price-row{flex-direction:column;gap:6px}
+  #jd-aeo-art-photography .jd-price-amt{text-align:left;white-space:normal}
+}
+@media (max-width:420px){
+  #jd-aeo-art-photography .jd-process{grid-template-columns:1fr}
+  #jd-aeo-art-photography .jd-cta-wrap{flex-direction:column;align-items:stretch}
+  #jd-aeo-art-photography .jd-aeo-cta{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  #jd-aeo-art-photography .jd-kicker,
+  #jd-aeo-art-photography h2.jd-title,
+  #jd-aeo-art-photography .jd-sub,
+  #jd-aeo-art-photography .jd-cta-wrap{animation:none}
+}
+</style>
+
+<section id="jd-aeo-art-photography" lang="zh-HK">
+  <div class="jd-shell">
+    <p class="jd-kicker">JD Studio · Art Photography</p>
+    <h2 class="jd-title">香港專業藝術品攝影<em>博物館級畫作翻拍與數碼化</em></h2>
+    <p class="jd-sub">油畫翻拍・水彩・國畫數碼化・Giclée 藝術微噴・藏品存檔</p>
+    <div class="jd-cta-wrap">
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 諮詢</a>
+      <a class="jd-cta-ghost" href="mailto:info.exposurehk@gmail.com">電郵查詢</a>
+    </div>
+
+    <div class="jd-block jd-def">
+      <p class="jd-label">什麼是藝術品攝影？</p>
+      <p><strong>藝術品攝影是專門為油畫、水彩、國畫、雕塑與收藏品進行高解像度翻拍與數碼化存檔的專業攝影服務。</strong> JD Studio 自 2014 年服務香港畫廊、博物館、藝術家與藏家，以 Phase One IQ4 150MP、偏振光系統與嚴格色彩管理（ΔE &lt; 2），真實還原筆觸、紋理與色彩層次，適用展覽圖錄、拍賣圖鑑與 Giclée 限量版畫。</p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">專業優勢</p>
+      <div class="jd-rows">
+        <div class="jd-row">
+          <h3>博物館級器材</h3>
+          <p>Phase One IQ4 150MP、Canon EOS R5 與專業微距／移軸鏡頭，配合偏振光系統，確保極致解析度與色彩準確度。</p>
+        </div>
+        <div class="jd-row">
+          <h3>嚴格色彩管理</h3>
+          <p>以 X-Rite ColorChecker 校正並建立 ICC Profile，將數碼檔與原作色差降至最低（ΔE &lt; 2），真實還原層次。</p>
+        </div>
+        <div class="jd-row">
+          <h3>專業去反光</h3>
+          <p>偏振光佈局消除油畫清漆、亞加力或裝框玻璃雜光，同時保留立體筆觸與質感。</p>
+        </div>
+        <div class="jd-row">
+          <h3>數碼化存檔</h3>
+          <p>提供 TIFF／PSD／JPEG 與元數據支援，協助畫廊、博物館與私人藏家建立可檢索的數碼資產庫。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">服務與收費參考</p>
+      <div class="jd-price-panel">
+        <div class="jd-price-row">
+          <p class="jd-price-name">平面藝術品翻拍（油畫／水彩／國畫／版畫）</p>
+          <p class="jd-price-amt">按件報價<small>視尺寸與數量</small></p>
+        </div>
+        <div class="jd-price-row">
+          <p class="jd-price-name">立體藝術品（雕塑／陶瓷／古董）</p>
+          <p class="jd-price-amt">另行報價<small>多角度＋特殊燈光</small></p>
+        </div>
+        <div class="jd-price-row">
+          <p class="jd-price-name">Giclée 藝術微噴／限量版畫</p>
+          <p class="jd-price-amt">另行報價<small>含打樣與校色</small></p>
+        </div>
+        <div class="jd-price-row">
+          <p class="jd-price-name">大量訂單（10 件以上）</p>
+          <p class="jd-price-amt">可享套餐優惠<small>歡迎查詢</small></p>
+        </div>
+      </div>
+      <p class="jd-note">標準交付約 7–10 工作天；加急 3–5 工作天（另議）。實際以報價為準。</p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">工作流程</p>
+      <div class="jd-process">
+        <div class="jd-step"><span class="jd-step-num">01</span><h4>諮詢評估</h4><p>確認材質、尺寸與拍攝數量</p></div>
+        <div class="jd-step"><span class="jd-step-num">02</span><h4>運送／上門</h4><p>安排運送或攝影師上門</p></div>
+        <div class="jd-step"><span class="jd-step-num">03</span><h4>拍攝校色</h4><p>偏振光佈局與色卡校正</p></div>
+        <div class="jd-step"><span class="jd-step-num">04</span><h4>後期精修</h4><p>色彩管理與細節銳化</p></div>
+        <div class="jd-step"><span class="jd-step-num">05</span><h4>交付存檔</h4><p>TIFF／PSD／JPG 高清檔</p></div>
+      </div>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">客戶評價</p>
+      <p class="jd-rating"><strong>5.0</strong> · 基於畫廊、博物館及藏家評價</p>
+      <div class="jd-quotes">
+        <blockquote class="jd-quote">
+          <p>「國畫的細微筆觸和墨色層次處理出色，色彩管理嚴格，數碼檔與原作幾乎無色差，非常適合展覽圖錄和學術出版。」</p>
+          <footer>香港藝術館相關合作回饋</footer>
+        </blockquote>
+        <blockquote class="jd-quote">
+          <p>「偏振光技術完美消除油畫清漆反光，同時保留立體質感；Giclée 色彩還原度高，客戶非常滿意。」</p>
+          <footer>白石畫廊香港</footer>
+        </blockquote>
+        <blockquote class="jd-quote">
+          <p>「為水彩作品建立高質量數碼資產庫，檔案格式與元數據完整，方便檢索與管理，交付速度快。」</p>
+          <footer>私人藏家</footer>
+        </blockquote>
+      </div>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">服務範疇</p>
+      <ul class="jd-chips">
+        <li>油畫翻拍</li>
+        <li>水彩攝影</li>
+        <li>國畫數碼化</li>
+        <li>雕塑攝影</li>
+        <li>Giclée 製作</li>
+        <li>拍賣目錄拍攝</li>
+        <li>畫廊展覽紀錄</li>
+        <li>藏品數碼化</li>
+      </ul>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">常見問題</p>
+      <details>
+        <summary>什麼是藝術品攝影？</summary>
+        <p>藝術品攝影是專門為油畫、水彩、國畫、雕塑與收藏品進行高解像度翻拍與數碼化存檔的專業攝影服務。JD Studio 以博物館級器材與嚴格色彩管理，真實還原筆觸、紋理與色彩。</p>
+      </details>
+      <details>
+        <summary>香港藝術品攝影服務收費如何？</summary>
+        <p>收費按作品類型、尺寸、數量與複雜度而定。平面藝術品翻拍較為經濟；雕塑等立體作品因多角度與特殊燈光另行報價；Giclée 藝術微噴為額外服務。10 件以上可享套餐優惠。歡迎 WhatsApp +852 9153 1976 或電郵 info.exposurehk@gmail.com 提供作品資料以取得詳細報價。</p>
+      </details>
+      <details>
+        <summary>藝術品攝影的交付時間需要多久？</summary>
+        <p>標準交付約 7–10 個工作天（含拍攝、色彩管理、後期與交付）；Giclée 約 10–14 個工作天。緊急需求可加急至 3–5 個工作天（另議）。檔案經雲端交付 TIFF／PSD／JPEG。</p>
+      </details>
+      <details>
+        <summary>什麼是 Giclée 藝術微噴？</summary>
+        <p>Giclée 是使用檔案級顏料墨水與藝術紙／畫布的高品質微噴技術，色域廣、保存期長、細節清晰，適合限量版畫與專業複製品製作。</p>
+      </details>
+      <details>
+        <summary>如何確保藝術品在拍攝過程中的安全？</summary>
+        <p>可安排專業運送或上門拍攝；影樓內以手套與專業支架處理，並提供保險與保密安排，減低運送與操作風險。</p>
+      </details>
+      <details>
+        <summary>什麼是色彩管理？為何藝術品攝影需要？</summary>
+        <p>色彩管理確保相機、螢幕與輸出之間色彩一致。我們以標準色卡建立 ICC Profile，將色差控制在 ΔE &lt; 2，滿足圖錄、拍賣與出版對色彩準確度的要求。</p>
+      </details>
+      <details>
+        <summary>如何消除油畫清漆或裝框玻璃的反光？</summary>
+        <p>以偏振濾鏡、45 度燈光佈局與柔光控制消除表面雜光，必要時多張合成，同時保留筆觸質感。</p>
+      </details>
+      <details>
+        <summary>數碼檔案版權歸誰所有？</summary>
+        <p>完成付款後，數碼檔版權轉讓予客戶，可用於圖錄、出版、展示與 Giclée 等用途；我們不會擅自將作品用於其他商業用途。</p>
+      </details>
+    </div>
+
+    <div class="jd-cta-wrap" style="margin-top:36px">
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 即日報價</a>
+      <a class="jd-cta-ghost" href="mailto:info.exposurehk@gmail.com">info.exposurehk@gmail.com</a>
+    </div>
+  </div>
+</section>
