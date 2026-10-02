@@ -146,6 +146,88 @@ def verify_hosting() -> None:
     sys.exit(9)
 
 
+def verify_live_revision() -> None:
+    """Fail if published site still serves a stale client (Manus sync gap)."""
+    marker_path = os.path.join(root, "client/public/deploy-revision.txt")
+    expected = ""
+    if os.path.isfile(marker_path):
+        expected = open(marker_path, encoding="utf-8").read().strip().splitlines()[0].strip()
+    if not expected:
+        expected = sha
+    print(f"manus-auto-deploy: verifying live deploy-revision contains {expected!r} …")
+    urls = [
+        "https://jdsys.biz/deploy-revision.txt",
+        "https://www.jdsys.biz/deploy-revision.txt",
+        "https://jdsys.manus.space/deploy-revision.txt",
+    ]
+    # Also require merged Ad Expenses UI strings in the main JS bundle.
+    must_have = ["記錄與月度報表已合併", "Ad Spend & Monthly Report"]
+    must_not = ['id:"reports",label:"月度報表",path:"/reports"']
+    last_err = ""
+    for attempt in range(10):
+        ok = True
+        for url in urls:
+            try:
+                body = subprocess.check_output(
+                    ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", url],
+                    text=True,
+                    timeout=30,
+                )
+            except Exception as exc:  # noqa: BLE001
+                ok = False
+                last_err = f"{url}: {exc}"
+                break
+            if expected not in body:
+                ok = False
+                last_err = f"{url} missing revision marker; body={body[:120]!r}"
+                break
+        if ok:
+            try:
+                html = subprocess.check_output(
+                    ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", "https://jdsys.biz/"],
+                    text=True,
+                    timeout=30,
+                )
+                import re
+
+                m = re.search(r'src="(/assets/index-[^"]+\.js)"', html)
+                if not m:
+                    ok = False
+                    last_err = "index.html has no /assets/index-*.js"
+                else:
+                    js_url = "https://jdsys.biz" + m.group(1)
+                    js = subprocess.check_output(
+                        ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", js_url],
+                        text=True,
+                        timeout=60,
+                    )
+                    for needle in must_have:
+                        if needle not in js:
+                            ok = False
+                            last_err = f"live JS missing {needle!r}"
+                            break
+                    if ok:
+                        for needle in must_not:
+                            if needle in js:
+                                ok = False
+                                last_err = f"live JS still has stale nav {needle!r}"
+                                break
+            except Exception as exc:  # noqa: BLE001
+                ok = False
+                last_err = str(exc)
+        if ok:
+            print("manus-auto-deploy: live revision OK (deploy-revision + Ad Expenses merge UI)")
+            return
+        print(f"manus-auto-deploy: live revision not ready (attempt {attempt + 1}/10): {last_err}")
+        time.sleep(6)
+    print(
+        "manus-auto-deploy: LIVE CODE VERIFY FAILED — publish succeeded but site still serves old client. "
+        "Manus JD SYS sync did not land the GitHub main files; re-run sync (do not trust publish alone).",
+        file=sys.stderr,
+    )
+    sys.exit(10)
+
+
 def do_publish(*, verify: bool = True) -> None:
     print(f"manus-auto-deploy: website.publish {website_id} …")
     pub = api(
@@ -187,6 +269,7 @@ def do_publish(*, verify: bool = True) -> None:
 
     if verify:
         verify_hosting()
+        verify_live_revision()
 
 
 if publish_only:
@@ -228,32 +311,36 @@ if st0 == "error":
     )
     sys.exit(5)
 
-prompt = f"""【固定 production 流程 — 已授權執行】
+prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 sync】
 
 唯一來源：GitHub main（derekho144/cursor-2026）
 目標 commit：{sha}（{full}）— {msg}
 目前本地 branch 參考：{branch}
 
+上次 publish 失敗模式（必須避免）：checkpoint／publish 成功但 live `/assets/index-*.js` 仍係舊 sidebar（仍有獨立「月度報表」）。今次必須先證明工作區＋build 已係新碼，先至 checkpoint。
+
 請嚴格按序執行，唔使再問確認：
 
-1. Pull / Sync GitHub **main** 到本 JD SYS 專案，對齊上述 commit
-2. 確認工作區已包含該 commit 的改動（可用 git rev-parse / git log 核對）
-3. 保存 checkpoint（version）
-4. **Hosting 硬性檢查（必須先過）**：確認 website_id={website_id} 嘅 origin／proxy **唔係** *.up.railway.app。若係 Railway，先移除並改回純 Manus managed hosting，先至 publish。
-5. Publish 到 jdsys.biz production（website_id={website_id}, visibility=public）
-6. 驗證 https://jdsys.biz 、 https://www.jdsys.biz 、 https://jdsys.manus.space 全部 HTTPS 200，且頁面／502 Host **唔含** railway.app
-7. 完成後只回報：
-   - synced_sha
-   - checkpoint_or_version_id
-   - publish_status
-   - site_urls
-   - origin_host（必須係 Manus managed，唔可以係 Railway）
+1. Pull / Sync GitHub **main** 到本 JD SYS 專案，對齊上述 commit（`git rev-parse HEAD` 必須係 {full} 或至少 short {sha}）
+2. **檔案硬核對（全部要過，否則唔好 checkpoint）**：
+   - `client/src/components/DashboardLayout.tsx`：menu **唔可以**有 `id: "reports"` / label「月度報表」獨立項
+   - `client/src/pages/MonthlyReport.tsx`：必須係 `Redirect` 去 `/ad-expenses?tab=report`
+   - `client/src/pages/AdExpenses.tsx`：必須含字串 `記錄與月度報表已合併` 同 `Ad Spend & Monthly Report`
+   - `client/public/deploy-revision.txt`：必須存在且含 `{sha}`
+3. 執行 frontend production build（`npm run build` 或專案既定 build），確保 `dist/public`／網站靜態資產已更新
+4. 保存 checkpoint（version）
+5. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
+6. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
+7. 驗證：
+   - `https://jdsys.biz/deploy-revision.txt` 含 `{sha}`
+   - `https://jdsys.biz` 的 index JS 含 `記錄與月度報表已合併`，且 **唔含** 舊 nav `id:"reports",label:"月度報表",path:"/reports"`
+8. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
 
 規則：
 - 唔好另開無關標準 task 做 production 發佈
-- 唔好改業務代碼
-- **禁止** 將 jdsys.biz／www／manus.space origin 指去 Railway
-- GitHub main 係唯一來源；Manus 只負責 sync → checkpoint → publish（managed hosting）
+- 唔好改業務代碼（只 sync／build／checkpoint／publish）
+- **禁止** Railway origin
+- GitHub main 係唯一來源
 """
 
 print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} (profile={agent_profile}) …")
