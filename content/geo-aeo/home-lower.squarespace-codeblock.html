@@ -1,0 +1,347 @@
+<!--
+  JD Studio homepage — lower half · "Darkroom Catalogue"
+  Paste as ONE Squarespace Code Block below the existing hero; set that section's background to #050507.
+  Page H1 stays in Squarespace; this block starts at H2.
+  No prices on homepage. Tile photos: JD Studio own portfolio (Squarespace CDN + food-crab / video-bts via jsDelivr until Asset Library upload), 4:5 cover crop.
+  Images share a light grade filter so the wall reads as one catalogue.
+-->
+<style>
+#jdh{
+  --bg:#050507;--ink:#f5f5f7;--mut:#b8b8bc;--dim:#9a9a9f;--line:rgba(255,255,255,.1);--gold:#c9a962;
+  --cream:#d8cfb4;
+  --ease:cubic-bezier(.2,.7,.2,1);--gut:clamp(14px,2vw,28px);
+  box-sizing:border-box;width:100%;max-width:100%;margin:0;
+  padding:clamp(72px,10vw,140px) 0 clamp(80px,11vw,152px);
+  background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.6;
+}
+#jdh *{box-sizing:border-box}
+#jdh h2,#jdh h3,#jdh p,#jdh a,#jdh summary{font-family:inherit;font-style:normal;text-transform:none}
+#jdh h2,#jdh h3,#jdh p{margin:0;letter-spacing:normal;line-height:inherit}
+#jdh ul,#jdh li{margin:0;padding:0;list-style:none}
+#jdh li::before{content:none}
+#jdh .wrap{max-width:1240px;margin:0 auto;padding:0 clamp(20px,5vw,48px)}
+#jdh .sec+.sec{margin-top:clamp(72px,10vw,128px)}
+#jdh .row{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--gut)}
+#jdh .rule{padding-top:20px;border-top:1px solid var(--line)}
+#jdh .k{
+  margin:0;font-size:12px;font-weight:500;line-height:1.6;letter-spacing:.28em;color:var(--gold);
+}
+
+/* Intro — italic cream statement (ref: agency tagline personality) */
+#jdh .intro{
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:clamp(12px,2vw,28px) 0 clamp(8px,1.5vw,20px);
+}
+#jdh .disp{
+  margin:0;max-width:18em;color:var(--cream);
+  font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:clamp(1.65rem,4.2vw,3.15rem);font-weight:700;font-style:italic;
+  line-height:1.28;letter-spacing:-.01em;
+}
+#jdh .def{
+  margin:clamp(18px,2.4vw,28px) 0 0;max-width:34em;
+  font-size:.95rem;line-height:1.75;font-weight:300;letter-spacing:.04em;color:var(--mut);
+}
+#jdh .def strong{font-weight:500;color:var(--ink)}
+#jdh .nw{white-space:nowrap}
+
+/* Light in-page wayfinding — not an app nav */
+#jdh .way{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 0;
+  margin-top:clamp(28px,3.5vw,40px);padding-top:18px;border-top:1px solid var(--line);
+  width:min(100%,36em);font-size:.72rem;letter-spacing:.18em;color:var(--dim);
+}
+#jdh .way a{
+  color:var(--dim);text-decoration:none;padding:4px 2px;
+  transition:color .25s ease;
+}
+#jdh .way a:hover{color:var(--ink)}
+#jdh .way a.is-active{color:var(--gold);border-bottom:1px solid var(--gold)}
+#jdh .way a:focus-visible{outline:2px solid var(--gold);outline-offset:4px;color:var(--gold)}
+#jdh .way .sep{display:inline-block;margin:0 14px;opacity:.45;user-select:none}
+#jdh #jdh-svc,#jdh #jdh-faq,#jdh #jdh-ask{scroll-margin-top:96px}
+
+/* Service wall header */
+#jdh .hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin:0 0 clamp(28px,3.2vw,44px)}
+#jdh .hd p{margin:0;font-size:.78rem;letter-spacing:.1em;color:var(--dim)}
+#jdh .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(36px,4.2vw,56px) var(--gut)}
+
+/* Work tiles */
+#jdh .work{
+  display:block;color:var(--ink);text-decoration:none;outline:none;
+  transition:transform .35s var(--ease);
+}
+#jdh .work:active{transform:scale(.985)}
+#jdh .ph{
+  position:relative;overflow:hidden;aspect-ratio:4/5;margin:0;
+  background:#121216;
+}
+/* CSS skeleton shimmer while CDN image loads */
+#jdh .ph::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(
+    110deg,
+    #121216 0%,
+    #121216 38%,
+    #1c1c22 50%,
+    #121216 62%,
+    #121216 100%
+  );
+  background-size:200% 100%;
+  animation:jdh-shimmer 1.35s ease-in-out infinite;
+}
+#jdh .ph.is-ready::before{opacity:0;animation:none;transition:opacity .4s ease}
+#jdh .ph img{
+  position:absolute;inset:0;z-index:1;width:100%;height:100%;max-width:none;
+  object-fit:cover;object-position:50% 50%;
+  filter:saturate(.9) contrast(1.04) brightness(.97);
+  opacity:0;
+  transition:transform 1.4s var(--ease),filter .55s ease,opacity .45s ease;
+}
+#jdh .ph.is-ready img{opacity:1}
+#jdh .cap{margin-top:14px}
+#jdh .cap h3{
+  display:inline-block;margin:0;padding-bottom:4px;color:var(--ink);
+  font-size:clamp(1rem,1.25vw,1.1rem);font-weight:500;line-height:1.45;letter-spacing:.08em;
+  background:linear-gradient(var(--gold),var(--gold)) 0 100%/0 1.5px no-repeat;
+  transition:background-size .5s var(--ease),color .25s ease;
+}
+#jdh .work:hover .ph img,#jdh .work:focus-visible .ph img{
+  transform:scale(1.045);filter:saturate(.95) contrast(1.05) brightness(1);
+}
+#jdh .work:active .ph img{
+  transform:scale(1.02);filter:saturate(.92) contrast(1.04) brightness(.98);
+  transition-duration:.15s;
+}
+@media (hover:hover){
+  #jdh .grid:has(.work:hover) .work:not(:hover) img{filter:saturate(.55) contrast(1) brightness(.42)}
+  #jdh .grid:has(.work:hover) .work:not(:hover) h3{color:var(--dim)}
+}
+#jdh .work:hover h3,#jdh .work:focus-visible h3{background-size:100% 1.5px}
+#jdh .work:focus-visible .ph{
+  outline:2px solid var(--gold);outline-offset:3px;
+}
+#jdh .work:focus-visible{outline:none}
+
+@keyframes jdh-shimmer{
+  0%{background-position:100% 0}
+  100%{background-position:-100% 0}
+}
+
+/* FAQ — secondary to the wall */
+#jdh .faq{align-items:baseline}
+#jdh .faq .k{grid-column:1/span 4}
+#jdh .qa{grid-column:5/-1;border-bottom:1px solid var(--line)}
+#jdh details+details{border-top:1px solid var(--line)}
+#jdh summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:24px;
+  padding:20px 0;color:var(--ink);font-size:clamp(1rem,1.3vw,1.12rem);font-weight:400;line-height:1.5;letter-spacing:.04em;
+  transition:color .25s ease;
+}
+#jdh details:first-child summary{padding-top:0}
+#jdh summary::-webkit-details-marker{display:none}
+#jdh summary::after{
+  content:"+";flex:0 0 auto;color:var(--dim);font-size:1.3rem;font-weight:300;line-height:1;
+  transition:transform .35s var(--ease),color .25s ease;
+}
+#jdh summary:hover{color:var(--gold)}
+#jdh summary:hover::after{color:var(--ink)}
+#jdh summary:active{opacity:.85}
+#jdh details[open] summary{color:var(--ink)}
+#jdh details[open] summary::after{transform:rotate(45deg);color:var(--gold)}
+#jdh summary:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+#jdh details p{margin:0;padding:0 0 22px;max-width:38em;font-size:.95rem;line-height:1.9;font-weight:300;letter-spacing:.02em;color:var(--mut)}
+#jdh details a{color:var(--gold);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .25s ease}
+#jdh details a:hover{border-bottom-color:var(--gold)}
+#jdh details a:focus-visible{outline:1px solid var(--gold);outline-offset:3px}
+
+/* Close CTA */
+#jdh .end{align-items:end}
+#jdh .ask{grid-column:1/span 5}
+#jdh .ask h2{
+  margin:0;color:var(--ink);font-size:clamp(2.1rem,4.4vw,3.6rem);font-weight:300;line-height:1.18;letter-spacing:.02em;
+  font-feature-settings:"palt" 1;
+}
+#jdh .ask p{margin:16px 0 0;max-width:22em;font-size:1.02rem;line-height:1.85;font-weight:300;letter-spacing:.02em;color:var(--mut)}
+#jdh .acts{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;margin-top:32px}
+#jdh .btn{
+  display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 32px;border-radius:2px;
+  background:var(--gold);color:#0b0b0d;font-size:.95rem;font-weight:500;letter-spacing:.08em;text-decoration:none;
+  transition:background-color .25s ease,transform .2s var(--ease),filter .25s ease;
+}
+#jdh .btn:hover{background:#d8bd7e;filter:brightness(1.03)}
+#jdh .btn:active{background:#b8944f;transform:translateY(1px) scale(.98);filter:none}
+#jdh .ghost{
+  padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink);font-size:.95rem;letter-spacing:.06em;text-decoration:none;
+  transition:border-color .25s ease,color .25s ease,opacity .2s ease;
+}
+#jdh .ghost:hover{border-color:var(--gold);color:var(--gold)}
+#jdh .ghost:active{opacity:.75}
+#jdh .btn:focus-visible,#jdh .ghost:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+#jdh .end .ph{grid-column:7/-1;aspect-ratio:3/2}
+
+@media (max-width:899px){
+  #jdh .disp{max-width:16em}
+  #jdh .way{margin-top:24px}
+  #jdh .cap{margin-top:12px}
+  #jdh .faq .k,#jdh .qa{grid-column:1/-1}
+  #jdh .faq .k{margin-bottom:18px}
+  #jdh .ask,#jdh .end .ph{grid-column:1/-1}
+  #jdh .end .ph{order:-1;margin-bottom:36px}
+}
+@media (max-width:699px){
+  #jdh .grid{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:36px}
+  #jdh .way{letter-spacing:.12em}
+  #jdh .way .sep{margin:0 10px}
+}
+@media (max-width:599px){
+  #jdh .cap h3{font-size:.98rem;letter-spacing:.06em}
+  #jdh .acts{flex-direction:column;align-items:stretch}
+  #jdh .ghost{align-self:center}
+}
+@media (prefers-reduced-motion:reduce){
+  #jdh .ph::before{animation:none;background:#16161a}
+  #jdh .ph img,#jdh .cap h3,#jdh summary::after,#jdh .btn,#jdh .ghost,#jdh .work{transition:none}
+  #jdh .work:hover .ph img,#jdh .work:focus-visible .ph img,#jdh .work:active .ph img{transform:none}
+  #jdh .btn:active,#jdh .work:active{transform:none}
+}
+.sqs-block-content #jdh{width:100%}
+</style>
+
+<section id="jdh" lang="zh-HK" aria-label="JD Studio 服務與作品">
+  <div class="wrap">
+
+    <header class="sec intro">
+      <h2 class="disp">Turning your ideas into visually stunning realities</h2>
+      <p class="def">Hong Kong commercial photography &amp; film — since 2014.</p>
+      <nav class="way" aria-label="本頁導覽">
+        <a href="#jdh-svc">服務</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#jdh-faq">常見問題</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#jdh-ask">查詢</a>
+      </nav>
+    </header>
+
+    <nav class="sec" aria-labelledby="jdh-svc" id="jdh-svc-block">
+      <div class="hd rule">
+        <h2 class="k" id="jdh-svc">服務</h2>
+        <p>點選進入服務頁</p>
+      </div>
+      <ul class="grid">
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/product-photography" aria-label="產品攝影 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1586954191798-P8ILV798T3BWR56ONUWC/A7R06570.jpg?format=2000w" alt="JD Studio 產品攝影作品：瓷器花瓶" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>產品攝影</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/food-photography" aria-label="食物攝影 — 進入服務頁">
+            <div class="ph"><img src="https://cdn.jsdelivr.net/gh/derekho144/cursor-2026@cursor/homepage-lower-ui-096b/content/geo-aeo/assets/home-tiles/food-crab.jpg" alt="JD Studio 食物攝影作品：蟹宴特寫" width="1600" height="2000" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>食物攝影</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/interior-photography" aria-label="室內攝影 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/524cd844-61e6-4e52-9c27-94fc0229b054/A7R00140.jpg?format=2000w" alt="JD Studio 室內攝影作品：商舖空間" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>室內攝影</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/jewelry-photography" aria-label="珠寶攝影 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1567679811240-Y5G1PD9MG9B53UFKQR6W/2101+A1.jpg?format=2000w" alt="JD Studio 珠寶攝影作品：鑽石戒指" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>珠寶攝影</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/corporate-event" aria-label="企業活動 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1760031273224-YDDIHH3Y36XJPB5CAKGU/DSC02693.jpg?format=2000w" alt="JD Studio 企業活動攝影作品：簽約儀式握手" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>企業活動</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/video-project" aria-label="影片／TVC — 進入服務頁">
+            <div class="ph"><img src="https://cdn.jsdelivr.net/gh/derekho144/cursor-2026@cursor/homepage-lower-ui-096b/content/geo-aeo/assets/home-tiles/video-bts.jpg" alt="JD Studio 影片製作幕後：專業電影機組" width="1600" height="2000" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>影片／TVC</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/services/event-photography" aria-label="派對活動 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1646351761337-WYXT8UMSVL1XSVN13B7F/DSC04196.jpg?format=2000w" alt="JD Studio 派對活動攝影作品：家庭慶祝時刻" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>派對活動</h3></div>
+          </a>
+        </li>
+        <li>
+          <a class="work" href="https://www.jdstudiohk.com/-menu-design" aria-label="餐牌設計 — 進入服務頁">
+            <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590357606-YKNTNHTIXE828I3UI2FZ/4%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=2000w" alt="JD Studio 餐牌影像作品：酒店甜品" width="2000" height="2500" loading="lazy" decoding="async"></div>
+            <div class="cap"><h3>餐牌設計</h3></div>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="sec row rule faq" id="jdh-faq">
+      <h2 class="k">常見問題</h2>
+      <div class="qa">
+        <details>
+          <summary>拍攝需要提前多久預約？</summary>
+          <p>視項目類型而定。影樓產品／食物拍攝通常可於數日內安排；活動與影片項目建議盡早預留檔期。WhatsApp 告知用途與日期，我們會盡快回覆可做時間。</p>
+        </details>
+        <details>
+          <summary>影樓在哪裡？</summary>
+          <p>JD Studio 影樓位於九龍新蒲崗；亦可到店舖、餐廳、酒店或活動現場拍攝。</p>
+        </details>
+        <details>
+          <summary>如何開始查詢？</summary>
+          <p>WhatsApp <a href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">+852 9153 1976</a>，簡單說明用途、日期與數量（可附參考圖），我們會盡快回覆方案與報價。</p>
+        </details>
+      </div>
+    </div>
+
+    <div class="sec row end" id="jdh-ask">
+      <div class="ask">
+        <h2>有拍攝計劃？</h2>
+        <p>傳張參考圖或簡單說明用途，我們盡快回覆。</p>
+        <div class="acts">
+          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 查詢報價</a>
+          <a class="ghost" href="https://www.jdstudiohk.com/contact-us">聯絡我們 →</a>
+        </div>
+      </div>
+      <div class="ph"><img src="https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1746862124159-CD27A08I38XM89CGPBAA/AKE_Cariam-2-Product-Shot-0324.jpg?format=2000w" alt="JD Studio 珠寶靜物作品" width="2000" height="2500" loading="lazy" decoding="async"></div>
+    </div>
+
+  </div>
+</section>
+<script>
+(function(){
+  var root=document.getElementById("jdh");
+  if(!root)return;
+  function mark(img){
+    var ph=img.closest(".ph");
+    if(ph)ph.classList.add("is-ready");
+  }
+  root.querySelectorAll(".ph img").forEach(function(img){
+    if(img.complete&&img.naturalWidth){mark(img);return;}
+    img.addEventListener("load",function(){mark(img);},{once:true});
+    img.addEventListener("error",function(){mark(img);},{once:true});
+  });
+  /* Active wayfinding — which section is in view */
+  var links=root.querySelectorAll(".way a[href^='#']");
+  var map={};
+  links.forEach(function(a){
+    var id=a.getAttribute("href").slice(1);
+    var el=root.querySelector("#"+id) || document.getElementById(id);
+    if(el)map[id]={el:el,a:a};
+  });
+  if(typeof IntersectionObserver!=="undefined" && Object.keys(map).length){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(!en.isIntersecting)return;
+        var id=en.target.id;
+        links.forEach(function(a){a.classList.toggle("is-active", a.getAttribute("href")==="#"+id);});
+      });
+    },{root:null,rootMargin:"-30% 0px -55% 0px",threshold:0});
+    Object.keys(map).forEach(function(id){io.observe(map[id].el);});
+  }
+})();
+</script>

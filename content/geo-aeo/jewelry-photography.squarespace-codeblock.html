@@ -1,0 +1,254 @@
+<span id="jd-jewelry-photography" aria-hidden="true"></span>
+<style>
+#jd-aeo-jewelry-photography{
+  --ink:#050608;--line:rgba(255,255,255,.09);--text:#f3f5f7;--muted:#a8b0b8;--dim:#6f7882;
+  --metal:#d7dde4;--shine:#f7fafc;--accent:#c5d0dc;
+  box-sizing:border-box;width:100%;max-width:980px;margin:0 auto;
+  padding:56px 24px 72px;color:var(--text);position:relative;overflow:hidden;
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+  background:
+    radial-gradient(720px 340px at 18% -8%,rgba(215,221,228,.16),transparent 55%),
+    radial-gradient(480px 280px at 92% 12%,rgba(255,255,255,.05),transparent 52%),
+    linear-gradient(170deg,#101318 0%,#07090c 48%,#040506 100%);
+  border-radius:28px;
+}
+#jd-aeo-jewelry-photography *{box-sizing:border-box}
+#jd-aeo-jewelry-photography .jd-shell{position:relative;z-index:1}
+#jd-aeo-jewelry-photography .jd-hero{display:grid;gap:18px;max-width:44rem}
+#jd-aeo-jewelry-photography .jd-kicker{
+  margin:0;display:inline-flex;align-items:center;gap:10px;
+  font-size:11px;font-weight:500;letter-spacing:.26em;text-transform:uppercase;color:var(--accent);
+  animation:jdJewIn .7s ease both;
+}
+#jd-aeo-jewelry-photography .jd-kicker::before{
+  content:"";width:28px;height:1px;background:linear-gradient(90deg,var(--metal),transparent);
+}
+#jd-aeo-jewelry-photography h2.jd-title{
+  margin:0;font-size:clamp(2.1rem,5.2vw,3.4rem);font-weight:600;letter-spacing:-.04em;line-height:1.06;color:var(--shine);
+  animation:jdJewIn .8s .05s ease both;
+}
+#jd-aeo-jewelry-photography .jd-title span{
+  display:block;margin-top:.1em;
+  background:linear-gradient(110deg,#ffffff 0%,#cfd6de 45%,#9aa6b2 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+#jd-aeo-jewelry-photography .jd-sub{
+  margin:0;font-size:clamp(1rem,2vw,1.16rem);color:var(--muted);font-weight:400;max-width:34em;
+  animation:jdJewIn .8s .1s ease both;
+}
+#jd-aeo-jewelry-photography .jd-cta-wrap{
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:6px;
+  animation:jdJewIn .8s .16s ease both;
+}
+#jd-aeo-jewelry-photography .jd-aeo-cta{
+  display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 26px;
+  border-radius:980px;background:var(--shine);color:#111418;font-size:.95rem;font-weight:600;text-decoration:none;
+  transition:transform .25s ease,background .25s ease;
+}
+#jd-aeo-jewelry-photography .jd-aeo-cta:hover{background:#fff;transform:translateY(-1px)}
+#jd-aeo-jewelry-photography .jd-cta-ghost{
+  display:inline-flex;align-items:center;min-height:50px;padding:0 12px;color:var(--muted);font-size:.95rem;text-decoration:none;
+}
+#jd-aeo-jewelry-photography .jd-cta-ghost:hover{color:var(--shine)}
+#jd-aeo-jewelry-photography .jd-block{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+#jd-aeo-jewelry-photography .jd-label{
+  margin:0 0 14px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+}
+#jd-aeo-jewelry-photography .jd-def p{margin:0;font-size:1.06rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-aeo-jewelry-photography .jd-def p+p{margin-top:12px}
+#jd-aeo-jewelry-photography .jd-def strong{color:var(--shine);font-weight:500}
+#jd-aeo-jewelry-photography .jd-eeat{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;padding:0;list-style:none;
+  border:1px solid var(--line);border-radius:18px;overflow:hidden;background:rgba(255,255,255,.025);
+}
+#jd-aeo-jewelry-photography .jd-eeat li{
+  margin:0;padding:18px 18px 16px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+}
+#jd-aeo-jewelry-photography .jd-eeat li:nth-child(2n){border-right:0}
+#jd-aeo-jewelry-photography .jd-eeat li:nth-last-child(-n+2){border-bottom:0}
+#jd-aeo-jewelry-photography .jd-eeat strong{
+  display:block;margin-bottom:6px;font-size:.92rem;font-weight:500;color:var(--shine);
+}
+#jd-aeo-jewelry-photography .jd-eeat span{display:block;font-size:.88rem;line-height:1.55;color:var(--dim)}
+#jd-aeo-jewelry-photography .jd-scope{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin:0;padding:0;list-style:none;counter-reset:scope;
+}
+#jd-aeo-jewelry-photography .jd-scope li{
+  counter-increment:scope;position:relative;margin:0;padding:16px 16px 16px 52px;
+  border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);
+  color:var(--shine);font-size:.98rem;font-weight:500;
+}
+#jd-aeo-jewelry-photography .jd-scope li::before{
+  content:counter(scope,decimal-leading-zero);position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  font-size:12px;letter-spacing:.08em;color:var(--accent);font-weight:500;
+}
+#jd-aeo-jewelry-photography .jd-price-panel{display:grid;gap:12px}
+#jd-aeo-jewelry-photography .jd-price-row{
+  display:grid;grid-template-columns:1.45fr auto;gap:16px;align-items:end;
+  padding:22px 22px 20px;border-radius:20px;border:1px solid var(--line);
+  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+}
+#jd-aeo-jewelry-photography .jd-price-row.feature{
+  border-color:rgba(215,221,228,.28);
+  background:linear-gradient(135deg,rgba(215,221,228,.1),rgba(255,255,255,.02));
+}
+#jd-aeo-jewelry-photography .jd-price-name{margin:0;font-size:1.02rem;font-weight:500;color:var(--shine)}
+#jd-aeo-jewelry-photography .jd-price-desc{margin:6px 0 0;font-size:.86rem;color:var(--dim)}
+#jd-aeo-jewelry-photography .jd-price-amt{
+  margin:0;text-align:right;font-size:clamp(1.15rem,2.6vw,1.55rem);font-weight:600;letter-spacing:-.02em;color:var(--shine);line-height:1.15;
+}
+#jd-aeo-jewelry-photography .jd-price-amt small{
+  display:block;margin-top:6px;font-size:.72rem;font-weight:400;color:var(--dim);
+}
+#jd-aeo-jewelry-photography .jd-note{margin:14px 0 0;font-size:.88rem;color:var(--dim)}
+#jd-aeo-jewelry-photography a.jd-inline,#jd-aeo-jewelry-photography .jd-note a,#jd-aeo-jewelry-photography details a{
+  color:var(--metal);text-decoration:none;
+}
+#jd-aeo-jewelry-photography a.jd-inline:hover,#jd-aeo-jewelry-photography .jd-note a:hover,#jd-aeo-jewelry-photography details a:hover{text-decoration:underline}
+#jd-aeo-jewelry-photography details{margin:0;border-bottom:1px solid var(--line);background:transparent}
+#jd-aeo-jewelry-photography details:first-of-type{border-top:1px solid var(--line)}
+#jd-aeo-jewelry-photography summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;
+  padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--shine);
+}
+#jd-aeo-jewelry-photography summary::-webkit-details-marker{display:none}
+#jd-aeo-jewelry-photography summary:after{
+  content:"+";flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);font-weight:300;
+}
+#jd-aeo-jewelry-photography details[open] summary:after{
+  content:"–";color:var(--metal);border-color:rgba(215,221,228,.45);background:rgba(215,221,228,.08);
+}
+#jd-aeo-jewelry-photography details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--muted);font-weight:300}
+@keyframes jdJewIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (max-width:720px){
+  #jd-aeo-jewelry-photography{padding:40px 16px 56px;border-radius:18px}
+  #jd-aeo-jewelry-photography .jd-scope,#jd-aeo-jewelry-photography .jd-eeat{grid-template-columns:1fr}
+  #jd-aeo-jewelry-photography .jd-eeat li{border-right:0}
+  #jd-aeo-jewelry-photography .jd-eeat li:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  #jd-aeo-jewelry-photography .jd-eeat li:last-child{border-bottom:0}
+  #jd-aeo-jewelry-photography .jd-price-row{grid-template-columns:1fr;gap:10px}
+  #jd-aeo-jewelry-photography .jd-price-amt{text-align:left}
+}
+@media (max-width:420px){
+  #jd-aeo-jewelry-photography .jd-cta-wrap{flex-direction:column;align-items:stretch}
+  #jd-aeo-jewelry-photography .jd-aeo-cta{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  #jd-aeo-jewelry-photography .jd-kicker,
+  #jd-aeo-jewelry-photography h2.jd-title,
+  #jd-aeo-jewelry-photography .jd-sub,
+  #jd-aeo-jewelry-photography .jd-cta-wrap{animation:none}
+}
+</style>
+
+<section id="jd-aeo-jewelry-photography" lang="zh-HK">
+  <div class="jd-shell">
+    <header class="jd-hero">
+      <p class="jd-kicker">JD Studio · Hong Kong · 自 2014</p>
+      <h2 class="jd-title">香港珠寶攝影服務<span>微距火彩 · 金屬質感 · 電商細節</span></h2>
+      <p class="jd-sub">服務珠寶品牌、設計師與電商商戶；適用戒指、耳環、吊墜、手鍊、手鐲、手錶及高反光金屬。</p>
+      <div class="jd-cta-wrap">
+        <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp +852 9153 1976</a>
+        <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/hong-kong-product-photography-pricing-standards">產品攝影收費參考</a>
+      </div>
+    </header>
+
+    <div class="jd-block jd-def">
+      <p class="jd-label">什麼是珠寶攝影？</p>
+      <p><strong>珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。</strong> JD Studio 自 2014 年於香港提供商業攝影，為珠寶品牌、設計師與電商商戶輸出清潔白底、細節特寫及品牌形象照，方便網店、廣告與目錄使用。</p>
+      <p>收費按件數、材質反光難度與精修程度計算；基礎級距可對照網站公開文章《<a class="jd-inline" href="https://www.jdstudiohk.com/blog/hong-kong-product-photography-pricing-standards">香港產品攝影收費</a>》，實際珠寶項目另行報價。</p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">經驗 · 專業 · 可信（E-E-A-T）</p>
+      <ul class="jd-eeat">
+        <li>
+          <strong>Experience｜實務經驗</strong>
+          <span>2014 成立；產品／電商攝影經驗覆蓋香港品牌與中小企；工作室位於九龍新蒲崗，可安排寄件或到場拍攝。</span>
+        </li>
+        <li>
+          <strong>Expertise｜專業流程</strong>
+          <span>微距鏡頭與控光處理鑽石火彩、金屬反光與錶面細節；可輸出白底圖、細節特寫與品牌形象照。</span>
+        </li>
+        <li>
+          <strong>Authoritativeness｜可核對資訊</strong>
+          <span>收費級距連結公開 Blog《香港產品攝影收費》；服務頁與產品攝影／電商用途互相參照，避免無來源定價。</span>
+        </li>
+        <li>
+          <strong>Trustworthiness｜聯絡與交付</strong>
+          <span>WhatsApp +852 9153 1976 · info.exposurehk@gmail.com；一般參考產品攝影交付約 5–7 工作天（急件另議）。</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">服務範圍</p>
+      <ul class="jd-scope">
+        <li>戒指／耳環／吊墜</li>
+        <li>手鍊／手鐲</li>
+        <li>手錶／高反光金屬</li>
+        <li>電商白底與細節特寫</li>
+      </ul>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">香港珠寶攝影服務與收費參考</p>
+      <div class="jd-price-panel">
+        <div class="jd-price-row feature">
+          <div>
+            <p class="jd-price-name">單件基本珠寶照</p>
+            <p class="jd-price-desc">按件報價；級距可參考產品攝影按張約 HK$150–500／張（Blog 公開）</p>
+          </div>
+          <p class="jd-price-amt">按件報價<small>公開級距參考</small></p>
+        </div>
+        <div class="jd-price-row">
+          <div>
+            <p class="jd-price-name">系列／多件套餐</p>
+            <p class="jd-price-desc">多件可享系列優惠；數量較多亦可參考按時計費（半天／全日）</p>
+          </div>
+          <p class="jd-price-amt">另行報價<small>系列優惠</small></p>
+        </div>
+        <div class="jd-price-row">
+          <div>
+            <p class="jd-price-name">手錶／高反光金屬</p>
+            <p class="jd-price-desc">需特殊燈光與反光控制，複雜度較高</p>
+          </div>
+          <p class="jd-price-amt">另行報價<small>按難度</small></p>
+        </div>
+      </div>
+      <p class="jd-note">實際以件數、材質與精修要求為準。來源：<a href="https://www.jdstudiohk.com/blog/hong-kong-product-photography-pricing-standards">hong-kong-product-photography-pricing-standards</a> · 查詢 WhatsApp +852 9153 1976</p>
+    </div>
+
+    <div class="jd-block">
+      <p class="jd-label">常見問題</p>
+      <details>
+        <summary>什麼是珠寶攝影？</summary>
+        <p>珠寶攝影是專門拍攝首飾與鐘錶，呈現切面火彩、金屬質感與精細工藝的專業微距攝影服務。JD Studio 為珠寶品牌、設計師與電商商戶提供清潔白底、細節特寫及品牌形象照。</p>
+      </details>
+      <details>
+        <summary>珠寶攝影收費如何計算？</summary>
+        <p>收費按件數、材質反光難度與精修程度計算；單件基本照按件報價，系列可享優惠。基礎級距可參考《香港產品攝影收費》（按張約 HK$150–500；JD Studio 基本約 HK$300–500／張）。歡迎 WhatsApp +852 9153 1976 免費報價。</p>
+      </details>
+      <details>
+        <summary>能否拍出鑽石火彩／手錶質感？</summary>
+        <p>可以。JD Studio 以微距與控光呈現切面火彩、金屬反光與精細工藝細節；手錶及高反光金屬因燈光要求較高，一般另行報價。</p>
+      </details>
+      <details>
+        <summary>是否適合電商平台？</summary>
+        <p>適合。可輸出清潔白底與細節圖，方便網店、廣告與平台上架使用；交付格式可按用途說明安排。</p>
+      </details>
+      <details>
+        <summary>如何預約？多久交付？</summary>
+        <p>WhatsApp +852 9153 1976 或電郵 info.exposurehk@gmail.com，提供件數、材質與用途即可初步報價。交付天數可參考產品攝影約 5–7 個工作天；工作室位於九龍新蒲崗。</p>
+      </details>
+    </div>
+
+    <div class="jd-cta-wrap" style="margin-top:36px">
+      <a class="jd-aeo-cta" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
+      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/blog/hong-kong-product-photography-pricing-standards">核對產品攝影收費</a>
+      <a class="jd-cta-ghost" href="https://www.jdstudiohk.com/services/product-photography">產品攝影服務</a>
+    </div>
+  </div>
+</section>
