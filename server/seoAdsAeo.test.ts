@@ -4,10 +4,13 @@ import {
   canonicalQueryIntent,
   classifyAeoReadiness,
   expectedTime,
+  funnelFromQuoteRows,
   gscPositionTrend,
   isCommercialHongKongQuery,
   scoreServicePriority,
+  searchTermSummary,
 } from "./seoAdsAeo";
+import type { GoogleAdsSearchTerm } from "./googleAds";
 
 describe("SEO + Ads + AEO priority model", () => {
   it("shows ranking up when the current position number is lower", () => {
@@ -61,7 +64,10 @@ describe("SEO + Ads + AEO priority model", () => {
         spendHKD: 120,
         weightedQualityScore: 4,
         lowQualitySpendHKD: 100,
+        conversions: 0,
       },
+      funnel: { leadCount: 8, acceptedCount: 4, searchLeads: 3, winRate: 50 },
+      searchTerms: { termCount: 2, conversions: 1, spendHKD: 40, clicks: 12, topTerms: ["香港產品攝影"] },
       organic: { clicks: 3, impressions: 220, ctr: 1.36, position: 14.2 },
       aeo: {
         status: "partial",
@@ -90,7 +96,9 @@ describe("SEO + Ads + AEO priority model", () => {
       acceptedRevenueHKD: 0,
       acceptedCount: 0,
       maxAcceptedRevenueHKD: 20000,
-      ads: { keywordCount: 0, spendHKD: 0, weightedQualityScore: null, lowQualitySpendHKD: 0 },
+      ads: { keywordCount: 0, spendHKD: 0, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
+      funnel: { leadCount: 0, acceptedCount: 0, searchLeads: 0, winRate: null },
+      searchTerms: { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] },
       organic: { clicks: 0, impressions: 0, ctr: 0, position: null },
       aeo: {
         status: "ready",
@@ -105,6 +113,84 @@ describe("SEO + Ads + AEO priority model", () => {
 
     expect(priority.breakdown.paidSearchFriction).toBe(0);
     expect(priority.confidence).toBe("limited");
+  });
+
+  it("lifts thin-revenue services when Google/Website funnel leads exist", () => {
+    const priority = scoreServicePriority({
+      id: "food",
+      label: "食物攝影",
+      path: "/services/food-photography",
+      acceptedRevenueHKD: 0,
+      acceptedCount: 0,
+      maxAcceptedRevenueHKD: 20000,
+      ads: { keywordCount: 0, spendHKD: 0, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
+      funnel: { leadCount: 5, acceptedCount: 0, searchLeads: 3, winRate: 0 },
+      searchTerms: { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] },
+      organic: { clicks: 1, impressions: 80, ctr: 1.25, position: 18 },
+      aeo: {
+        status: "partial",
+        httpStatus: 200,
+        hasFaqPage: true,
+        hasService: true,
+        hasOffer: false,
+        hasDefinition: true,
+        hasContactCta: true,
+      },
+    });
+
+    expect(priority.breakdown.businessValue).toBeGreaterThanOrEqual(11);
+    expect(priority.recommendations.join(" ")).toMatch(/Google|網站/);
+  });
+
+  it("aggregates quote funnel rows by service and search lead sources", () => {
+    const funnel = funnelFromQuoteRows(
+      [
+        { serviceType: "product", status: "sent", leadSource: "Google", count: 3 },
+        { serviceType: "product", status: "accepted", leadSource: "Website", count: 1 },
+        { serviceType: "product", status: "draft", leadSource: "HelloToby", count: 4 },
+        { serviceType: "food_beverage", status: "sent", leadSource: "Google", count: 2 },
+      ],
+      ["product"]
+    );
+    expect(funnel.leadCount).toBe(8);
+    expect(funnel.acceptedCount).toBe(1);
+    expect(funnel.searchLeads).toBe(4);
+    expect(funnel.winRate).toBe(12.5);
+  });
+
+  it("matches Ads search terms to a service profile and query", () => {
+    const terms: GoogleAdsSearchTerm[] = [
+      {
+        searchTerm: "香港產品攝影報價",
+        campaignName: "Search",
+        adGroupName: "產品",
+        impressions: 40,
+        clicks: 6,
+        costHKD: 90,
+        conversions: 2,
+        ctr: 15,
+      },
+      {
+        searchTerm: "珠寶攝影",
+        campaignName: "Search",
+        adGroupName: "珠寶",
+        impressions: 20,
+        clicks: 2,
+        costHKD: 30,
+        conversions: 0,
+        ctr: 10,
+      },
+    ];
+    const summary = searchTermSummary(terms, {
+      id: "product",
+      label: "產品攝影",
+      path: "/services/product-photography",
+      serviceTypes: ["product"],
+      terms: ["產品", "商品", "product"],
+    }, "香港產品攝影報價");
+    expect(summary.termCount).toBe(1);
+    expect(summary.conversions).toBe(2);
+    expect(summary.topTerms[0]).toBe("香港產品攝影報價");
   });
 
   it("keeps Hong Kong commercial photography queries and rejects non-commercial research queries", () => {
@@ -133,6 +219,7 @@ describe("SEO + Ads + AEO priority model", () => {
         avgCpcHKD: 5,
         weightedQualityScore: 5,
         lowQualitySpendHKD: 50,
+        conversions: 1,
       },
       organic: { clicks: 2, impressions: 150, ctr: 1.33, position: 14 },
       aeo: {
@@ -145,9 +232,12 @@ describe("SEO + Ads + AEO priority model", () => {
         hasContactCta: true,
       },
       difficulty: 24,
+      funnel: { leadCount: 6, acceptedCount: 2, searchLeads: 2, winRate: 33.3 },
+      searchTerms: { termCount: 1, conversions: 1, spendHKD: 40, clicks: 8, topTerms: ["香港產品攝影"] },
     });
 
     expect(score.total).toBeGreaterThan(70);
     expect(score.ahrefsFeasibility).toBe(13);
+    expect(score.paidIntent).toBeGreaterThan(10);
   });
 });

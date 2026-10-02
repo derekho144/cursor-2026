@@ -9,7 +9,9 @@ import {
 } from "./googleSearchConsole";
 import {
   fetchKeywordQualityScores,
+  fetchSearchTermInsights,
   type GoogleAdsKeywordQuality,
+  type GoogleAdsSearchTerm,
 } from "./googleAds";
 
 /**
@@ -19,7 +21,14 @@ import {
  * than attempting to predict rankings. It uses four visible components:
  * business value (0-40), paid-search friction (0-25), organic opportunity
  * (0-25), and AEO/page readiness gap (0-10).
+ *
+ * System data enrichment (fail-soft when unavailable):
+ * - Quote funnel + leadSource (Google / Website) for demand validation
+ * - Ads search_term_view conversions for paid commercial proof
  */
+
+/** Lead sources that indicate SEO / Ads / site demand (not marketplace). */
+const SEARCH_LEAD_SOURCES = new Set(["Google", "Website"]);
 
 export type AeoReadiness = "ready" | "partial" | "weak" | "unavailable";
 
@@ -40,6 +49,21 @@ export type PriorityBreakdown = {
   aeoGap: number;
 };
 
+export type QuoteFunnelSignals = {
+  leadCount: number;
+  acceptedCount: number;
+  searchLeads: number;
+  winRate: number | null;
+};
+
+export type SearchTermSignals = {
+  termCount: number;
+  conversions: number;
+  spendHKD: number;
+  clicks: number;
+  topTerms: string[];
+};
+
 export type ServicePriorityInput = {
   id: string;
   label: string;
@@ -54,7 +78,10 @@ export type ServicePriorityInput = {
     avgCpcHKD?: number | null;
     weightedQualityScore: number | null;
     lowQualitySpendHKD: number;
+    conversions?: number;
   };
+  funnel: QuoteFunnelSignals;
+  searchTerms: SearchTermSignals;
   organic: {
     clicks: number;
     impressions: number;
@@ -104,9 +131,17 @@ export type QueryBacklogItem = {
     avgCpcHKD: number | null;
     weightedQualityScore: number | null;
     lowQualitySpendHKD: number;
+    conversions: number;
     commercialSignal: "available" | "unavailable";
   };
-  revenue: { acceptedCount: number; acceptedRevenueHKD: number };
+  searchTerms: SearchTermSignals;
+  revenue: {
+    acceptedCount: number;
+    acceptedRevenueHKD: number;
+    leadCount: number;
+    searchLeads: number;
+    winRate: number | null;
+  };
   aeo: AeoSignals;
   ahrefs: {
     available: boolean;
@@ -259,6 +294,7 @@ function adsSummary(keywords: GoogleAdsKeywordQuality[], profile: ServiceProfile
   );
   const spendHKD = related.reduce((sum, keyword) => sum + keyword.costHKD, 0);
   const clicks = related.reduce((sum, keyword) => sum + keyword.clicks, 0);
+  const conversions = related.reduce((sum, keyword) => sum + safeNumber(keyword.conversions), 0);
   const lowQualitySpendHKD = related
     .filter((keyword) => (keyword.qualityScore ?? 10) <= 5)
     .reduce((sum, keyword) => sum + keyword.costHKD, 0);
@@ -276,12 +312,86 @@ function adsSummary(keywords: GoogleAdsKeywordQuality[], profile: ServiceProfile
     keywordCount: related.length,
     spendHKD: round(spendHKD, 2),
     clicks,
+    conversions: round(conversions, 2),
     avgCpcHKD: clicks > 0 ? round(spendHKD / clicks, 2) : null,
     lowQualitySpendHKD: round(lowQualitySpendHKD, 2),
     weightedQualityScore:
       weightedQualityScore.weight > 0
         ? round(weightedQualityScore.weighted / weightedQualityScore.weight, 1)
         : null,
+  };
+}
+
+function emptyFunnel(): QuoteFunnelSignals {
+  return { leadCount: 0, acceptedCount: 0, searchLeads: 0, winRate: null };
+}
+
+function emptySearchTerms(): SearchTermSignals {
+  return { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] };
+}
+
+export function searchTermSummary(
+  terms: GoogleAdsSearchTerm[],
+  profile: ServiceProfile,
+  query?: string
+): SearchTermSignals {
+  const queryNorm = query ? normalizedKeyword(query) : "";
+  const related = terms.filter((term) => {
+    const haystack = `${term.searchTerm} ${term.adGroupName}`;
+    if (queryNorm) {
+      const termNorm = normalizedKeyword(term.searchTerm);
+      if (
+        termNorm === queryNorm ||
+        termNorm.includes(queryNorm) ||
+        queryNorm.includes(termNorm)
+      ) {
+        return true;
+      }
+    }
+    return matchingProfile(haystack, profile);
+  });
+  // Prefer exact/near-query matches when scoring a specific backlog query.
+  const ranked = queryNorm
+    ? [...related].sort((a, b) => {
+        const aExact = normalizedKeyword(a.searchTerm) === queryNorm ? 1 : 0;
+        const bExact = normalizedKeyword(b.searchTerm) === queryNorm ? 1 : 0;
+        if (bExact !== aExact) return bExact - aExact;
+        return b.conversions - a.conversions || b.costHKD - a.costHKD;
+      })
+    : [...related].sort((a, b) => b.conversions - a.conversions || b.costHKD - a.costHKD);
+
+  const spendHKD = ranked.reduce((sum, term) => sum + term.costHKD, 0);
+  const clicks = ranked.reduce((sum, term) => sum + term.clicks, 0);
+  const conversions = ranked.reduce((sum, term) => sum + term.conversions, 0);
+  return {
+    termCount: ranked.length,
+    conversions: round(conversions, 2),
+    spendHKD: round(spendHKD, 2),
+    clicks,
+    topTerms: ranked.slice(0, 3).map((term) => term.searchTerm).filter(Boolean),
+  };
+}
+
+export function funnelFromQuoteRows(
+  rows: Array<{ serviceType: string | null; status: string | null; leadSource: string | null; count: number }>,
+  serviceTypes: string[]
+): QuoteFunnelSignals {
+  const typeSet = new Set(serviceTypes);
+  let leadCount = 0;
+  let acceptedCount = 0;
+  let searchLeads = 0;
+  for (const row of rows) {
+    if (!row.serviceType || !typeSet.has(row.serviceType)) continue;
+    const count = safeNumber(row.count);
+    leadCount += count;
+    if (row.status === "accepted") acceptedCount += count;
+    if (row.leadSource && SEARCH_LEAD_SOURCES.has(row.leadSource)) searchLeads += count;
+  }
+  return {
+    leadCount,
+    acceptedCount,
+    searchLeads,
+    winRate: leadCount > 0 ? round((acceptedCount / leadCount) * 100, 1) : null,
   };
 }
 
@@ -454,11 +564,35 @@ export function backlogScore(input: {
   organic: ReturnType<typeof gscSummary>;
   aeo: AeoSignals;
   difficulty: number | null;
+  funnel?: QuoteFunnelSignals;
+  searchTerms?: SearchTermSignals;
 }): QueryBacklogItem["breakdown"] & { total: number } {
-  const businessValue = input.maxRevenue > 0 ? round(Math.min(30, (input.revenue / input.maxRevenue) * 30)) : 0;
-  const paidIntent = input.ads.keywordCount > 0
+  let businessValue = input.maxRevenue > 0 ? round(Math.min(30, (input.revenue / input.maxRevenue) * 30)) : 0;
+  const funnel = input.funnel ?? emptyFunnel();
+  // Soft demand floor: Google/Website leads prove search intent even when accepted $ is thin.
+  if (businessValue < 12 && (funnel.searchLeads > 0 || funnel.leadCount > 0)) {
+    const funnelFloor = Math.min(
+      12,
+      (funnel.searchLeads > 0 ? 6 : 0) + Math.min(6, funnel.leadCount)
+    );
+    businessValue = Math.max(businessValue, funnelFloor);
+  } else if (funnel.searchLeads > 0) {
+    businessValue = Math.min(30, businessValue + Math.min(3, funnel.searchLeads));
+  }
+
+  let paidIntent = input.ads.keywordCount > 0
     ? round(Math.min(20, Math.min(12, input.ads.spendHKD / 8) + Math.max(0, (7 - (input.ads.weightedQualityScore ?? 7)) * 2)))
     : 0;
+  const searchTerms = input.searchTerms ?? emptySearchTerms();
+  if (searchTerms.conversions > 0) {
+    paidIntent = Math.min(20, paidIntent + Math.min(6, searchTerms.conversions * 2));
+  } else if (searchTerms.termCount > 0 && paidIntent === 0) {
+    paidIntent = Math.min(8, 3 + Math.min(5, searchTerms.spendHKD / 20));
+  } else if ((input.ads.conversions ?? 0) > 0) {
+    paidIntent = Math.min(20, paidIntent + Math.min(4, (input.ads.conversions ?? 0) * 1.5));
+  }
+  paidIntent = round(paidIntent);
+
   const organicOpportunity = input.organic.position == null ? 0
     : input.organic.position <= 20 ? 25
     : input.organic.position <= 40 ? 21
@@ -513,18 +647,37 @@ export async function inspectServicePageAeo(profile: Pick<ServiceProfile, "path"
 }
 
 export function scoreServicePriority(input: ServicePriorityInput): ServicePriority {
-  const businessValue =
+  let businessValue =
     input.maxAcceptedRevenueHKD > 0
       ? round(Math.min(40, (input.acceptedRevenueHKD / input.maxAcceptedRevenueHKD) * 40))
       : 0;
+  const funnel = input.funnel ?? emptyFunnel();
+  if (businessValue < 16 && (funnel.searchLeads > 0 || funnel.leadCount > 0)) {
+    businessValue = Math.max(
+      businessValue,
+      Math.min(16, (funnel.searchLeads > 0 ? 8 : 0) + Math.min(8, funnel.leadCount))
+    );
+  } else if (funnel.searchLeads > 0) {
+    businessValue = Math.min(40, businessValue + Math.min(4, funnel.searchLeads));
+  }
 
-  const hasPaidSignal = input.ads.keywordCount > 0 || input.ads.spendHKD > 0;
+  const searchTerms = input.searchTerms ?? emptySearchTerms();
+  const hasPaidSignal =
+    input.ads.keywordCount > 0 ||
+    input.ads.spendHKD > 0 ||
+    searchTerms.termCount > 0 ||
+    (input.ads.conversions ?? 0) > 0;
   const qualityGap = input.ads.weightedQualityScore != null
     ? Math.max(0, Math.min(10, (7 - input.ads.weightedQualityScore) * 2))
     : 0;
-  const paidSearchFriction = hasPaidSignal
-    ? round(Math.min(25, Math.min(15, input.ads.spendHKD / 8) + qualityGap))
+  let paidSearchFriction = hasPaidSignal
+    ? round(Math.min(25, Math.min(15, Math.max(input.ads.spendHKD, searchTerms.spendHKD) / 8) + qualityGap))
     : 0;
+  if (searchTerms.conversions > 0) {
+    // Converting search terms raise urgency to fix landing/QS alignment.
+    paidSearchFriction = Math.min(25, paidSearchFriction + Math.min(5, searchTerms.conversions * 2));
+  }
+  paidSearchFriction = round(paidSearchFriction);
 
   let organicOpportunity = 0;
   if (input.organic.impressions > 0 && input.organic.position != null) {
@@ -560,12 +713,21 @@ export function scoreServicePriority(input: ServicePriorityInput): ServicePriori
   if (hasPaidSignal && ((input.ads.weightedQualityScore ?? 10) < 6 || input.ads.lowQualitySpendHKD > 0)) {
     recommendations.push("檢視 Ads 關鍵字、RSA 文案與此落地頁是否同一服務意圖；先改善相關性，再考慮提高競價。");
   }
+  if (searchTerms.conversions > 0) {
+    recommendations.push(
+      `Ads 搜尋字詞已有 ${searchTerms.conversions} 次轉換（例：${searchTerms.topTerms.slice(0, 2).join("、") || "相關字詞"}）；優先對齊落地頁與 RSA。`
+    );
+  } else if (funnel.searchLeads > 0 && (input.organic.position == null || input.organic.position > 10)) {
+    recommendations.push(
+      `近窗有 ${funnel.searchLeads} 個 Google／網站來源詢價；補強服務頁報價 FAQ 與內部連結，把搜尋需求收成。`
+    );
+  }
   if (recommendations.length === 0) {
     recommendations.push("維持現有頁面品質並累積案例、客戶評價及可引用的本地服務資料。");
   }
 
   const availableSources = [
-    input.acceptedRevenueHKD > 0 || input.acceptedCount > 0,
+    input.acceptedRevenueHKD > 0 || input.acceptedCount > 0 || funnel.leadCount > 0,
     hasPaidSignal,
     input.organic.impressions > 0,
     input.aeo.status !== "unavailable",
@@ -608,9 +770,32 @@ export async function getGrowthPriorities(days = 28) {
         .groupBy(quotes.serviceType)
     : Promise.resolve([] as Array<{ serviceType: string; acceptedCount: number; acceptedRevenueHKD: number }>);
 
+  const quoteFunnelPromise = db
+    ? db
+        .select({
+          serviceType: quotes.serviceType,
+          status: quotes.status,
+          leadSource: quotes.leadSource,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(quotes)
+        .where(gte(quotes.createdAt, since))
+        .groupBy(quotes.serviceType, quotes.status, quotes.leadSource)
+    : Promise.resolve(
+        [] as Array<{ serviceType: string | null; status: string | null; leadSource: string | null; count: number }>
+      );
+
   const adsPromise = fetchKeywordQualityScores(safeDays, 150)
     .then((keywords) => ({ available: true as const, keywords, error: null }))
     .catch((error: unknown) => ({ available: false as const, keywords: [] as GoogleAdsKeywordQuality[], error: error instanceof Error ? error.message : String(error) }));
+
+  const searchTermsPromise = fetchSearchTermInsights(safeDays, 200)
+    .then((terms) => ({ available: true as const, terms, error: null }))
+    .catch((error: unknown) => ({
+      available: false as const,
+      terms: [] as GoogleAdsSearchTerm[],
+      error: error instanceof Error ? error.message : String(error),
+    }));
 
   const gscPromise = (async () => {
     try {
@@ -637,9 +822,11 @@ export async function getGrowthPriorities(days = 28) {
     }
   })();
 
-  const [acceptedRevenueRows, ads, gsc, aeoRows] = await Promise.all([
+  const [acceptedRevenueRows, quoteFunnelRows, ads, searchTerms, gsc, aeoRows] = await Promise.all([
     acceptedRevenuePromise,
+    quoteFunnelPromise,
     adsPromise,
+    searchTermsPromise,
     gscPromise,
     Promise.all(SERVICE_PROFILES.map((profile) => inspectServicePageAeo(profile))),
   ]);
@@ -662,6 +849,12 @@ export async function getGrowthPriorities(days = 28) {
       },
       { acceptedCount: 0, acceptedRevenueHKD: 0 }
     );
+    const funnel = funnelFromQuoteRows(quoteFunnelRows, profile.serviceTypes);
+    // Prefer accepted revenue query for acceptedCount/revenue; funnel fills lead volume.
+    const mergedFunnel: QuoteFunnelSignals = {
+      ...funnel,
+      acceptedCount: revenue.acceptedCount || funnel.acceptedCount,
+    };
 
     const pageRows = gsc.pageRows.filter((row) => row.keys?.[0]?.includes(profile.path));
     const queryRows = gsc.queryRows.filter((row) => matchingProfile(row.keys?.[0] ?? "", profile));
@@ -678,6 +871,8 @@ export async function getGrowthPriorities(days = 28) {
       acceptedRevenueHKD: round(revenue.acceptedRevenueHKD, 2),
       maxAcceptedRevenueHKD: 0,
       ads: adsSummary(ads.keywords, profile),
+      funnel: mergedFunnel,
+      searchTerms: searchTermSummary(searchTerms.terms, profile),
       organic: combinedOrganic,
       aeo: aeoRows[index],
     };
@@ -725,7 +920,17 @@ export async function getGrowthPriorities(days = 28) {
 
   const ahrefs = await fetchAhrefsSnapshot(candidateRows.map(({ query }) => query));
   const revenueByProfile = new Map(
-    draftInputs.map((input) => [input.id, { acceptedCount: input.acceptedCount, acceptedRevenueHKD: input.acceptedRevenueHKD }])
+    draftInputs.map((input) => [
+      input.id,
+      {
+        acceptedCount: input.acceptedCount,
+        acceptedRevenueHKD: input.acceptedRevenueHKD,
+        leadCount: input.funnel.leadCount,
+        searchLeads: input.funnel.searchLeads,
+        winRate: input.funnel.winRate,
+        funnel: input.funnel,
+      },
+    ])
   );
   const backlog: QueryBacklogItem[] = candidateRows.map(({ row, query, profile }) => {
     const service = profile!;
@@ -734,7 +939,16 @@ export async function getGrowthPriorities(days = 28) {
     const previousOrganic = gscSummary(previousRow ? [previousRow] : []);
     const positionTrend = gscPositionTrend(organic.position, previousOrganic.position);
     const adsForService = adsSummary(ads.keywords, service);
-    const revenue = revenueByProfile.get(service.id) ?? { acceptedCount: 0, acceptedRevenueHKD: 0 };
+    const querySearchTerms = searchTermSummary(searchTerms.terms, service, query);
+    const revenueRow = revenueByProfile.get(service.id);
+    const revenue = {
+      acceptedCount: revenueRow?.acceptedCount ?? 0,
+      acceptedRevenueHKD: revenueRow?.acceptedRevenueHKD ?? 0,
+      leadCount: revenueRow?.leadCount ?? 0,
+      searchLeads: revenueRow?.searchLeads ?? 0,
+      winRate: revenueRow?.winRate ?? null,
+    };
+    const funnel = revenueRow?.funnel ?? emptyFunnel();
     const aeo = aeoByService.get(service.id) ?? {
       status: "unavailable" as const,
       httpStatus: null,
@@ -756,6 +970,8 @@ export async function getGrowthPriorities(days = 28) {
       organic,
       aeo,
       difficulty: metric?.difficulty ?? null,
+      funnel,
+      searchTerms: querySearchTerms,
     });
 
     const content: string[] = [];
@@ -765,20 +981,27 @@ export async function getGrowthPriorities(days = 28) {
     if (!aeo.hasOffer) content.push("補足 Offer／OfferCatalog 結構化資料及可見的服務範圍與報價 CTA。");
     if (metric?.serpFeatures.includes("local_pack")) content.push("SERP 有本地圖包：補強一致的香港本地實體、服務區與案例佐證。");
     if (metric?.serpFeatures.includes("ai_overview")) content.push("SERP 有 AI Overview：加入可引用的定義、流程、數字與精簡問答。");
+    if (querySearchTerms.conversions > 0) {
+      content.push(
+        `Ads 搜尋字詞已驗證轉換（${querySearchTerms.conversions}）：${querySearchTerms.topTerms.slice(0, 2).join("、") || query}。`
+      );
+    }
 
     const actions = [
       `目標頁：${service.path}`,
       organic.position != null && organic.position <= 20
         ? "先更新現有服務頁，不急於新建相近頁面，避免關鍵字互相競爭。"
         : "評估以現有服務頁為主，必要時再新增支援內容頁並以內鏈導回服務頁。",
-      ads.available && adsForService.keywordCount > 0
-        ? "用 Ads 關鍵字與 RSA 用語核對此頁的主標題、CTA 與服務意圖是否完全一致。"
-        : "等待 Google Ads 權限恢復後，自動補入 CPC、QS 與商業意圖訊號。",
+      ads.available && (adsForService.keywordCount > 0 || querySearchTerms.termCount > 0)
+        ? querySearchTerms.conversions > 0
+          ? "用已轉換的 Ads 搜尋字詞核對此頁主標題、CTA 與服務意圖是否一致。"
+          : "用 Ads 關鍵字與 RSA 用語核對此頁的主標題、CTA 與服務意圖是否完全一致。"
+        : "等待 Google Ads 權限恢復後，自動補入 CPC、QS、搜尋字詞與轉換訊號。",
     ];
 
     const sourceCount = [
-      revenue.acceptedRevenueHKD > 0 || revenue.acceptedCount > 0,
-      ads.available,
+      revenue.acceptedRevenueHKD > 0 || revenue.acceptedCount > 0 || revenue.leadCount > 0,
+      ads.available || searchTerms.available,
       gsc.available,
       aeo.status !== "unavailable",
       ahrefs.available && metric != null,
@@ -786,7 +1009,7 @@ export async function getGrowthPriorities(days = 28) {
     const confidence: QueryBacklogItem["confidence"] =
       sourceCount >= 4 ? "high" : sourceCount >= 2 ? "medium" : "limited";
     const commercialSignal: QueryBacklogItem["ads"]["commercialSignal"] =
-      ads.available ? "available" : "unavailable";
+      ads.available || searchTerms.available ? "available" : "unavailable";
 
     return {
       id: `${service.id}:${normalizedKeyword(query)}`,
@@ -798,6 +1021,7 @@ export async function getGrowthPriorities(days = 28) {
       confidence,
       organic: { ...organic, previousPosition: previousOrganic.position, positionChange: positionTrend.change, positionTrend: positionTrend.trend },
       ads: { ...adsForService, commercialSignal },
+      searchTerms: querySearchTerms,
       revenue,
       aeo,
       ahrefs: {
@@ -835,8 +1059,18 @@ export async function getGrowthPriorities(days = 28) {
     generatedAt: new Date().toISOString(),
     window: { days: safeDays, startDate, endDate },
     sources: {
-      revenue: { available: Boolean(db), acceptedStatuses: ["accepted"] },
-      googleAds: { available: ads.available, error: ads.error },
+      revenue: {
+        available: Boolean(db),
+        acceptedStatuses: ["accepted"],
+        funnel: Boolean(db),
+        searchLeadSources: ["Google", "Website"],
+      },
+      googleAds: {
+        available: ads.available || searchTerms.available,
+        keywords: ads.available,
+        searchTerms: searchTerms.available,
+        error: ads.error ?? searchTerms.error,
+      },
       googleSearchConsole: { available: gsc.available, siteUrl: gsc.siteUrl, error: gsc.error },
       livePageAudit: { available: aeoRows.some((row) => row.status !== "unavailable") },
       ahrefs: { available: ahrefs.available, error: ahrefs.error, cached: ahrefs.cached, cacheHours: 24 },
@@ -844,8 +1078,8 @@ export async function getGrowthPriorities(days = 28) {
     methodology: {
       scoreOutOf: 100,
       components: [
-        { label: "已接受報價收入", max: 40, meaning: "近窗已接受收入越高，優先度越高" },
-        { label: "Ads 摩擦", max: 25, meaning: "已有花費且 QS／落地頁相關性出現缺口" },
+        { label: "已接受報價收入", max: 40, meaning: "近窗已接受收入 + Google／網站詢價 funnel 佐證" },
+        { label: "Ads 摩擦", max: 25, meaning: "關鍵字 QS／花費缺口 + 搜尋字詞轉換訊號" },
         { label: "自然搜尋機會", max: 25, meaning: "已有曝光但尚未穩定在第一頁" },
         { label: "AEO 頁面缺口", max: 10, meaning: "FAQ、Service、Offer、可見定義與 CTA 未齊" },
       ],
@@ -854,8 +1088,8 @@ export async function getGrowthPriorities(days = 28) {
     backlog,
     backlogDefinition: {
       limit: 10,
-      selection: "GSC 有曝光、商業＋香港服務意圖且平均位置大於 10 的 query；以接近第一頁、曝光和可執行性排序。",
-      automaticRefresh: "頁面開啟時會重新讀取可用來源；Google Ads 與 Ahrefs 連線恢復時會自動補齊分數。Ahrefs 成功結果快取 24 小時；失敗只快取 5 分鐘，避免重複 API 呼叫。",
+      selection: "GSC 有曝光、商業＋香港服務意圖且平均位置大於 10 的 query；以接近第一頁、曝光和可執行性排序；分數會用報價 funnel（leadSource）與 Ads 搜尋字詞轉換作商業驗證。",
+      automaticRefresh: "頁面開啟時會重新讀取可用來源；Google Ads（關鍵字 QS + search terms）與 Ahrefs 連線恢復時會自動補齊分數。Ahrefs 成功結果快取 24 小時；失敗只快取 5 分鐘，避免重複 API 呼叫。",
     },
   };
 }

@@ -502,9 +502,10 @@ export default function GrowthPriorities() {
 
         <section className="flex flex-wrap items-center gap-2 text-xs">
           <span className="mr-1 text-muted-foreground">資料來源：</span>
-          <SourceBadge ok={Boolean(data?.sources.revenue.available)} label="已接受報價" />
+          <SourceBadge ok={Boolean(data?.sources.revenue.available)} label="報價 funnel" />
           <SourceBadge ok={Boolean(data?.sources.googleSearchConsole.available)} label="Search Console" />
           <SourceBadge ok={Boolean(data?.sources.googleAds.available)} label="Google Ads" />
+          <SourceBadge ok={Boolean(data?.sources.googleAds.searchTerms)} label="Ads 搜尋字詞" />
           <SourceBadge ok={Boolean(data?.sources.ahrefs.available)} label="Ahrefs" />
           <SourceBadge ok={Boolean(data?.sources.livePageAudit.available)} label="Live AEO 檢查" />
           {data?.sources.ahrefs.cached && <span className="text-[10px] text-muted-foreground">Ahrefs 使用快取結果</span>}
@@ -701,10 +702,10 @@ export default function GrowthPriorities() {
 
                         <div className="grid min-w-full grid-cols-2 gap-x-5 gap-y-3 text-xs sm:min-w-[570px] sm:grid-cols-5">
                           <Metric label="GSC 位置" value={item.organic.position == null ? "—" : <span className="inline-flex items-center gap-1">第 {item.organic.position} {gscPositionTrend(item.organic)}</span>} hint={<span>{number(item.organic.impressions)} 曝光 · CTR {item.organic.ctr}%{item.organic.previousPosition != null ? ` · 前期第 ${item.organic.previousPosition}` : ""}</span>} />
-                          <Metric label="Ads 商業意圖" value={item.ads.commercialSignal === "available" ? `${item.ads.keywordCount} 個關鍵字` : "待授權"} hint={item.ads.commercialSignal === "available" ? `${item.ads.clicks} clicks · ${currency(item.ads.spendHKD)}` : "恢復後自動補齊"} />
-                          <Metric label="Ads 品質" value={item.ads.weightedQualityScore == null ? "—" : `QS ${item.ads.weightedQualityScore}`} hint={item.ads.avgCpcHKD == null ? "無足夠 clicks" : `平均 CPC ${currency(item.ads.avgCpcHKD)}`} />
+                          <Metric label="Ads 商業意圖" value={item.ads.commercialSignal === "available" ? `${item.ads.keywordCount} 個關鍵字` : "待授權"} hint={item.ads.commercialSignal === "available" ? `${item.ads.clicks} clicks · ${currency(item.ads.spendHKD)}${item.ads.conversions ? ` · ${number(item.ads.conversions)} 轉換` : ""}` : "恢復後自動補齊"} />
+                          <Metric label="Ads 搜尋字詞" value={item.searchTerms.termCount ? `${item.searchTerms.termCount} 個字詞` : "—"} hint={item.searchTerms.termCount ? `${number(item.searchTerms.conversions)} 轉換 · ${item.searchTerms.topTerms.slice(0, 2).join("、") || "相關字詞"}` : "無匹配字詞"} />
                           <Metric label="Ahrefs 難度" value={item.ahrefs.available ? `KD ${number(item.ahrefs.difficulty)}` : "待連線"} hint={item.ahrefs.available ? `Volume ${number(item.ahrefs.volume)}` : "恢復後自動補齊"} />
-                          <Metric label="商業價值" value={currency(item.revenue.acceptedRevenueHKD)} hint={`${item.revenue.acceptedCount} 個已接受報價`} />
+                          <Metric label="商業價值" value={currency(item.revenue.acceptedRevenueHKD)} hint={`${item.revenue.acceptedCount} 接受 · ${item.revenue.leadCount} 詢價${item.revenue.searchLeads ? ` · ${item.revenue.searchLeads} 搜尋來源` : ""}`} />
                         </div>
                       </div>
 
