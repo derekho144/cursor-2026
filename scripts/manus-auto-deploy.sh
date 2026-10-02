@@ -148,6 +148,8 @@ def verify_hosting() -> None:
 
 def verify_live_revision() -> None:
     """Fail if published site still serves a stale client (Manus sync gap)."""
+    import re
+
     marker_path = os.path.join(root, "client/public/deploy-revision.txt")
     expected = ""
     if os.path.isfile(marker_path):
@@ -160,13 +162,24 @@ def verify_live_revision() -> None:
         "https://www.jdsys.biz/deploy-revision.txt",
         "https://jdsys.manus.space/deploy-revision.txt",
     ]
-    # Also require merged Ad Expenses UI strings in the main JS bundle.
+    # Unified Ad Expenses page markers live in the lazy AdExpenses chunk (not index).
     must_have = ["Ad Spend & Monthly Report", "ad-expenses-report", "開支記錄"]
-    must_not = ['id:"reports",label:"月度報表",path:"/reports"']
+    must_not = [
+        'id:"reports",label:"月度報表",path:"/reports"',
+        "ad-expenses-tabs",
+    ]
+    stale_versions = {"8043430f", "b7c0ce4d"}
     last_err = ""
     for attempt in range(10):
         ok = True
+        st = api("GET", f"website.status?website_id={website_id}")
+        vid = str(st.get("version_id") or "")
+        if vid in stale_versions:
+            ok = False
+            last_err = f"website still on stale version_id={vid}"
         for url in urls:
+            if not ok:
+                break
             try:
                 body = subprocess.check_output(
                     ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", url],
@@ -188,35 +201,50 @@ def verify_live_revision() -> None:
                     text=True,
                     timeout=30,
                 )
-                import re
-
                 m = re.search(r'src="(/assets/index-[^"]+\.js)"', html)
                 if not m:
                     ok = False
                     last_err = "index.html has no /assets/index-*.js"
                 else:
-                    js_url = "https://jdsys.biz" + m.group(1)
-                    js = subprocess.check_output(
-                        ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", js_url],
+                    index_js = subprocess.check_output(
+                        [
+                            "curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0",
+                            "https://jdsys.biz" + m.group(1),
+                        ],
                         text=True,
                         timeout=60,
                     )
+                    # Resolve lazy AdExpenses chunk from the index bundle.
+                    chunk = re.search(r'(AdExpenses-[A-Za-z0-9_-]+\.js)', index_js)
+                    js_urls = ["https://jdsys.biz" + m.group(1)]
+                    if chunk:
+                        js_urls.append("https://jdsys.biz/assets/" + chunk.group(1))
+                    combined = index_js
+                    for ju in js_urls[1:]:
+                        combined += subprocess.check_output(
+                            ["curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0", ju],
+                            text=True,
+                            timeout=60,
+                        )
                     for needle in must_have:
-                        if needle not in js:
+                        if needle not in combined:
                             ok = False
-                            last_err = f"live JS missing {needle!r}"
+                            last_err = f"live JS/AdExpenses chunk missing {needle!r}"
                             break
                     if ok:
                         for needle in must_not:
-                            if needle in js:
+                            if needle in combined:
                                 ok = False
-                                last_err = f"live JS still has stale nav {needle!r}"
+                                last_err = f"live JS still has stale UI {needle!r}"
                                 break
             except Exception as exc:  # noqa: BLE001
                 ok = False
                 last_err = str(exc)
         if ok:
-            print("manus-auto-deploy: live revision OK (deploy-revision + Ad Expenses merge UI)")
+            print(
+                "manus-auto-deploy: live revision OK "
+                f"(deploy-revision + unified Ad Expenses UI; version_id={vid})"
+            )
             return
         print(f"manus-auto-deploy: live revision not ready (attempt {attempt + 1}/10): {last_err}")
         time.sleep(6)
@@ -228,8 +256,14 @@ def verify_live_revision() -> None:
     sys.exit(10)
 
 
-def do_publish(*, verify: bool = True) -> None:
-    print(f"manus-auto-deploy: website.publish {website_id} …")
+def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None:
+    stale_versions = {"8043430f", "b7c0ce4d"}
+    before = api("GET", f"website.status?website_id={website_id}")
+    before_vid = str(before.get("version_id") or "")
+    print(
+        f"manus-auto-deploy: website.publish {website_id} "
+        f"(current version_id={before_vid or '?'}) …"
+    )
     pub = api(
         "POST",
         "website.publish",
@@ -250,11 +284,13 @@ def do_publish(*, verify: bool = True) -> None:
         sys.exit(3)
 
     published = False
+    final_vid = ""
     for _ in range(60):
         st = api("GET", f"website.status?website_id={website_id}")
         ps = st.get("publish_status")
+        final_vid = str(st.get("version_id") or "")
         print(
-            f"publish_status: {ps} version={st.get('version_id')} urls={st.get('site_urls')}"
+            f"publish_status: {ps} version={final_vid} urls={st.get('site_urls')}"
         )
         if ps == "published":
             published = True
@@ -266,6 +302,18 @@ def do_publish(*, verify: bool = True) -> None:
     if not published:
         print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
         sys.exit(3)
+
+    if require_new_version and (
+        final_vid in stale_versions
+        or (before_vid in stale_versions and final_vid == before_vid)
+    ):
+        print(
+            "manus-auto-deploy: REFUSING stale publish — "
+            f"version_id={final_vid} is not a new unified-page checkpoint. "
+            "JD SYS must save a new checkpoint after syncing GitHub main, then re-publish.",
+            file=sys.stderr,
+        )
+        sys.exit(11)
 
     if verify:
         verify_hosting()
@@ -325,22 +373,24 @@ prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 syn
 2. **檔案硬核對（全部要過，否則唔好 checkpoint）**：
    - `client/src/components/DashboardLayout.tsx`：menu **唔可以**有 `id: "reports"` / label「月度報表」獨立項
    - `client/src/pages/MonthlyReport.tsx`：必須係 `Redirect` 去 `/ad-expenses?tab=report`
-   - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`（單一頁：分析＋記錄）
-   - `client/public/deploy-revision.txt`：必須存在且含首行 marker（或 `{sha}`）
+   - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔可以**有 `ad-expenses-tabs`（單一頁：分析＋記錄，無 tabs）
+   - `client/public/deploy-revision.txt`：首行必須係 `unified-ad-expenses-report-v2`（或至少含 `{sha}`）
 3. 執行 frontend production build（`npm run build` 或專案既定 build），確保 `dist/public`／網站靜態資產已更新
-4. 保存 checkpoint（version）
-5. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
-6. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
-7. 驗證：
-   - `https://jdsys.biz/deploy-revision.txt` 含本地 marker／`{sha}`
-   - live JS／chunk 含 `Ad Spend & Monthly Report` 同 `開支記錄`，且 **唔含** 舊 nav `id:"reports",label:"月度報表",path:"/reports"`
-8. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
+4. **授權**：為保存 checkpoint，允許 WebDev workspace 內 commit／merge／清理 conflict／暫存 version.json；GitHub 業務內容必須保持與 main@{full} 一致。同意移除阻擋 checkpoint 的大型本地資產副本（保留 File Storage）。
+5. 保存 **全新** checkpoint — `version_id` **禁止** 再係 `8043430f` 或 `b7c0ce4d`
+6. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
+7. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
+8. 驗證：
+   - `https://jdsys.biz/deploy-revision.txt` 含 `unified-ad-expenses-report-v2`
+   - live `AdExpenses-*.js` 含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔含** `ad-expenses-tabs` 同舊 nav `id:"reports",label:"月度報表",path:"/reports"`
+9. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
 
 規則：
 - 唔好另開無關標準 task 做 production 發佈
 - 唔好改業務代碼（只 sync／build／checkpoint／publish）
 - **禁止** Railway origin
 - GitHub main 係唯一來源
+- 若 checkpoint 再問確認：直接繼續，唔好停止
 """
 
 print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} (profile={agent_profile}) …")
@@ -408,14 +458,17 @@ while time.time() < deadline:
                         "task_id": task_id,
                         "message": {
                             "content": (
-                                "同意移除本地副本。"
-                                "【明確確認】繼續原定 production 範圍："
-                                f"sync GitHub main → 刪除阻擋 checkpoint 的大型本地資產副本"
+                                "同意。同意移除本地副本。"
+                                "【明確授權】繼續 production："
+                                f"sync GitHub main → WebDev workspace 內 commit/merge/清理 conflict "
+                                f"（業務內容必須對齊 GitHub main）→ "
+                                f"刪除阻擋 checkpoint 的大型本地資產副本"
                                 f"（保留 File Storage／manus-storage 引用）→ "
-                                f"npm run build → 新 checkpoint（version 必須唔同舊版）→ "
+                                f"npm run build → 新 checkpoint（version_id 禁止 8043430f/b7c0ce4d）→ "
                                 f"website.publish (website_id={website_id}, visibility=public) → "
-                                "驗證 jdsys.biz live 已係新碼。唔切舊 task、唔改業務代碼、唔改 DNS/Railway。"
-                                "唔使再問。"
+                                "驗證 deploy-revision=unified-ad-expenses-report-v2 且 "
+                                "AdExpenses chunk 有 ad-expenses-report、無 ad-expenses-tabs。"
+                                "唔切舊 task、唔改業務代碼、唔改 DNS/Railway。唔使再問。"
                             )
                         },
                         "agent_profile": agent_profile,
