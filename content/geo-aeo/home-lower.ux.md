@@ -22,7 +22,7 @@
 | Close | `AKE_Cariam-2-Product-Shot-0324.jpg` |
 
 ## Journey
-1. Statement + short definition  
+1. Italic cream EN tagline (agency personality) + one-line EN support  
 2. Subtle wayfinding: 服務 · 常見問題 · 查詢  
 3. Service wall — name only  
 4. FAQ ×3 (booking / location / start)  
