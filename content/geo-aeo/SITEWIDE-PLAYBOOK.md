@@ -106,7 +106,8 @@ Confirm `/services/interior-photography` still has definition + pricing table + 
 11. Contact (LocalBusiness/ContactPage polish)  
 12. Ensure each pricing blog has `Article`/`BlogPosting` + FAQ + speaks to service page  
 
-**After each page:** Publish Squarespace → report checklist → move next.  
+**Roles:** Cursor implements the Code Block / content in GitHub. **Manus merges + publishes Squarespace** — do not ask Derek to paste blocks as the deploy step.  
+**After each page:** Manus Publish Squarespace → report checklist → move next.  
 **Login:** If Squarespace login required, wait for Derek「Squarespace 已登入」then continue without re-asking.
 
 ---

@@ -1,0 +1,22 @@
+---
+description: Cursor modifies code; Manus merges and publishes
+alwaysApply: true
+---
+
+# Cursor vs Manus roles
+
+**Cursor (this agent):** implement and verify code / content changes in GitHub.  
+**Manus:** merge to `main` and publish the target surface. Do **not** ask Derek to manually paste Code Blocks or notify Manus.
+
+## Surfaces
+
+| Surface | After Cursor lands the change |
+|---|---|
+| `jdsys.biz` (JD SYS) | Commit on `origin/main` → `bash scripts/manus-auto-deploy.sh` |
+| `www.jdstudiohk.com` (Squarespace AEO / homepage blocks) | Push branch/PR → instruct Manus to **merge PR + apply Code Block + Publish Squarespace** (not `website.publish` for jdsys) |
+
+## Do not
+
+- End a Squarespace change by dumping paste instructions as Derek’s job
+- Treat “give user the codeblock to copy” as the deploy step when Manus can publish
+- Publish `jdsys.biz` for Squarespace-only workstreams
