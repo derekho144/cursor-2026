@@ -80,7 +80,7 @@ export default function MonthlyReportPanel({
             Monthly Report
           </div>
           <h2 className="text-lg font-light">月度廣告報表</h2>
-          <p className="mt-1 text-xs text-muted-foreground">與「記錄」共用同一套廣告開支資料；含 MoM、詢價／成交與 CPC。</p>
+          <p className="mt-1 text-xs text-muted-foreground">只讀分析：MoM、平台佔比、全年趨勢、詢價／成交／CPC。改數請返「記錄」分頁。</p>
         </div>
         {!hideExport && (
           <button

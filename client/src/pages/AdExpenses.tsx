@@ -2,7 +2,6 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from "recharts";
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Receipt, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -101,17 +100,6 @@ export default function AdExpenses() {
     onError: () => toast.error("刪除失敗"),
   });
 
-  const chartData = useMemo(() => {
-    if (!summary) return [];
-    const monthMap: Record<number, Record<string, number | string>> = {};
-    for (const row of summary) {
-      const m = row.month;
-      if (!monthMap[m]) monthMap[m] = { month: m, monthLabel: `${m}月` };
-      monthMap[m][row.platform] = Number(row.amount);
-    }
-    return Object.values(monthMap).sort((a, b) => Number(a.month) - Number(b.month));
-  }, [summary]);
-
   const platformTotals = useMemo(() => {
     if (!summary) return {} as Record<string, { expense: number; refund: number }>;
     const totals: Record<string, { expense: number; refund: number }> = {};
@@ -163,7 +151,7 @@ export default function AdExpenses() {
               Ad Spend & Monthly Report
             </div>
             <h1 className="text-2xl font-light">廣告開支</h1>
-            <p className="mt-1 text-xs text-muted-foreground">記錄與月度報表已合併；共用年月篩選與同一套開支資料。</p>
+            <p className="mt-1 text-xs text-muted-foreground">記錄＝輸入／改數；月度報表＝MoM、佔比、詢價成交與匯出。兩邊同一套開支資料，圖表只放報表。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {activeTab === "records" ? (
@@ -223,8 +211,8 @@ export default function AdExpenses() {
 
         <Tabs value={activeTab} onValueChange={(v) => setTab(v as AdExpenseTab)}>
           <TabsList className="mb-2" style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.15)" }} data-testid="ad-expenses-tabs">
-            <TabsTrigger value="records">記錄</TabsTrigger>
-            <TabsTrigger value="report">月度報表</TabsTrigger>
+            <TabsTrigger value="records">記錄（編輯）</TabsTrigger>
+            <TabsTrigger value="report">月度報表（分析）</TabsTrigger>
           </TabsList>
 
           <TabsContent value="report" className="mt-4">
@@ -279,52 +267,9 @@ export default function AdExpenses() {
           })}
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded p-6" style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.15)" }}>
-            <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", color: "#d4a843", textTransform: "uppercase", marginBottom: "4px" }}>
-              Monthly Breakdown
-            </div>
-            <h3 className="text-sm font-light mb-4">{selectedYear} 年月度開支分佈</h3>
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="monthLabel" tick={{ fill: "#666", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#666", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(212,168,67,0.3)", borderRadius: "4px", fontSize: "12px" }} labelStyle={{ color: "#d4a843" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  {PLATFORMS.map((p) => (
-                    <Bar key={p.value} dataKey={p.value} name={p.label} fill={p.color} radius={[2, 2, 0, 0]} maxBarSize={16} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">尚無資料</div>
-            )}
-          </div>
-
-          <div className="rounded p-6" style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.15)" }}>
-            <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", color: "#d4a843", textTransform: "uppercase", marginBottom: "4px" }}>
-              Trend Analysis
-            </div>
-            <h3 className="text-sm font-light mb-4">各平台月度趨勢</h3>
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="monthLabel" tick={{ fill: "#666", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#666", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(212,168,67,0.3)", borderRadius: "4px", fontSize: "12px" }} labelStyle={{ color: "#d4a843" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  {PLATFORMS.map((p) => (
-                    <Line key={p.value} type="monotone" dataKey={p.value} name={p.label} stroke={p.color} strokeWidth={1.5} dot={{ r: 3, fill: p.color }} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">尚無資料</div>
-            )}
-          </div>
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          趨勢／佔比／MoM 圖表已集中喺「月度報表」分頁；呢度只保留平台總覽方便對帳同改數。
+        </p>
 
         {/* Table */}
         <div className="rounded overflow-hidden overflow-x-auto" style={{ border: "1px solid rgba(212,168,67,0.15)" }}>
