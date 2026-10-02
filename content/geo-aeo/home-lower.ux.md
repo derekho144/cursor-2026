@@ -6,6 +6,7 @@
 - No prices on homepage tiles / FAQ
 - **Own work only** — JD Studio portfolio frames (Squarespace CDN; food crab hosted from repo until uploaded to Asset Library)
 - Strict 4×2 wall, 4:5 cover crop, shared CSS grade
+- Preserve palette: `#050507` / gold `#c9a962` / Noto Sans TC — not a dashboard
 
 ## Tile sources
 | Service | File |
@@ -22,9 +23,18 @@
 
 ## Journey
 1. Statement + short definition  
-2. Service wall — name only  
-3. FAQ ×3 (booking / location / start)  
-4. WhatsApp close  
+2. Subtle wayfinding: 服務 · 常見問題 · 查詢  
+3. Service wall — name only  
+4. FAQ ×3 (booking / location / start)  
+5. WhatsApp close  
+
+## UX notes (UI pass)
+- **Loading:** `.ph::before` shimmer skeleton; fades when `.is-ready` (minimal JS on img load/error)
+- **Feedback:** tile hover dim-siblings + gold underline; `:active` press scale; CTA hover lift + darker press
+- **Hierarchy:** display statement → gold section labels → FAQ secondary → CTA destination
+- **Nav:** intro `.way` anchors only — not a sticky app bar
+- **a11y:** stronger muted contrast (`--mut`/`--dim`); `aria-label` on tiles; 2px gold `focus-visible`; `prefers-reduced-motion` kills shimmer/transforms
+- **Whitespace:** slightly tighter vertical rhythm between sections; even tile/caption gaps
 
 ## Squarespace
 One Code Block; section background `#050507`.  
