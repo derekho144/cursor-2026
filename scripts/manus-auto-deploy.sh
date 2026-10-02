@@ -161,7 +161,7 @@ def verify_live_revision() -> None:
         "https://jdsys.manus.space/deploy-revision.txt",
     ]
     # Also require merged Ad Expenses UI strings in the main JS bundle.
-    must_have = ["記錄與月度報表已合併", "Ad Spend & Monthly Report"]
+    must_have = ["Ad Spend & Monthly Report", "ad-expenses-report", "開支記錄"]
     must_not = ['id:"reports",label:"月度報表",path:"/reports"']
     last_err = ""
     for attempt in range(10):
@@ -325,15 +325,15 @@ prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 syn
 2. **檔案硬核對（全部要過，否則唔好 checkpoint）**：
    - `client/src/components/DashboardLayout.tsx`：menu **唔可以**有 `id: "reports"` / label「月度報表」獨立項
    - `client/src/pages/MonthlyReport.tsx`：必須係 `Redirect` 去 `/ad-expenses?tab=report`
-   - `client/src/pages/AdExpenses.tsx`：必須含字串 `記錄與月度報表已合併` 同 `Ad Spend & Monthly Report`
-   - `client/public/deploy-revision.txt`：必須存在且含 `{sha}`
+   - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`（單一頁：分析＋記錄）
+   - `client/public/deploy-revision.txt`：必須存在且含首行 marker（或 `{sha}`）
 3. 執行 frontend production build（`npm run build` 或專案既定 build），確保 `dist/public`／網站靜態資產已更新
 4. 保存 checkpoint（version）
 5. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
 6. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
 7. 驗證：
-   - `https://jdsys.biz/deploy-revision.txt` 含 `{sha}`
-   - `https://jdsys.biz` 的 index JS 含 `記錄與月度報表已合併`，且 **唔含** 舊 nav `id:"reports",label:"月度報表",path:"/reports"`
+   - `https://jdsys.biz/deploy-revision.txt` 含本地 marker／`{sha}`
+   - live JS／chunk 含 `Ad Spend & Monthly Report` 同 `開支記錄`，且 **唔含** 舊 nav `id:"reports",label:"月度報表",path:"/reports"`
 8. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
 
 規則：

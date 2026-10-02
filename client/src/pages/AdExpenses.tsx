@@ -5,13 +5,11 @@ import { toast } from "sonner";
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Receipt, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AD_PLATFORMS as PLATFORMS } from "@/lib/platformConstants";
 import MonthlyReportPanel from "@/pages/MonthlyReportPanel";
-import { useLocation, useSearch } from "wouter";
+import { useSearch } from "wouter";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` }));
-type AdExpenseTab = "records" | "report";
 
 type EditingRow = {
   id?: number;
@@ -28,10 +26,7 @@ type EditingRow = {
 export default function AdExpenses() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  const [, setLocation] = useLocation();
   const search = useSearch();
-  const tabFromUrl: AdExpenseTab = new URLSearchParams(search).get("tab") === "report" ? "report" : "records";
-  const [activeTab, setActiveTab] = useState<AdExpenseTab>(tabFromUrl);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(currentMonth);
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
@@ -43,22 +38,14 @@ export default function AdExpenses() {
   const [txOffset, setTxOffset] = useState(0);
   const TX_LIMIT = 50;
   const utils = trpc.useUtils();
-
-  useEffect(() => {
-    setActiveTab(tabFromUrl);
-  }, [tabFromUrl]);
-
-  const setTab = (tab: AdExpenseTab) => {
-    setActiveTab(tab);
-    if (tab === "report" && selectedMonth == null) setSelectedMonth(currentMonth);
-    const params = new URLSearchParams(search);
-    if (tab === "report") params.set("tab", "report");
-    else params.delete("tab");
-    const qs = params.toString();
-    setLocation(`/ad-expenses${qs ? `?${qs}` : ""}`);
-  };
-
   const reportMonth = selectedMonth ?? currentMonth;
+
+  // Legacy /reports → /ad-expenses?tab=report bookmarks scroll to the analysis block.
+  useEffect(() => {
+    if (new URLSearchParams(search).get("tab") !== "report") return;
+    const el = document.getElementById("ad-expenses-report");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [search]);
   const { data: expenses, isLoading } = trpc.adExpenses.list.useQuery({
     year: selectedYear,
     month: selectedMonth ?? undefined,
@@ -151,29 +138,30 @@ export default function AdExpenses() {
               Ad Spend & Monthly Report
             </div>
             <h1 className="text-2xl font-light">廣告開支</h1>
-            <p className="mt-1 text-xs text-muted-foreground">記錄＝輸入／改數；月度報表＝MoM、佔比、詢價成交與匯出。兩邊同一套開支資料，圖表只放報表。</p>
+            <p className="mt-1 text-xs text-muted-foreground">月度分析同開支記錄已合成一頁：上面睇 MoM／佔比／詢價，下面改數同逐筆交易。</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {activeTab === "records" ? (
-              <button
-                onClick={() => { setShowAddForm(true); setEditingRow(newRow()); setTab("records"); }}
-                className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
-                style={{ background: "#d4a843", color: "#0a0a0a", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: "2px" }}
-              >
-                <Plus className="h-4 w-4" />
-                新增記錄
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-70"
-                style={{ border: "1px solid rgba(212,168,67,0.3)", color: "#d4a843", letterSpacing: "0.1em" }}
-              >
-                <Download className="h-3.5 w-3.5" />
-                匯出報表
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-70"
+              style={{ border: "1px solid rgba(212,168,67,0.3)", color: "#d4a843", letterSpacing: "0.1em" }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              匯出報表
+            </button>
+            <button
+              onClick={() => {
+                setShowAddForm(true);
+                setEditingRow(newRow());
+                document.getElementById("ad-expenses-records")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
+              style={{ background: "#d4a843", color: "#0a0a0a", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: "2px" }}
+            >
+              <Plus className="h-4 w-4" />
+              新增記錄
+            </button>
           </div>
         </div>
 
@@ -190,44 +178,45 @@ export default function AdExpenses() {
             </SelectContent>
           </Select>
           <Select
-            value={activeTab === "report" ? String(reportMonth) : selectedMonth ? String(selectedMonth) : "all"}
-            onValueChange={(v) => {
-              if (activeTab === "report") {
-                setSelectedMonth(parseInt(v));
-                return;
-              }
-              setSelectedMonth(v === "all" ? null : parseInt(v));
-            }}
+            value={selectedMonth ? String(selectedMonth) : "all"}
+            onValueChange={(v) => setSelectedMonth(v === "all" ? null : parseInt(v))}
           >
             <SelectTrigger className="w-[110px]" style={{ background: "#111", border: "1px solid rgba(212,168,67,0.2)" }}>
               <SelectValue placeholder="全部月份" />
             </SelectTrigger>
             <SelectContent>
-              {activeTab === "records" && <SelectItem value="all">全部月份</SelectItem>}
+              <SelectItem value="all">全部月份</SelectItem>
               {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
             </SelectContent>
           </Select>
+          {selectedMonth == null && (
+            <span className="text-[11px] text-muted-foreground">分析區會用本月（{currentMonth}月）；記錄表顯示全年。</span>
+          )}
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setTab(v as AdExpenseTab)}>
-          <TabsList className="mb-2" style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.15)" }} data-testid="ad-expenses-tabs">
-            <TabsTrigger value="records">記錄（編輯）</TabsTrigger>
-            <TabsTrigger value="report">月度報表（分析）</TabsTrigger>
-          </TabsList>
+        <section id="ad-expenses-report" data-testid="ad-expenses-report" className="scroll-mt-4">
+          <MonthlyReportPanel
+            selectedYear={selectedYear}
+            selectedMonth={reportMonth}
+            years={years}
+            onYearChange={setSelectedYear}
+            onMonthChange={setSelectedMonth}
+            hideFilters
+            hideExport
+          />
+        </section>
 
-          <TabsContent value="report" className="mt-4">
-            <MonthlyReportPanel
-              selectedYear={selectedYear}
-              selectedMonth={reportMonth}
-              years={years}
-              onYearChange={setSelectedYear}
-              onMonthChange={setSelectedMonth}
-              hideFilters
-              hideExport
-            />
-          </TabsContent>
+        <div style={{ height: "1px", background: "linear-gradient(to right, rgba(212,168,67,0.35), rgba(212,168,67,0.08), transparent)" }} />
 
-          <TabsContent value="records" className="mt-4 space-y-6">
+        <section id="ad-expenses-records" data-testid="ad-expenses-records" className="space-y-6 scroll-mt-4">
+        <div>
+          <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", color: "#d4a843", textTransform: "uppercase", marginBottom: "6px" }}>
+            Expense Records
+          </div>
+          <h2 className="text-lg font-light">開支記錄</h2>
+          <p className="mt-1 text-xs text-muted-foreground">新增、修改、刪除月度開支；逐筆交易明細用於對帳。</p>
+        </div>
+
         {/* Platform Summary Cards */}
         <div className="flex items-center justify-between mb-2">
           <div style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>
@@ -266,10 +255,6 @@ export default function AdExpenses() {
             );
           })}
         </div>
-
-        <p className="text-[11px] text-muted-foreground">
-          趨勢／佔比／MoM 圖表已集中喺「月度報表」分頁；呢度只保留平台總覽方便對帳同改數。
-        </p>
 
         {/* Table */}
         <div className="rounded overflow-hidden overflow-x-auto" style={{ border: "1px solid rgba(212,168,67,0.15)" }}>
@@ -537,8 +522,7 @@ export default function AdExpenses() {
             </div>
           )}
         </div>
-          </TabsContent>
-        </Tabs>
+        </section>
       </div>
     </DashboardLayout>
   );
