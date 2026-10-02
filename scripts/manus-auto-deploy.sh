@@ -398,6 +398,8 @@ while time.time() < deadline:
         if event_id and event_id not in confirmed and wait_type:
             if wait_type == "messageAskUser":
                 # confirmAction rejects cascadeAskUser; reply with an explicit yes.
+                # Checkpoint often blocks on large local assets (e.g. food-crab.jpg);
+                # approve removing those local copies while keeping File Storage refs.
                 print(f"auto-reply messageAskUser ({event_id})")
                 reply = api(
                     "POST",
@@ -406,10 +408,13 @@ while time.time() < deadline:
                         "task_id": task_id,
                         "message": {
                             "content": (
+                                "同意移除本地副本。"
                                 "【明確確認】繼續原定 production 範圍："
-                                f"sync GitHub main → checkpoint → website.publish "
-                                f"(website_id={website_id}, visibility=public) → "
-                                "驗證 jdsys.biz。唔切舊 task、唔改業務代碼、唔改 DNS/Railway。"
+                                f"sync GitHub main → 刪除阻擋 checkpoint 的大型本地資產副本"
+                                f"（保留 File Storage／manus-storage 引用）→ "
+                                f"npm run build → 新 checkpoint（version 必須唔同舊版）→ "
+                                f"website.publish (website_id={website_id}, visibility=public) → "
+                                "驗證 jdsys.biz live 已係新碼。唔切舊 task、唔改業務代碼、唔改 DNS/Railway。"
                                 "唔使再問。"
                             )
                         },
@@ -418,6 +423,7 @@ while time.time() < deadline:
                 )
                 print("askUser reply:", reply.get("ok"), reply.get("error"))
                 confirmed.add(event_id)
+                time.sleep(2)  # avoid Manus sendMessage rate limits
             else:
                 print(f"auto-confirm: {wait_type} ({event_id})")
                 conf = api(
