@@ -51,8 +51,10 @@
   transition:color .25s ease;
 }
 #jdh .way a:hover{color:var(--ink)}
-#jdh .way a:focus-visible{outline:1px solid var(--gold);outline-offset:4px;color:var(--gold)}
+#jdh .way a.is-active{color:var(--gold);border-bottom:1px solid var(--gold)}
+#jdh .way a:focus-visible{outline:2px solid var(--gold);outline-offset:4px;color:var(--gold)}
 #jdh .way .sep{display:inline-block;margin:0 14px;opacity:.45;user-select:none}
+#jdh #jdh-svc,#jdh #jdh-faq,#jdh #jdh-ask{scroll-margin-top:96px}
 
 /* Service wall header */
 #jdh .hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin:0 0 clamp(28px,3.2vw,44px)}
@@ -160,11 +162,10 @@
 #jdh .btn{
   display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 32px;border-radius:2px;
   background:var(--gold);color:#0b0b0d;font-size:.95rem;font-weight:500;letter-spacing:.08em;text-decoration:none;
-  transition:background-color .25s ease,transform .2s var(--ease),box-shadow .25s ease;
-  box-shadow:0 0 0 0 transparent;
+  transition:background-color .25s ease,transform .2s var(--ease),filter .25s ease;
 }
-#jdh .btn:hover{background:#d8bd7e;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-#jdh .btn:active{background:#b8944f;transform:translateY(1px) scale(.98);box-shadow:none}
+#jdh .btn:hover{background:#d8bd7e;filter:brightness(1.03)}
+#jdh .btn:active{background:#b8944f;transform:translateY(1px) scale(.98);filter:none}
 #jdh .ghost{
   padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink);font-size:.95rem;letter-spacing:.06em;text-decoration:none;
   transition:border-color .25s ease,color .25s ease,opacity .2s ease;
@@ -198,7 +199,6 @@
   #jdh .ph::before{animation:none;background:#16161a}
   #jdh .ph img,#jdh .cap h3,#jdh summary::after,#jdh .btn,#jdh .ghost,#jdh .work{transition:none}
   #jdh .work:hover .ph img,#jdh .work:focus-visible .ph img,#jdh .work:active .ph img{transform:none}
-  #jdh .btn:hover{box-shadow:none}
   #jdh .btn:active,#jdh .work:active{transform:none}
 }
 .sqs-block-content #jdh{width:100%}
@@ -297,7 +297,7 @@
         <h2>有拍攝計劃？</h2>
         <p>傳張參考圖或簡單說明用途，我們盡快回覆。</p>
         <div class="acts">
-          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 查詢</a>
+          <a class="btn" href="https://wa.me/85291531976?text=%E4%BD%A0%E5%A5%BD%EF%BC%8C%E6%88%91%E6%83%B3%E6%9F%A5%E8%A9%A2%E6%8B%8D%E6%94%9D%E5%A0%B1%E5%83%B9" target="_blank" rel="noopener noreferrer">WhatsApp 查詢報價</a>
           <a class="ghost" href="https://www.jdstudiohk.com/contact-us">聯絡我們 →</a>
         </div>
       </div>
@@ -319,5 +319,23 @@
     img.addEventListener("load",function(){mark(img);},{once:true});
     img.addEventListener("error",function(){mark(img);},{once:true});
   });
+  /* Active wayfinding — which section is in view */
+  var links=root.querySelectorAll(".way a[href^='#']");
+  var map={};
+  links.forEach(function(a){
+    var id=a.getAttribute("href").slice(1);
+    var el=root.querySelector("#"+id) || document.getElementById(id);
+    if(el)map[id]={el:el,a:a};
+  });
+  if(typeof IntersectionObserver!=="undefined" && Object.keys(map).length){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(!en.isIntersecting)return;
+        var id=en.target.id;
+        links.forEach(function(a){a.classList.toggle("is-active", a.getAttribute("href")==="#"+id);});
+      });
+    },{root:null,rootMargin:"-30% 0px -55% 0px",threshold:0});
+    Object.keys(map).forEach(function(id){io.observe(map[id].el);});
+  }
 })();
 </script>

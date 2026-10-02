@@ -32,7 +32,8 @@
 - **Loading:** `.ph::before` shimmer skeleton; fades when `.is-ready` (minimal JS on img load/error)
 - **Feedback:** tile hover dim-siblings + gold underline; `:active` press scale; CTA hover lift + darker press
 - **Hierarchy:** display statement → gold section labels → FAQ secondary → CTA destination
-- **Nav:** intro `.way` anchors only — not a sticky app bar
+- **Nav:** intro `.way` anchors only — not a sticky app bar; `is-active` via IntersectionObserver; section `scroll-margin`
+- **CTA copy:** concrete action —「WhatsApp 查詢報價」
 - **a11y:** stronger muted contrast (`--mut`/`--dim`); `aria-label` on tiles; 2px gold `focus-visible`; `prefers-reduced-motion` kills shimmer/transforms
 - **Whitespace:** slightly tighter vertical rhythm between sections; even tile/caption gaps
 
