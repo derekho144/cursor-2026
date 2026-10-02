@@ -15,7 +15,7 @@
 | 室內攝影 | `A7R00140.jpg` (Busy Bee boutique) |
 | 珠寶攝影 | `2101+A1.jpg` (diamond ring) |
 | 企業活動 | `DSC02693.jpg` (Cathay signing handshake) |
-| 影片／TVC | `DSC02678.jpg` (chef / kitchen production) |
+| 影片／TVC | `video-bts.jpg` (Behind the Scenes cinema rig; jsDelivr until Squarespace upload) |
 | 派對活動 | `DSC04196.jpg` (family celebration cake) |
 | 餐牌設計 | hotel dessert (`4酒店…`) |
 | Close | `AKE_Cariam-2-Product-Shot-0324.jpg` |
