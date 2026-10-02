@@ -15,6 +15,7 @@ export type PageId =
   | "ad-sync"
   | "google-ads-quality"
   | "growth-priorities"
+  /** @deprecated merged into ad-expenses; kept for legacy allowedPages JSON */
   | "reports"
   | "freehunter-board"
   | "expenses"
@@ -40,12 +41,11 @@ export const PAGE_CATALOG: PageDef[] = [
   { id: "clients", label: "客戶管理", pathPrefixes: ["/clients"] },
   { id: "loyalty", label: "會員方案", pathPrefixes: ["/loyalty"] },
   { id: "deliveries", label: "相片交付", pathPrefixes: ["/deliveries"] },
-  { id: "ad-expenses", label: "廣告開支", pathPrefixes: ["/ad-expenses"] },
+  { id: "ad-expenses", label: "廣告開支／月度報表", pathPrefixes: ["/ad-expenses", "/reports"] },
   { id: "platform-efficiency", label: "平台效益分析", pathPrefixes: ["/platform-efficiency"] },
   { id: "ad-sync", label: "平台同步", pathPrefixes: ["/ad-sync"] },
   { id: "google-ads-quality", label: "Google Ads QS", pathPrefixes: ["/google-ads-quality"] },
   { id: "growth-priorities", label: "增長優先模型", pathPrefixes: ["/growth-priorities"] },
-  { id: "reports", label: "月度報表", pathPrefixes: ["/reports"] },
   { id: "freehunter-board", label: "FH 工作板", pathPrefixes: ["/freehunter-board"] },
   { id: "expenses", label: "收入及支出", pathPrefixes: ["/expenses"] },
   { id: "follow-up", label: "報價跟進", pathPrefixes: ["/follow-up"] },
@@ -70,10 +70,23 @@ export const PUBLIC_PATH_PREFIXES = [
   "/api/",
 ];
 
+/** Legacy page ids still accepted in employee allowedPages JSON. */
+const LEGACY_PAGE_IDS = new Set<string>(["reports"]);
+
 export function parseAllowedPages(raw: unknown): PageId[] {
   if (!Array.isArray(raw)) return [];
-  const allowed = new Set(ALL_PAGE_IDS);
-  return raw.filter((x): x is PageId => typeof x === "string" && allowed.has(x as PageId));
+  const allowed = new Set<string>(ALL_PAGE_IDS.concat(Array.from(LEGACY_PAGE_IDS) as PageId[]));
+  const out: PageId[] = [];
+  const seen = new Set<PageId>();
+  for (const x of raw) {
+    if (typeof x !== "string" || !allowed.has(x)) continue;
+    // 月度報表 merged into 廣告開支
+    const id: PageId = x === "reports" ? "ad-expenses" : (x as PageId);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
 }
 
 export function userCanAccessPage(opts: {
@@ -85,6 +98,9 @@ export function userCanAccessPage(opts: {
   if (opts.role === "admin") return true;
   if (opts.isActive === false || opts.isActive === 0) return false;
   const pages = parseAllowedPages(opts.allowedPages);
+  if (opts.pageId === "ad-expenses" || opts.pageId === "reports") {
+    return pages.includes("ad-expenses");
+  }
   return pages.includes(opts.pageId);
 }
 

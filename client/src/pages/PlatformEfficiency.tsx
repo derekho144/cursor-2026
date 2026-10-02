@@ -388,8 +388,8 @@ export default function PlatformEfficiency() {
                         <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
                         <span style={{ fontSize: "0.65rem", color: "#f59e0b", lineHeight: "1.4" }}>
                           {(p as any).adType === "subscription"
-                            ? "尚未輸入訂閱月費，ROI / CPL 無法計算。請在廣告開支頁面輸入 FH 月費。"
-                            : "尚未輸入廣告開支，ROI / CPL 無法計算。請在廣告開支頁面輸入數據。"}
+                            ? "尚未輸入訂閱月費，ROI / CPL 無法計算。請在「廣告開支 → 記錄」輸入 FH 月費。"
+                            : "尚未輸入廣告開支，ROI / CPL 無法計算。請在「廣告開支 → 記錄」輸入數據。"}
                         </span>
                       </div>
                     )}
@@ -405,7 +405,7 @@ export default function PlatformEfficiency() {
                 <span style={{ color: "#d4a843" }}>評分方法：</span>
                 綜合評分由四個維度組成：ROAS（佔 40%，以 ROAS=5 為滿分基準）、成交率（佔 30%，以 30% 為滿分）、CPL 效率（佔 20%，成本越低分越高）、開支趨勢（佔 10%，開支下降代表效率提升）。
                 詢價來源以報價單的「詢價來源」欄位精確匹配（HelloToby / PRO360 / FreelanceHunter / Google / Repeat）。詢價數＝該年開單全部報價；成交數＝已接受（有拍攝日按拍攝年，無則按開單年）。回頭客無廣告開支，CPL 效率自動得滿分。
-                <span style={{ color: "#888" }}> FreeHunter 為訂閱制月費（非 CPC），請在廣告開支頁面將每月訂閱費輸入為「開支」以計算 ROAS 和 CPL。</span>
+                <span style={{ color: "#888" }}> FreeHunter 為訂閱制月費（非 CPC），請在「廣告開支 → 記錄」將每月訂閱費輸入為「開支」以計算 ROAS 和 CPL。月度 MoM／詢價報表見同一頁「月度報表」分頁。</span>
                 <span style={{ color: "#888" }}> 「ROAS」（廣告回報率）= 成交收入 ÷ 淨廣告開支，衡量廣告效率，服務業基準 ≥5x 優秀。「真實 ROI」= 扣除廣告開支及按收入比例分攤的直接服務成本（車費+器材+人工）後的實際利潤率。「LTV/CAC」= 客戶終身價值 ÷ 獲客成本，業界黃金比率 ≥3:1。</span>
                 {unclassifiedLeads > 0 && (
                   <span style={{ color: "#f59e0b" }}>

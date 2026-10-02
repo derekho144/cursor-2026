@@ -1,16 +1,18 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from "recharts";
-import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Receipt } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp, Receipt, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AD_PLATFORMS as PLATFORMS } from "@/lib/platformConstants";
-
-
+import MonthlyReportPanel from "@/pages/MonthlyReportPanel";
+import { useLocation, useSearch } from "wouter";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` }));
+type AdExpenseTab = "records" | "report";
 
 type EditingRow = {
   id?: number;
@@ -27,7 +29,11 @@ type EditingRow = {
 export default function AdExpenses() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [, setLocation] = useLocation();
+  const search = useSearch();
+  const tabFromUrl: AdExpenseTab = new URLSearchParams(search).get("tab") === "report" ? "report" : "records";
+  const [activeTab, setActiveTab] = useState<AdExpenseTab>(tabFromUrl);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(currentMonth);
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -38,6 +44,22 @@ export default function AdExpenses() {
   const [txOffset, setTxOffset] = useState(0);
   const TX_LIMIT = 50;
   const utils = trpc.useUtils();
+
+  useEffect(() => {
+    setActiveTab(tabFromUrl);
+  }, [tabFromUrl]);
+
+  const setTab = (tab: AdExpenseTab) => {
+    setActiveTab(tab);
+    if (tab === "report" && selectedMonth == null) setSelectedMonth(currentMonth);
+    const params = new URLSearchParams(search);
+    if (tab === "report") params.set("tab", "report");
+    else params.delete("tab");
+    const qs = params.toString();
+    setLocation(`/ad-expenses${qs ? `?${qs}` : ""}`);
+  };
+
+  const reportMonth = selectedMonth ?? currentMonth;
   const { data: expenses, isLoading } = trpc.adExpenses.list.useQuery({
     year: selectedYear,
     month: selectedMonth ?? undefined,
@@ -138,22 +160,86 @@ export default function AdExpenses() {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
             <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", color: "#d4a843", textTransform: "uppercase", marginBottom: "6px" }}>
-              Ad Expense Tracker
+              Ad Spend & Monthly Report
             </div>
-            <h1 className="text-2xl font-light">廣告開支記錄</h1>
+            <h1 className="text-2xl font-light">廣告開支</h1>
+            <p className="mt-1 text-xs text-muted-foreground">記錄與月度報表已合併；共用年月篩選與同一套開支資料。</p>
           </div>
-          <button
-            onClick={() => { setShowAddForm(true); setEditingRow(newRow()); }}
-            className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
-            style={{ background: "#d4a843", color: "#0a0a0a", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: "2px" }}
-          >
-            <Plus className="h-4 w-4" />
-            新增記錄
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {activeTab === "records" ? (
+              <button
+                onClick={() => { setShowAddForm(true); setEditingRow(newRow()); setTab("records"); }}
+                className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80"
+                style={{ background: "#d4a843", color: "#0a0a0a", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", borderRadius: "2px" }}
+              >
+                <Plus className="h-4 w-4" />
+                新增記錄
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-4 py-2 text-xs rounded transition-all hover:opacity-70"
+                style={{ border: "1px solid rgba(212,168,67,0.3)", color: "#d4a843", letterSpacing: "0.1em" }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                匯出報表
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ height: "1px", background: "linear-gradient(to right, #d4a843, rgba(212,168,67,0.1), transparent)" }} />
 
+        {/* Shared year / month */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+            <SelectTrigger className="w-[120px]" style={{ background: "#111", border: "1px solid rgba(212,168,67,0.2)" }}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((y) => <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select
+            value={activeTab === "report" ? String(reportMonth) : selectedMonth ? String(selectedMonth) : "all"}
+            onValueChange={(v) => {
+              if (activeTab === "report") {
+                setSelectedMonth(parseInt(v));
+                return;
+              }
+              setSelectedMonth(v === "all" ? null : parseInt(v));
+            }}
+          >
+            <SelectTrigger className="w-[110px]" style={{ background: "#111", border: "1px solid rgba(212,168,67,0.2)" }}>
+              <SelectValue placeholder="全部月份" />
+            </SelectTrigger>
+            <SelectContent>
+              {activeTab === "records" && <SelectItem value="all">全部月份</SelectItem>}
+              {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setTab(v as AdExpenseTab)}>
+          <TabsList className="mb-2" style={{ background: "#0f0f0f", border: "1px solid rgba(212,168,67,0.15)" }} data-testid="ad-expenses-tabs">
+            <TabsTrigger value="records">記錄</TabsTrigger>
+            <TabsTrigger value="report">月度報表</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="report" className="mt-4">
+            <MonthlyReportPanel
+              selectedYear={selectedYear}
+              selectedMonth={reportMonth}
+              years={years}
+              onYearChange={setSelectedYear}
+              onMonthChange={setSelectedMonth}
+              hideFilters
+              hideExport
+            />
+          </TabsContent>
+
+          <TabsContent value="records" className="mt-4 space-y-6">
         {/* Platform Summary Cards */}
         <div className="flex items-center justify-between mb-2">
           <div style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>
@@ -238,27 +324,6 @@ export default function AdExpenses() {
               <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">尚無資料</div>
             )}
           </div>
-        </div>
-
-        {/* Filters */}
-        <div className="flex gap-3">
-          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(parseInt(v))}>
-            <SelectTrigger className="w-[120px]" style={{ background: "#111", border: "1px solid rgba(212,168,67,0.2)" }}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {years.map((y) => <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={selectedMonth ? String(selectedMonth) : "all"} onValueChange={(v) => setSelectedMonth(v === "all" ? null : parseInt(v))}>
-            <SelectTrigger className="w-[110px]" style={{ background: "#111", border: "1px solid rgba(212,168,67,0.2)" }}>
-              <SelectValue placeholder="全部月份" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部月份</SelectItem>
-              {MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Table */}
@@ -527,6 +592,8 @@ export default function AdExpenses() {
             </div>
           )}
         </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
