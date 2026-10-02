@@ -1,5 +1,5 @@
-import { and, eq, gte, sql } from "drizzle-orm";
-import { quotes } from "../drizzle/schema";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { emailInquiries, quotes } from "../drizzle/schema";
 import { getDb } from "./db";
 import {
   DEFAULT_GSC_SITE_URL,
@@ -53,6 +53,8 @@ export type QuoteFunnelSignals = {
   leadCount: number;
   acceptedCount: number;
   searchLeads: number;
+  /** Unlinked email inquiries with AI serviceType — soft demand, not equal to Ads conversions. */
+  openInquiryLeads: number;
   winRate: number | null;
 };
 
@@ -140,6 +142,7 @@ export type QueryBacklogItem = {
     acceptedRevenueHKD: number;
     leadCount: number;
     searchLeads: number;
+    openInquiryLeads: number;
     winRate: number | null;
   };
   aeo: AeoSignals;
@@ -323,7 +326,7 @@ function adsSummary(keywords: GoogleAdsKeywordQuality[], profile: ServiceProfile
 }
 
 function emptyFunnel(): QuoteFunnelSignals {
-  return { leadCount: 0, acceptedCount: 0, searchLeads: 0, winRate: null };
+  return { leadCount: 0, acceptedCount: 0, searchLeads: 0, openInquiryLeads: 0, winRate: null };
 }
 
 function emptySearchTerms(): SearchTermSignals {
@@ -374,7 +377,8 @@ export function searchTermSummary(
 
 export function funnelFromQuoteRows(
   rows: Array<{ serviceType: string | null; status: string | null; leadSource: string | null; count: number }>,
-  serviceTypes: string[]
+  serviceTypes: string[],
+  openInquiryLeads = 0
 ): QuoteFunnelSignals {
   const typeSet = new Set(serviceTypes);
   let leadCount = 0;
@@ -391,8 +395,28 @@ export function funnelFromQuoteRows(
     leadCount,
     acceptedCount,
     searchLeads,
+    openInquiryLeads: Math.max(0, openInquiryLeads),
     winRate: leadCount > 0 ? round((acceptedCount / leadCount) * 100, 1) : null,
   };
+}
+
+/** Soft demand from inbox: unlinked inquiries with AI serviceType (no landing URL in schema). */
+export function openInquiryCountsByService(
+  rows: Array<{ aiParsed: string | null }>
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.aiParsed) continue;
+    try {
+      const parsed = JSON.parse(row.aiParsed) as { serviceType?: string };
+      const serviceType = String(parsed?.serviceType ?? "").trim();
+      if (!serviceType || serviceType === "other") continue;
+      counts.set(serviceType, (counts.get(serviceType) ?? 0) + 1);
+    } catch {
+      // ignore malformed AI JSON
+    }
+  }
+  return counts;
 }
 
 type AhrefsKeywordMetric = {
@@ -570,14 +594,15 @@ export function backlogScore(input: {
   let businessValue = input.maxRevenue > 0 ? round(Math.min(30, (input.revenue / input.maxRevenue) * 30)) : 0;
   const funnel = input.funnel ?? emptyFunnel();
   // Soft demand floor: Google/Website leads prove search intent even when accepted $ is thin.
-  if (businessValue < 12 && (funnel.searchLeads > 0 || funnel.leadCount > 0)) {
+  const softDemand = funnel.searchLeads + Math.min(3, funnel.openInquiryLeads);
+  if (businessValue < 12 && (softDemand > 0 || funnel.leadCount > 0)) {
     const funnelFloor = Math.min(
       12,
-      (funnel.searchLeads > 0 ? 6 : 0) + Math.min(6, funnel.leadCount)
+      (funnel.searchLeads > 0 ? 6 : funnel.openInquiryLeads > 0 ? 3 : 0) + Math.min(6, funnel.leadCount)
     );
     businessValue = Math.max(businessValue, funnelFloor);
-  } else if (funnel.searchLeads > 0) {
-    businessValue = Math.min(30, businessValue + Math.min(3, funnel.searchLeads));
+  } else if (softDemand > 0) {
+    businessValue = Math.min(30, businessValue + Math.min(3, softDemand));
   }
 
   let paidIntent = input.ads.keywordCount > 0
@@ -652,13 +677,14 @@ export function scoreServicePriority(input: ServicePriorityInput): ServicePriori
       ? round(Math.min(40, (input.acceptedRevenueHKD / input.maxAcceptedRevenueHKD) * 40))
       : 0;
   const funnel = input.funnel ?? emptyFunnel();
-  if (businessValue < 16 && (funnel.searchLeads > 0 || funnel.leadCount > 0)) {
+  const softDemand = funnel.searchLeads + Math.min(3, funnel.openInquiryLeads);
+  if (businessValue < 16 && (softDemand > 0 || funnel.leadCount > 0)) {
     businessValue = Math.max(
       businessValue,
-      Math.min(16, (funnel.searchLeads > 0 ? 8 : 0) + Math.min(8, funnel.leadCount))
+      Math.min(16, (funnel.searchLeads > 0 ? 8 : funnel.openInquiryLeads > 0 ? 4 : 0) + Math.min(8, funnel.leadCount))
     );
-  } else if (funnel.searchLeads > 0) {
-    businessValue = Math.min(40, businessValue + Math.min(4, funnel.searchLeads));
+  } else if (softDemand > 0) {
+    businessValue = Math.min(40, businessValue + Math.min(4, softDemand));
   }
 
   const searchTerms = input.searchTerms ?? emptySearchTerms();
@@ -785,6 +811,14 @@ export async function getGrowthPriorities(days = 28) {
         [] as Array<{ serviceType: string | null; status: string | null; leadSource: string | null; count: number }>
       );
 
+  // Soft inbox demand: unlinked inquiries only (avoid double-count with quotes).
+  const openInquiryPromise = db
+    ? db
+        .select({ aiParsed: emailInquiries.aiParsed })
+        .from(emailInquiries)
+        .where(and(gte(emailInquiries.createdAt, since), isNull(emailInquiries.quoteId)))
+    : Promise.resolve([] as Array<{ aiParsed: string | null }>);
+
   const adsPromise = fetchKeywordQualityScores(safeDays, 150)
     .then((keywords) => ({ available: true as const, keywords, error: null }))
     .catch((error: unknown) => ({ available: false as const, keywords: [] as GoogleAdsKeywordQuality[], error: error instanceof Error ? error.message : String(error) }));
@@ -822,9 +856,10 @@ export async function getGrowthPriorities(days = 28) {
     }
   })();
 
-  const [acceptedRevenueRows, quoteFunnelRows, ads, searchTerms, gsc, aeoRows] = await Promise.all([
+  const [acceptedRevenueRows, quoteFunnelRows, openInquiryRows, ads, searchTerms, gsc, aeoRows] = await Promise.all([
     acceptedRevenuePromise,
     quoteFunnelPromise,
+    openInquiryPromise,
     adsPromise,
     searchTermsPromise,
     gscPromise,
@@ -837,6 +872,7 @@ export async function getGrowthPriorities(days = 28) {
       { acceptedCount: safeNumber(row.acceptedCount), acceptedRevenueHKD: safeNumber(row.acceptedRevenueHKD) },
     ])
   );
+  const openInquiriesByServiceType = openInquiryCountsByService(openInquiryRows);
 
   const draftInputs: ServicePriorityInput[] = SERVICE_PROFILES.map((profile, index) => {
     const revenue = profile.serviceTypes.reduce(
@@ -849,7 +885,11 @@ export async function getGrowthPriorities(days = 28) {
       },
       { acceptedCount: 0, acceptedRevenueHKD: 0 }
     );
-    const funnel = funnelFromQuoteRows(quoteFunnelRows, profile.serviceTypes);
+    const openInquiryLeads = profile.serviceTypes.reduce(
+      (sum, serviceType) => sum + (openInquiriesByServiceType.get(serviceType) ?? 0),
+      0
+    );
+    const funnel = funnelFromQuoteRows(quoteFunnelRows, profile.serviceTypes, openInquiryLeads);
     // Prefer accepted revenue query for acceptedCount/revenue; funnel fills lead volume.
     const mergedFunnel: QuoteFunnelSignals = {
       ...funnel,
@@ -927,6 +967,7 @@ export async function getGrowthPriorities(days = 28) {
         acceptedRevenueHKD: input.acceptedRevenueHKD,
         leadCount: input.funnel.leadCount,
         searchLeads: input.funnel.searchLeads,
+        openInquiryLeads: input.funnel.openInquiryLeads,
         winRate: input.funnel.winRate,
         funnel: input.funnel,
       },
@@ -946,6 +987,7 @@ export async function getGrowthPriorities(days = 28) {
       acceptedRevenueHKD: revenueRow?.acceptedRevenueHKD ?? 0,
       leadCount: revenueRow?.leadCount ?? 0,
       searchLeads: revenueRow?.searchLeads ?? 0,
+      openInquiryLeads: revenueRow?.openInquiryLeads ?? 0,
       winRate: revenueRow?.winRate ?? null,
     };
     const funnel = revenueRow?.funnel ?? emptyFunnel();
@@ -1064,6 +1106,7 @@ export async function getGrowthPriorities(days = 28) {
         acceptedStatuses: ["accepted"],
         funnel: Boolean(db),
         searchLeadSources: ["Google", "Website"],
+        openInquiries: Boolean(db),
       },
       googleAds: {
         available: ads.available || searchTerms.available,

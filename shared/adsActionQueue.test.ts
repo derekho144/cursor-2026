@@ -10,9 +10,27 @@ describe("Ads Action Queue", () => {
       targetPath: "/services/product-photography",
       score: 80,
       organicPosition: 14,
-      ads: { commercialSignal: "unavailable", keywordCount: 0, spendHKD: 0, clicks: 0, avgCpcHKD: null, weightedQualityScore: null, lowQualitySpendHKD: 0 },
-      revenue: { acceptedCount: 1, acceptedRevenueHKD: 3000 },
+      ads: { commercialSignal: "unavailable", keywordCount: 0, spendHKD: 0, clicks: 0, avgCpcHKD: null, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
+      searchTerms: { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] },
+      revenue: { acceptedCount: 1, acceptedRevenueHKD: 3000, leadCount: 2, searchLeads: 1, winRate: 50 },
     }])).toEqual([]);
+  });
+
+  it("creates landing review from search-term conversions even without keyword_view rows", () => {
+    const [item] = buildAdsActionQueue([{
+      id: "product:search-term",
+      query: "香港產品攝影報價",
+      serviceLabel: "產品攝影",
+      targetPath: "/services/product-photography",
+      score: 78,
+      organicPosition: 16,
+      ads: { commercialSignal: "available", keywordCount: 0, spendHKD: 0, clicks: 0, avgCpcHKD: null, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
+      searchTerms: { termCount: 2, conversions: 2, spendHKD: 80, clicks: 10, topTerms: ["香港產品攝影報價"] },
+      revenue: { acceptedCount: 0, acceptedRevenueHKD: 0, leadCount: 3, searchLeads: 2, winRate: 0 },
+    }]);
+    expect(item.actionType).toBe("landing_page_review");
+    expect(item.rationale).toContain("轉換");
+    expect(item.rationale).toContain("Google／網站");
   });
 
   it("prioritises low-quality review and keeps it non-mutating", () => {

@@ -7,6 +7,7 @@ import {
   funnelFromQuoteRows,
   gscPositionTrend,
   isCommercialHongKongQuery,
+  openInquiryCountsByService,
   scoreServicePriority,
   searchTermSummary,
 } from "./seoAdsAeo";
@@ -66,7 +67,7 @@ describe("SEO + Ads + AEO priority model", () => {
         lowQualitySpendHKD: 100,
         conversions: 0,
       },
-      funnel: { leadCount: 8, acceptedCount: 4, searchLeads: 3, winRate: 50 },
+      funnel: { leadCount: 8, acceptedCount: 4, searchLeads: 3, openInquiryLeads: 1, winRate: 50 },
       searchTerms: { termCount: 2, conversions: 1, spendHKD: 40, clicks: 12, topTerms: ["香港產品攝影"] },
       organic: { clicks: 3, impressions: 220, ctr: 1.36, position: 14.2 },
       aeo: {
@@ -97,7 +98,7 @@ describe("SEO + Ads + AEO priority model", () => {
       acceptedCount: 0,
       maxAcceptedRevenueHKD: 20000,
       ads: { keywordCount: 0, spendHKD: 0, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
-      funnel: { leadCount: 0, acceptedCount: 0, searchLeads: 0, winRate: null },
+      funnel: { leadCount: 0, acceptedCount: 0, searchLeads: 0, openInquiryLeads: 0, winRate: null },
       searchTerms: { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] },
       organic: { clicks: 0, impressions: 0, ctr: 0, position: null },
       aeo: {
@@ -124,7 +125,7 @@ describe("SEO + Ads + AEO priority model", () => {
       acceptedCount: 0,
       maxAcceptedRevenueHKD: 20000,
       ads: { keywordCount: 0, spendHKD: 0, weightedQualityScore: null, lowQualitySpendHKD: 0, conversions: 0 },
-      funnel: { leadCount: 5, acceptedCount: 0, searchLeads: 3, winRate: 0 },
+      funnel: { leadCount: 5, acceptedCount: 0, searchLeads: 3, openInquiryLeads: 2, winRate: 0 },
       searchTerms: { termCount: 0, conversions: 0, spendHKD: 0, clicks: 0, topTerms: [] },
       organic: { clicks: 1, impressions: 80, ctr: 1.25, position: 18 },
       aeo: {
@@ -155,7 +156,20 @@ describe("SEO + Ads + AEO priority model", () => {
     expect(funnel.leadCount).toBe(8);
     expect(funnel.acceptedCount).toBe(1);
     expect(funnel.searchLeads).toBe(4);
+    expect(funnel.openInquiryLeads).toBe(0);
     expect(funnel.winRate).toBe(12.5);
+  });
+
+  it("counts unlinked open inquiries by AI serviceType without inventing landing attribution", () => {
+    const counts = openInquiryCountsByService([
+      { aiParsed: JSON.stringify({ serviceType: "product" }) },
+      { aiParsed: JSON.stringify({ serviceType: "product" }) },
+      { aiParsed: JSON.stringify({ serviceType: "other" }) },
+      { aiParsed: null },
+      { aiParsed: "{bad" },
+    ]);
+    expect(counts.get("product")).toBe(2);
+    expect(counts.has("other")).toBe(false);
   });
 
   it("matches Ads search terms to a service profile and query", () => {
@@ -232,7 +246,7 @@ describe("SEO + Ads + AEO priority model", () => {
         hasContactCta: true,
       },
       difficulty: 24,
-      funnel: { leadCount: 6, acceptedCount: 2, searchLeads: 2, winRate: 33.3 },
+      funnel: { leadCount: 6, acceptedCount: 2, searchLeads: 2, openInquiryLeads: 1, winRate: 33.3 },
       searchTerms: { termCount: 1, conversions: 1, spendHKD: 40, clicks: 8, topTerms: ["香港產品攝影"] },
     });
 
