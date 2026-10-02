@@ -60,5 +60,19 @@ describe("pagePermissions", () => {
     expect(resolvePageIdForPath("/employees")).toBe("employees");
     expect(resolvePageIdForPath("/pricing-learning")).toBe("pricing-learning");
     expect(resolvePageIdForPath("/delivery/abc")).toBe(null);
+    expect(resolvePageIdForPath("/reports")).toBe("ad-expenses");
+    expect(resolvePageIdForPath("/ad-expenses")).toBe("ad-expenses");
+  });
+
+  it("maps legacy reports permission onto ad-expenses", () => {
+    expect(parseAllowedPages(["reports", "quotes"])).toEqual(["ad-expenses", "quotes"]);
+    expect(
+      userCanAccessPage({
+        role: "user",
+        isActive: true,
+        allowedPages: ["reports"],
+        pageId: "ad-expenses",
+      })
+    ).toBe(true);
   });
 });
