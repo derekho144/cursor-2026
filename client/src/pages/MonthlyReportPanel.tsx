@@ -79,8 +79,8 @@ export default function MonthlyReportPanel({
           <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", color: "#d4a843", textTransform: "uppercase", marginBottom: "6px" }}>
             Monthly Report
           </div>
-          <h2 className="text-lg font-light">月度廣告報表</h2>
-          <p className="mt-1 text-xs text-muted-foreground">與「記錄」共用同一套廣告開支資料；含 MoM、詢價／成交與 CPC。</p>
+          <h2 className="text-lg font-light">月度分析</h2>
+          <p className="mt-1 text-xs text-muted-foreground">MoM、平台佔比、全年趨勢、詢價／成交／CPC。改數請撳下面「開支記錄」。</p>
         </div>
         {!hideExport && (
           <button
