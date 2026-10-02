@@ -61,6 +61,7 @@ import {
   UserCog,
   GraduationCap,
   Gauge,
+  Sparkles,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -84,6 +85,7 @@ const DEFAULT_MENU_ITEMS = [
   { id: "ad-expenses", icon: BarChart3, label: "廣告開支", path: "/ad-expenses" },
   { id: "platform-efficiency", icon: PieChart, label: "平台效益分析", path: "/platform-efficiency" },
   { id: "google-ads-quality", icon: Gauge, label: "Google Ads QS", path: "/google-ads-quality" },
+  { id: "growth-priorities", icon: Sparkles, label: "增長優先模型", path: "/growth-priorities" },
   { id: "ad-sync", icon: RefreshCw, label: "平台同步", path: "/ad-sync" },
   { id: "reports", icon: TrendingUp, label: "月度報表", path: "/reports" },
   { id: "freehunter-board", icon: Briefcase, label: "FH 工作板", path: "/freehunter-board" },
@@ -110,6 +112,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "ad-expenses": BarChart3,
   "platform-efficiency": PieChart,
   "google-ads-quality": Gauge,
+  "growth-priorities": Sparkles,
   "ad-sync": RefreshCw,
   reports: TrendingUp,
   "email-inquiries": Mail,
