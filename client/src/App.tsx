@@ -19,6 +19,7 @@ const AdSync = lazy(() => import("./pages/AdSync"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
 const PlatformEfficiency = lazy(() => import("./pages/PlatformEfficiency"));
 const GoogleAdsQuality = lazy(() => import("./pages/GoogleAdsQuality"));
+const GrowthPriorities = lazy(() => import("./pages/GrowthPriorities"));
 const ClientsList = lazy(() => import("./pages/ClientsList"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const DeliveryList = lazy(() => import("./pages/DeliveryList"));
@@ -63,6 +64,7 @@ function Router() {
         <Route path="/reports" component={MonthlyReport} />
         <Route path="/platform-efficiency" component={PlatformEfficiency} />
         <Route path="/google-ads-quality" component={GoogleAdsQuality} />
+        <Route path="/growth-priorities" component={GrowthPriorities} />
         <Route path="/clients" component={ClientsList} />
         <Route path="/clients/:id" component={ClientDetail} />
         <Route path="/deliveries" component={DeliveryList} />

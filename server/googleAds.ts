@@ -148,6 +148,67 @@ async function executeGaqlQuery(query: string): Promise<any[]> {
   return (json.results ?? []) as any[];
 }
 
+export async function runGoogleAdsGaql(query: string): Promise<any[]> {
+  checkEnvVars();
+  return executeGaqlQuery(query);
+}
+
+export async function mutateGoogleAds(
+  mutateOperations: unknown[],
+  validateOnly: boolean,
+): Promise<{ partialFailure: boolean; results: any[] }> {
+  checkEnvVars();
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${AD_ACCOUNT_ID}/googleAds:mutate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": DEVELOPER_TOKEN,
+        "login-customer-id": MANAGER_CUSTOMER_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mutateOperations, validateOnly, partialFailure: true }),
+    },
+  );
+  const json = await res.json() as any;
+  if (!res.ok) {
+    const errMsg = json?.error?.details?.[0]?.errors?.[0]?.message ?? json?.error?.message ?? JSON.stringify(json);
+    throw new Error(`Google Ads mutate error (${res.status}): ${errMsg}`);
+  }
+  return { partialFailure: Boolean(json.partialFailureError), results: Array.isArray(json.mutateOperationResponses) ? json.mutateOperationResponses : [] };
+}
+
+/** Call a resource-specific Google Ads REST mutate endpoint (AdService, AssetService, etc.). */
+export async function mutateGoogleAdsService(
+  service: "ads" | "adGroupAds" | "assets" | "campaignAssets",
+  operations: unknown[],
+  validateOnly: boolean,
+): Promise<{ partialFailure: boolean; results: any[] }> {
+  checkEnvVars();
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${AD_ACCOUNT_ID}/${service}:mutate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": DEVELOPER_TOKEN,
+        "login-customer-id": MANAGER_CUSTOMER_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ operations, validateOnly, partialFailure: true }),
+    },
+  );
+  const json = await res.json() as any;
+  if (!res.ok) {
+    const errMsg = json?.error?.details?.[0]?.errors?.[0]?.message ?? json?.error?.message ?? JSON.stringify(json);
+    throw new Error(`Google Ads ${service} mutate error (${res.status}): ${errMsg}`);
+  }
+  return { partialFailure: Boolean(json.partialFailureError), results: Array.isArray(json.results) ? json.results : [] };
+}
+
 export async function fetchGoogleAdsCosts(
   startDate: string, // YYYY-MM-DD
   endDate: string    // YYYY-MM-DD
@@ -289,6 +350,19 @@ function bucketLabel(v: unknown): QualityScoreBucket | null {
   return String(v);
 }
 
+function adsDateRange(days: number): { startDate: string; endDate: string } {
+  // GAQL only supports a fixed set of DURING macros. The quality dashboard
+  // accepts arbitrary 7–90 day windows, so use explicit completed dates.
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() - 1);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
 function computeOverview(keywords: GoogleAdsKeywordQuality[]): GoogleAdsQualityOverview {
   const withQs = keywords.filter((k) => k.qualityScore != null);
   const avgQualityScore =
@@ -340,6 +414,7 @@ export async function fetchKeywordQualityScores(
   checkEnvVars();
   const safeDays = Math.max(7, Math.min(90, days));
   const safeLimit = Math.max(10, Math.min(500, limit));
+  const { startDate, endDate } = adsDateRange(safeDays);
 
   const query = `
     SELECT
@@ -357,7 +432,7 @@ export async function fetchKeywordQualityScores(
       metrics.cost_micros,
       metrics.ctr
     FROM keyword_view
-    WHERE segments.date DURING LAST_${safeDays}_DAYS
+    WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
       AND campaign.advertising_channel_type = 'SEARCH'
       AND metrics.impressions > 0
     ORDER BY metrics.cost_micros DESC
