@@ -1,25 +1,31 @@
-# Food photography — AEO/GEO + E-E-A-T (pro UI)
+# Food photography — Google-useful AEO pack
 
 **URL:** https://www.jdstudiohk.com/services/food-photography  
 **Anchor:** `#jd-food-photography`  
 **Blog:** https://www.jdstudiohk.com/blog/food-photography-package-contents  
 **Related:** `/-menu-design`, `/services/product-photography`, `/contact-us`
 
-## Block order
-1. Brand kicker + H2 + sub + CTA  
-2. Definition「是專門…」  
-3. Stats (500+ / 2014 / 3–5 / Menu) with source notes  
-4. E-E-A-T four cells  
-5. Scope  
-6. Visible pricing (Blog tiers)  
-7. Related links  
-8. FAQ Q1 定義 / Q2 收費  
-9. CTA  
+## Copy rules
+- No on-page founding year /「自 2014」/「成立年份」hero or stats.
+- Keep `foundingDate: "2014"` only in LocalBusiness JSON-LD.
+- Prefer Google-useful signals: definition, use cases, process, transparent pricing, delivery, location, platform FAQ (Foodpanda/Deliveroo), contact.
 
-## Delivery honesty
-- Menu-design page: ~3–5 working days  
-- Package blog: ~5–7 working days  
-- On-page FAQ states both; do not collapse into one invented number.
+## Block order
+1. Brand + kicker + H2 + sub + CTA  
+2. Definition  
+3. Use cases「適合邊啲用途」+ prep checklist  
+4. Stats: 500+ / 5–7 days / SPK / Menu  
+5. How-to process (4 steps)  
+6. Scope  
+7. Visible pricing  
+8. Why / trust facts (no E-E-A-T acronym)  
+9. Related links  
+10. FAQ (incl. delivery platforms)  
+11. CTA  
+
+## Schema
+- WebPage + Service + OfferCatalog + FAQPage + HowTo + BreadcrumbList  
+- FAQ answers must match visible FAQ text  
 
 ## Files
 - `food-photography.squarespace-codeblock.html`
