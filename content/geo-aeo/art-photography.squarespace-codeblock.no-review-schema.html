@@ -1,0 +1,1063 @@
+<style>
+    /* 基礎設置 */
+    #jd-art-photography {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+        background: #030303;
+        color: #94a3b8;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        position: relative;
+        overflow: hidden;
+        scroll-behavior: smooth;
+        overflow-anchor: none;
+    }
+
+    #jd-art-photography * {
+        box-sizing: border-box;
+    }
+
+    /* 背景網格 */
+    .jd-art-bg-grid {
+        position: absolute;
+        inset: 0;
+        background-size: 60px 60px;
+        background-image: 
+            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.6;
+    }
+
+    /* 光暈效果 */
+    .jd-art-spotlight {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 800px;
+        height: 400px;
+        background: radial-gradient(circle at center, rgba(212, 175, 55, 0.08) 0%, transparent 70%);
+        filter: blur(60px);
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.5;
+    }
+
+    /* 主容器 */
+    .jd-art-main {
+        position: relative;
+        z-index: 10;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px 120px;
+    }
+
+    /* Hero 區塊 */
+    .jd-art-hero {
+        padding: 32px 0 48px;
+        text-align: center;
+    }
+
+    .jd-art-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 16px;
+        border-radius: 50px;
+        border: 1px solid rgba(251, 191, 36, 0.2);
+        background: rgba(251, 191, 36, 0.1);
+        color: #fbbf24;
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 20px;
+        backdrop-filter: blur(10px);
+    }
+
+    .jd-art-badge-dot {
+        width: 4px;
+        height: 4px;
+        background: #fbbf24;
+        border-radius: 50%;
+    }
+
+    .jd-art-hero-title {
+        font-size: 48px;
+        font-weight: 600;
+        color: #ffffff;
+        line-height: 1.1;
+        margin-bottom: 16px;
+        letter-spacing: -0.02em;
+    }
+
+    .jd-art-gold-gradient {
+        background: linear-gradient(135deg, #fceabb 0%, #f8b500 50%, #fceabb 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        background-size: 200% auto;
+    }
+
+    .jd-art-hero-subtitle {
+        font-size: 14px;
+        color: #94a3b8;
+        font-weight: 400;
+        letter-spacing: 0.05em;
+        margin-bottom: 20px;
+    }
+
+    .jd-art-hero-subtitle span {
+        color: #475569;
+        margin: 0 12px;
+    }
+
+    .jd-art-hero-desc {
+        max-width: 900px;
+        margin: 0 auto 28px;
+        font-size: 15px;
+        color: #94a3b8;
+        line-height: 1.8;
+    }
+
+    .jd-art-hero-desc p {
+        margin-bottom: 12px;
+    }
+
+    .jd-art-hero-desc strong {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+
+    .jd-art-hero-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 28px;
+    }
+
+    .jd-art-btn-primary {
+        padding: 11px 28px;
+        border-radius: 50px;
+        background: #ffffff;
+        color: #000000;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s;
+        display: inline-block;
+    }
+
+    .jd-art-btn-primary:hover {
+        background: #cbd5e1;
+    }
+
+    .jd-art-btn-secondary {
+        padding: 11px 28px;
+        border-radius: 50px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s;
+        display: inline-block;
+        backdrop-filter: blur(10px);
+    }
+
+    .jd-art-btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Expertise Section */
+    .jd-art-expertise {
+        padding: 40px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-expertise-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-top: 28px;
+    }
+
+    .jd-art-expertise-card {
+        padding: 24px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.4s ease;
+    }
+
+    .jd-art-expertise-card:hover {
+        border-color: rgba(251, 191, 36, 0.3);
+        background: rgba(255, 255, 255, 0.03);
+        transform: translateY(-2px);
+    }
+
+    .jd-art-expertise-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+        display: block;
+    }
+
+    .jd-art-expertise-title {
+        font-size: 17px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 10px;
+    }
+
+    .jd-art-expertise-desc {
+        font-size: 14px;
+        color: #94a3b8;
+        line-height: 1.7;
+    }
+
+    /* Reviews Section */
+    .jd-art-reviews {
+        padding: 40px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-reviews-header {
+        text-align: center;
+        margin-bottom: 28px;
+    }
+
+    .jd-art-reviews-rating {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        margin-bottom: 10px;
+    }
+
+    .jd-art-reviews-stars {
+        color: #fbbf24;
+        font-size: 24px;
+    }
+
+    .jd-art-reviews-score {
+        font-size: 32px;
+        font-weight: 700;
+        color: #fbbf24;
+    }
+
+    .jd-art-reviews-count {
+        font-size: 13px;
+        color: #64748b;
+    }
+
+    .jd-art-reviews-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+    }
+
+    .jd-art-review-card {
+        padding: 24px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.4s ease;
+    }
+
+    .jd-art-review-card:hover {
+        border-color: rgba(251, 191, 36, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .jd-art-review-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .jd-art-review-logo {
+        width: 45px;
+        height: 45px;
+        border-radius: 8px;
+        background: rgba(251, 191, 36, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #fbbf24;
+        font-size: 16px;
+    }
+
+    .jd-art-review-client {
+        font-size: 15px;
+        font-weight: 600;
+        color: #ffffff;
+    }
+
+    .jd-art-review-text {
+        font-size: 14px;
+        color: #94a3b8;
+        line-height: 1.7;
+    }
+
+    /* Services 區塊 */
+    .jd-art-services {
+        padding: 40px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-section-header {
+        margin-bottom: 28px;
+        text-align: center;
+    }
+
+    .jd-art-section-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: -0.01em;
+        margin-bottom: 8px;
+    }
+
+    .jd-art-section-desc {
+        font-size: 14px;
+        color: #64748b;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    .jd-art-services-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 28px;
+    }
+
+    .jd-art-service-card {
+        position: relative;
+        padding: 24px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.4s ease;
+    }
+
+    .jd-art-service-card:hover {
+        box-shadow: 0 0 40px -10px rgba(212, 175, 55, 0.1);
+        border-color: rgba(212, 175, 55, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .jd-art-service-number {
+        font-size: 24px;
+        color: rgba(251, 191, 36, 0.7);
+        font-family: 'Courier New', monospace;
+        margin-bottom: 16px;
+        display: block;
+    }
+
+    .jd-art-service-title {
+        font-size: 17px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 10px;
+        letter-spacing: -0.01em;
+    }
+
+    .jd-art-service-desc {
+        font-size: 14px;
+        color: #94a3b8;
+        line-height: 1.7;
+        margin-bottom: 12px;
+    }
+
+    .jd-art-service-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .jd-art-service-list li {
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.6;
+        margin-bottom: 8px;
+        padding-left: 16px;
+        position: relative;
+    }
+
+    .jd-art-service-list li:before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: rgba(251, 191, 36, 0.6);
+    }
+
+    .jd-art-service-list strong {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+
+    .jd-art-highlight-box {
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+        margin-top: 12px;
+    }
+
+    .jd-art-highlight-box.gold {
+        border-color: rgba(251, 191, 36, 0.1);
+        background: rgba(251, 191, 36, 0.02);
+    }
+
+    .jd-art-highlight-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .jd-art-highlight-box .jd-art-highlight-title {
+        color: #cbd5e1;
+    }
+
+    .jd-art-highlight-box.gold .jd-art-highlight-title {
+        color: #fbbf24;
+    }
+
+    .jd-art-highlight-text {
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.6;
+    }
+
+    /* Process 區塊 */
+    .jd-art-process {
+        padding: 40px 0;
+        background: rgba(255, 255, 255, 0.01);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-process-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 20px;
+        margin-top: 28px;
+    }
+
+    .jd-art-process-item {
+        text-align: center;
+        transition: all 0.3s;
+    }
+
+    .jd-art-process-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+        font-size: 24px;
+        transition: all 0.3s;
+    }
+
+    .jd-art-process-item:hover .jd-art-process-icon {
+        border-color: rgba(251, 191, 36, 0.5);
+        background: rgba(251, 191, 36, 0.1);
+    }
+
+    .jd-art-process-item.highlight .jd-art-process-icon {
+        border-color: rgba(251, 191, 36, 0.3);
+        background: rgba(251, 191, 36, 0.1);
+    }
+
+    .jd-art-process-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 6px;
+        letter-spacing: -0.01em;
+    }
+
+    .jd-art-process-item.highlight .jd-art-process-title {
+        color: #fbbf24;
+    }
+
+    .jd-art-process-desc {
+        font-size: 12px;
+        color: #64748b;
+        line-height: 1.5;
+    }
+
+    /* FAQ Section */
+    .jd-art-faq {
+        padding: 40px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-faq-list {
+        max-width: 900px;
+        margin: 28px auto 0;
+    }
+
+    .jd-art-faq-item {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        margin-bottom: 12px;
+        overflow: hidden;
+        contain: layout;
+    }
+
+    .jd-art-faq-question {
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: none;
+        padding: 18px 20px;
+        color: #fbbf24;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.3s ease;
+        font-family: inherit;
+    }
+
+    .jd-art-faq-question:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-faq-icon {
+        transition: transform 0.3s ease;
+        color: #fbbf24;
+        font-size: 12px;
+    }
+
+    .jd-art-faq-item.active .jd-art-faq-icon {
+        transform: rotate(180deg);
+    }
+
+    .jd-art-faq-answer {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s ease;
+    }
+
+    .jd-art-faq-item.active .jd-art-faq-answer {
+        max-height: 1000px;
+    }
+
+    .jd-art-faq-answer-content {
+        padding: 0 20px 18px;
+        color: #94a3b8;
+        font-size: 14px;
+        line-height: 1.8;
+    }
+
+    /* Keywords 區塊 */
+    .jd-art-keywords {
+        padding: 40px 0;
+        text-align: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .jd-art-keywords-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: -0.01em;
+        margin-bottom: 20px;
+    }
+
+    .jd-art-keywords-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .jd-art-keyword-tag {
+        padding: 8px 16px;
+        border-radius: 50px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        font-size: 13px;
+        color: #cbd5e1;
+        transition: all 0.3s;
+        cursor: default;
+    }
+
+    .jd-art-keyword-tag:hover {
+        border-color: rgba(251, 191, 36, 0.3);
+        color: #fbbf24;
+    }
+
+    /* 響應式 */
+    @media (max-width: 768px) {
+        .jd-art-hero-title {
+            font-size: 36px;
+        }
+
+        .jd-art-hero-subtitle {
+            font-size: 12px;
+        }
+
+        .jd-art-hero-desc {
+            font-size: 13px;
+        }
+
+        .jd-art-section-title {
+            font-size: 24px;
+        }
+
+        .jd-art-services-grid,
+        .jd-art-expertise-grid,
+        .jd-art-reviews-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .jd-art-process-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .jd-art-main {
+            padding: 0 16px 80px;
+        }
+
+        .jd-art-hero {
+            padding: 24px 0 40px;
+        }
+
+        .jd-art-hero-title {
+            font-size: 30px;
+        }
+
+        .jd-art-section-title {
+            font-size: 22px;
+        }
+
+        .jd-art-hero-buttons {
+            flex-direction: column;
+        }
+
+        .jd-art-btn-primary,
+        .jd-art-btn-secondary {
+            width: 100%;
+        }
+
+        .jd-art-process-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Squarespace 兼容 */
+    .sqs-block-content #jd-art-photography {
+        width: 100%;
+    }
+</style>
+
+<div id="jd-art-photography">
+    <!-- 背景元素 -->
+    <div class="jd-art-bg-grid"></div>
+    <div class="jd-art-spotlight"></div>
+
+    <!-- 主內容 -->
+    <div class="jd-art-main">
+        <!-- Hero 區塊 -->
+        <header class="jd-art-hero">
+            <div class="jd-art-badge">
+                <span class="jd-art-badge-dot"></span>
+                專業藝術品攝影 & 數碼化存檔 | 自2014年服務香港藝術界
+            </div>
+
+            <h1 class="jd-art-hero-title">
+                香港專業藝術品攝影服務<br><span class="jd-art-gold-gradient">博物館級畫作翻拍與數碼化</span>
+            </h1>
+
+            <p class="jd-art-hero-subtitle">
+                <strong>博物館級畫作翻拍</strong> <span>/</span> <strong>Giclée 藝術微噴</strong> <span>/</span> <strong>藝術藏品數碼化</strong>
+            </p>
+
+            <div class="jd-art-hero-desc" itemprop="description">
+                <p>
+                    JD STUDIO 自2014年成立以來，專精於香港藝術品攝影服務，已為超過50間畫廊、博物館及200位藝術家和藏家提供專業拍攝。我們的攝影團隊擁有香港專業攝影師公會（HKIPP）認證，使用Phase One IQ4 150MP（1億5千萬像素）、Canon EOS R5（4500萬像素）等博物館級器材，配備專業偏振光系統（Polarized Lighting）和標準色卡（Color Checker）進行嚴格色彩管理。
+                </p>
+                <p>
+                    透過專業的燈光佈局與嚴格的色彩管理流程（Color Management），我們確保每一筆觸、每一處紋理都能在鏡頭下真實呈現。服務包括油畫翻拍、水彩攝影、國畫數碼化、雕塑攝影、Giclée 藝術微噴製作等，滿足畫廊展覽圖錄、拍賣行圖鑑、限量版畫製作等專業需求。
+                </p>
+            </div>
+
+            <div class="jd-art-hero-buttons">
+                <a href="https://wa.me/85291531976" class="jd-art-btn-primary">WhatsApp 諮詢</a>
+                <a href="mailto:info.exposurehk@gmail.com" class="jd-art-btn-secondary">電郵查詢</a>
+            </div>
+        </header>
+
+        <!-- Expertise Section (E-E-A-T: Expertise) -->
+        <section class="jd-art-expertise">
+            <div class="jd-art-section-header">
+                <h2 class="jd-art-section-title">專業資歷與技術優勢</h2>
+                <p class="jd-art-section-desc">博物館級器材與嚴格的色彩管理流程</p>
+            </div>
+
+       
+
+                <div class="jd-art-expertise-card">
+                    <span class="jd-art-expertise-icon"></span>
+                    <h3 class="jd-art-expertise-title">博物館級器材</h3>
+                    <p class="jd-art-expertise-desc">
+                        使用Phase One IQ4 150MP（1億5千萬像素）、Canon EOS R5（4500萬像素）等頂級相機，配備專業微距鏡頭和偏振光系統，確保極致解析度和色彩準確度。
+                    </p>
+                </div>
+
+                <div class="jd-art-expertise-card">
+                    <span class="jd-art-expertise-icon"></span>
+                    <h3 class="jd-art-expertise-title">嚴格色彩管理</h3>
+                    <p class="jd-art-expertise-desc">
+                        使用X-Rite ColorChecker Passport標準色卡進行嚴格校正，建立ICC Profile色彩配置文件，確保數碼檔案與原作色差降至最低（ΔE < 2），真實還原藝術品的色彩層次。
+                    </p>
+                </div>
+
+                <div class="jd-art-expertise-card">
+                    <span class="jd-art-expertise-icon"></span>
+                    <h3 class="jd-art-expertise-title">專業去反光技術</h3>
+                    <p class="jd-art-expertise-desc">
+                        運用偏振光技術（Polarized Lighting）和專業燈光佈局，有效消除油畫清漆、亞加力或裝框玻璃表面的雜光反射，同時保留畫作的立體筆觸（Texture）。
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Reviews Section (E-E-A-T: Experience & Trustworthiness) -->
+        <section class="jd-art-reviews">
+            <div class="jd-art-reviews-header">
+                <div class="jd-art-reviews-rating">
+                    <div class="jd-art-reviews-stars">⭐⭐⭐⭐⭐</div>
+                    <div class="jd-art-reviews-score">5.0</div>
+                </div>
+                <div class="jd-art-reviews-count">基於 42 個畫廊、博物館及藏家評價</div>
+            </div>
+
+            <div class="jd-art-reviews-grid">
+                <div class="jd-art-review-card">
+                    <div class="jd-art-review-header">
+                        <div class="jd-art-review-logo">HKM</div>
+                        <div class="jd-art-review-client">香港藝術館</div>
+                    </div>
+                    <p class="jd-art-review-text">
+                        「JD STUDIO 的藝術品攝影專業度極高，國畫的細微筆觸和墨色層次 色彩管理流程嚴格，數碼檔案與原作幾乎無色差，非常適合製作展覽圖錄和學術出版」
+                    </p>
+</div>
+
+                <div class="jd-art-review-card">
+                    <div class="jd-art-review-header">
+                        <div class="jd-art-review-logo">WH</div>
+                        <div class="jd-art-review-client">白石畫廊香港</div>
+                    </div>
+                    <p class="jd-art-review-text">
+                        「我們委託JD STUDIO為畫廊藏品進行全面數碼化，他們的偏振光技術完美消除了油畫清漆的反光問題，同時保留了畫作的立體質感。Giclée藝術微噴的色彩還原度極高，客戶非常滿意。」
+                    </p>
+</div>
+
+                <div class="jd-art-review-card">
+                    <div class="jd-art-review-header">
+                        <div class="jd-art-review-logo">CL</div>
+                        <div class="jd-art-review-client">陳先生（私人藏家）</div>
+                    </div>
+                    <p class="jd-art-review-text">
+                        「作為私人藏家，我需要為珍貴的水彩作品建立高質量的數碼資產庫。JD STUDIO的專業服務讓我非常放心，他們提供標準化的檔案格式和元數據支援，方便未來的檢索和資產管理。交付速度快，品質保證。」
+                    </p>
+</div>
+            </div>
+        </section>
+
+        <!-- Services 區塊 -->
+        <section class="jd-art-services" id="services">
+            <div class="jd-art-section-header">
+                <h2 class="jd-art-section-title">為什麼選擇 JD STUDIO?</h2>
+                <p class="jd-art-section-desc">針對藝術家與收藏家對細節的執著，我們以技術重新定義影像標準</p>
+            </div>
+
+            <div class="jd-art-services-grid">
+                <!-- Service 01 -->
+                <article class="jd-art-service-card">
+                    <span class="jd-art-service-number">01</span>
+                    <h3 class="jd-art-service-title">極致高解像度 (High-Resolution)</h3>
+                    <p class="jd-art-service-desc">
+                        細節決定價值。採用Phase One IQ4 150MP（1億5千萬像素）、Canon EOS R5（4500萬像素）等高像素專業相機系統，完美捕捉作品的微細紋理。
+                    </p>
+                    <ul class="jd-art-service-list">
+                        <li>滿足<strong>大幅面印刷</strong>及<strong>Giclée 藝術微噴</strong>的嚴格輸出需求（300 DPI以上）</li>
+                        <li>即使放大數倍，<strong>筆觸細節</strong>依然清晰銳利，適合製作<strong>限量版畫</strong>和學術出版</li>
+                    </ul>
+                </article>
+
+                <!-- Service 02 -->
+                <article class="jd-art-service-card">
+                    <span class="jd-art-service-number">02</span>
+                    <h3 class="jd-art-service-title">精準色彩還原 (True-to-Life)</h3>
+                    <p class="jd-art-service-desc">
+                        色彩是藝術的語言。我們使用X-Rite ColorChecker Passport<strong>標準色卡</strong>進行嚴格校正，建立ICC Profile色彩配置文件。
+                    </p>
+                    <div class="jd-art-highlight-box">
+                        <span class="jd-art-highlight-title">色彩管理</span>
+                        <span class="jd-art-highlight-text">確保數碼檔案與原作色差降至最低（<strong>ΔE < 2</strong>），真實還原色彩層次感。</span>
+                    </div>
+                    <div class="jd-art-highlight-box gold">
+                        <span class="jd-art-highlight-title">適用媒材</span>
+                        <span class="jd-art-highlight-text"><strong>油畫、水彩、國畫、版畫、攝影作品、書法</strong>等各類平面藝術。</span>
+                    </div>
+                </article>
+
+                <!-- Service 03 -->
+                <article class="jd-art-service-card">
+                    <span class="jd-art-service-number">03</span>
+                    <h3 class="jd-art-service-title">專業去反光技術 (Glare-Free)</h3>
+                    <p class="jd-art-service-desc">
+                        針對高光澤表面，我們運用特殊的<strong>偏振光技術 (Polarized Lighting)</strong>和專業燈光佈局。
+                    </p>
+                    <ul class="jd-art-service-list">
+                        <li>有效消除<strong>油畫清漆、亞加力或裝框玻璃</strong>表面的雜光反射</li>
+                        <li>同時保留畫作的<strong>立體筆觸 (Texture)</strong>，讓平面影像呈現厚度感</li>
+                    </ul>
+                </article>
+
+                <!-- Service 04 -->
+                <article class="jd-art-service-card">
+                    <span class="jd-art-service-number">04</span>
+                    <h3 class="jd-art-service-title">全面數碼化存檔</h3>
+                    <p class="jd-art-service-desc">
+                        為珍貴藏品建立永久的<strong>數碼資產</strong>。協助<strong>畫廊、博物館及私人藏家</strong>進行系統性的<strong>收藏品數碼化</strong>。
+                    </p>
+                    <p class="jd-art-service-desc">
+                        我們提供標準化的檔案格式（TIFF、PSD、JPEG）與<strong>元數據 (Metadata)</strong>支援（包括作品名稱、藝術家、尺寸、媒材、拍攝日期等），方便未來的檢索、出版及資產管理。
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <!-- Process 區塊 -->
+        <section class="jd-art-process" id="process">
+            <div class="jd-art-section-header">
+                <h2 class="jd-art-section-title">專業工作流程</h2>
+                <p class="jd-art-section-desc">嚴謹的標準化作業，確保每一件作品的安全與品質</p>
+            </div>
+
+            <div class="jd-art-process-grid">
+                <!-- Step 1 -->
+                <div class="jd-art-process-item">
+                    <div class="jd-art-process-icon">💬</div>
+                    <h4 class="jd-art-process-title">諮詢評估</h4>
+                    <p class="jd-art-process-desc">確認作品材質、尺寸及拍攝數量</p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="jd-art-process-item">
+                    <div class="jd-art-process-icon">📦</div>
+                    <h4 class="jd-art-process-title">運送/上門</h4>
+                    <p class="jd-art-process-desc">安排作品運送或攝影師上門拍攝</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="jd-art-process-item">
+                    <div class="jd-art-process-icon">📷</div>
+                    <h4 class="jd-art-process-title">拍攝校色</h4>
+                    <p class="jd-art-process-desc">偏振光佈局、Color Checker 校正</p>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="jd-art-process-item highlight">
+                    <div class="jd-art-process-icon">✨</div>
+                    <h4 class="jd-art-process-title">後期精修</h4>
+                    <p class="jd-art-process-desc">色彩管理轉換、細節銳化</p>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="jd-art-process-item">
+                    <div class="jd-art-process-icon">☁️</div>
+                    <h4 class="jd-art-process-title">交付存檔</h4>
+                    <p class="jd-art-process-desc">交付 TIFF/PSD/JPG 高清大圖</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Section (E-E-A-T & GEO Optimization) -->
+        <section class="jd-art-faq">
+            <div class="jd-art-section-header">
+                <h2 class="jd-art-section-title">香港藝術品攝影常見問題</h2>
+                <p class="jd-art-section-desc">專業解答您對藝術品翻拍與數碼化服務的疑問</p>
+            </div>
+
+            <div class="jd-art-faq-list">
+                <!-- FAQ 1 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>香港藝術品攝影服務收費如何？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            我們的藝術品攝影服務收費透明合理，根據作品類型、尺寸、數量及拍攝複雜度而定。標準平面藝術品翻拍（如油畫、水彩、國畫、版畫）通常較為經濟實惠；立體藝術品（如雕塑、陶瓷、古董）因需要多角度拍攝和特殊燈光佈局，收費較高；Giclée 藝術微噴製作則提供額外的限量版畫服務。建議您透過WhatsApp (+852-9153-1976) 或電郵 (info.exposurehk@gmail.com) 聯絡我們，提供作品照片和拍攝需求，我們會為您提供詳細報價。我們也提供套餐優惠，大量訂單（10件以上）可享折扣。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 2 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>藝術品攝影的交付時間需要多久？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            標準藝術品攝影的交付時間為7-10個工作天，包括拍攝、色彩管理校正、後期精修（去背、調色、細節銳化）及交付。Giclée 藝術微噴製作的交付時間為10-14個工作天，包括打樣、校色和最終印刷。如果您有緊急需求，我們提供加急服務，可在3-5個工作天內完成，但需額外收費。所有數碼檔案均透過雲端（Google Drive、Dropbox）或WeTransfer交付高解析度檔案（TIFF、PSD、JPEG），方便您下載和使用。我們也提供免費2次修改，確保您完全滿意。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 3 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>什麼是 Giclée 藝術微噴？與一般印刷有什麼分別？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            Giclée（音譯「吉克利」）是一種高品質的藝術微噴印刷技術，使用專業級噴墨打印機（如Epson SureColor P9000）和檔案級顏料墨水（Pigment Ink），在高級藝術紙（如Hahnemühle、Canson）或畫布上進行印刷。與一般印刷相比，Giclée具有以下優勢：(1) 色彩範圍更廣（覆蓋Adobe RGB色域），能更準確地還原原作色彩；(2) 保存時間更長（檔案級墨水可保存100年以上，不褪色）；(3) 解析度更高（通常達到2400 DPI以上），細節更清晰；(4) 適合製作限量版畫，每張作品都可以簽名和編號。Giclée是藝術家、畫廊和藏家製作高品質複製品的首選方式。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 4 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>如何確保藝術品在拍攝過程中的安全？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            我們非常重視藝術品的安全，採取多重保護措施：(1) 專業運送：我們與專業藝術品運輸公司合作，提供全程保險和溫濕度控制的運送服務；(2) 上門拍攝：如果您的作品珍貴或不便運送，我們的攝影團隊可以攜帶器材上門拍攝，避免運輸風險；(3) 安全操作：所有作品在拍攝過程中都會戴手套處理，放置在專業的作品支架上，避免直接接觸和損傷；(4) 全額保險：所有作品在我們的影樓內都會購買全額保險，確保絕對安全；(5) 保密協議：我們會簽署保密協議，保護您的作品資訊和商業機密。我們曾為多間博物館和畫廊提供服務，累積了豐富的藝術品處理經驗。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 5 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>什麼是色彩管理（Color Management）？為何藝術品攝影需要？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            色彩管理（Color Management）是一套確保色彩在不同設備（相機、螢幕、打印機）之間準確傳遞的技術流程。藝術品攝影需要色彩管理的原因是：(1) 確保數碼檔案與原作色彩一致：通過使用標準色卡（如X-Rite ColorChecker Passport）進行校正，建立ICC Profile色彩配置文件，確保拍攝的色彩與原作色差降至最低（ΔE < 2）；(2) 確保不同設備顯示一致：無論在哪台螢幕或打印機上查看或輸出，色彩都能保持一致；(3) 滿足專業出版和印刷需求：畫廊展覽圖錄、拍賣行圖鑑、學術出版等都要求極高的色彩準確度。我們的色彩管理流程包括：拍攝時使用標準色卡、建立ICC Profile、在校色螢幕上進行後期調整、提供符合標準的數碼檔案。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 6 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>你們使用什麼攝影器材拍攝藝術品？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            我們使用博物館級的專業攝影器材，確保藝術品照片達到出版級質量。相機方面，我們使用Phase One IQ4 150MP（1億5千萬像素）、Canon EOS R5（4500萬像素）、Sony A7R IV（6100萬像素）等頂級全片幅相機和中畫幅相機。鏡頭方面，我們配備Canon TS-E 90mm f/2.8L Macro（移軸微距鏡頭）、Sigma 105mm f/2.8 DG DN Macro等專業鏡頭，能夠拍攝極致的細節並矯正透視變形。燈光系統方面，我們使用Profoto D2、Broncolor Siros等專業閃光燈，配合偏振光系統、柔光箱、反光板等配件，精準控制光線，消除反光。後期製作方面，我們使用Adobe Photoshop、Capture One Pro等專業軟件進行色彩管理、細節銳化和檔案輸出。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 7 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>如何消除油畫清漆或裝框玻璃的反光？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            消除油畫清漆或裝框玻璃的反光是藝術品攝影的核心技術之一。我們運用專業的偏振光技術（Polarized Lighting）來解決這個問題：(1) 偏振濾鏡：在相機鏡頭和燈光上都安裝偏振濾鏡，通過調整偏振角度，有效消除表面反光；(2) 45度燈光佈局：將燈光放置在作品兩側45度角的位置，避免直射光線產生反光；(3) 柔光處理：使用大型柔光箱或柔光傘，讓光線更均勻柔和，減少反光；(4) 多次拍攝合成：如果反光特別嚴重，我們會從不同角度拍攝多張照片，然後在後期合成，去除所有反光區域。這些技術能有效消除反光，同時保留畫作的立體筆觸（Texture）和質感，讓平面影像呈現厚度感。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 8 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>你們有服務過哪些知名畫廊或博物館？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            自2014年成立以來，JD STUDIO已為香港超過50間畫廊、博物館及200位藝術家和藏家提供專業攝影服務。我們的客戶包括香港藝術館（館藏國畫數碼化）、香港文化博物館（展覽紀錄）、白石畫廊香港（藏品翻拍和Giclée製作）等知名機構。我們也為眾多獨立藝術家、私人藏家、拍賣行提供專業攝影服務。我們的客戶遍佈畫廊、博物館、藝術家工作室、私人收藏等領域，累積了豐富的行業經驗和專業知識。我們的客戶滿意度高達5.0/5.0（基於42個評價），多數客戶成為我們的長期合作夥伴。我們也曾為國際藝術展覽、拍賣會、藝術出版提供專業攝影服務。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 9 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>藝術品攝影的數碼檔案版權歸誰所有？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            完成付款後，所有藝術品攝影的數碼檔案版權將完全轉讓給客戶，您擁有檔案的完整使用權，可以用於任何商業或非商業用途，包括畫廊展覽圖錄、拍賣行圖鑑、學術出版、網站展示、社交媒體、Giclée藝術微噴、限量版畫製作等，無需額外付費或授權。我們會提供正式的版權轉讓協議，確保您的權益。如果您需要保留攝影師署名權（用於參賽或展覽），我們可以協商特殊安排。我們承諾不會將您的藝術品照片用於其他商業用途或展示給第三方（除非獲得您的明確同意），保護您的作品資訊和商業機密。所有數碼檔案都會提供多種格式（TIFF、PSD、JPEG）和解析度，方便您用於不同用途。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAQ 10 -->
+                <div class="jd-art-faq-item">
+                    <button class="jd-art-faq-question" onclick="this.parentElement.classList.toggle('active')">
+                        <span>如何為畫廊或博物館進行系統性的藏品數碼化？</span>
+                        <span class="jd-art-faq-icon">▼</span>
+                    </button>
+                    <div class="jd-art-faq-answer">
+                        <div class="jd-art-faq-answer-content">
+                            我們為畫廊、博物館及私人藏家提供系統性的藏品數碼化服務，包括以下流程：(1) 諮詢評估：了解您的藏品數量、類型、尺寸和數碼化需求，制定詳細的拍攝計劃和時間表；(2) 標準化拍攝：使用統一的器材、燈光佈局和色彩管理流程，確保所有藏品的數碼檔案質量一致；(3) 元數據支援：為每件作品建立詳細的元數據（Metadata），包括作品名稱、藝術家、創作年份、尺寸、媒材、拍攝日期、檔案編號等，方便未來的檢索和資產管理；(4) 檔案格式標準化：提供符合國際標準的檔案格式（TIFF、PSD、JPEG）和命名規則，方便整合到您的資產管理系統；(5) 雲端存儲和備份：協助您建立雲端存儲和備份系統，確保數碼資產的長期保存。我們曾為多間博物館和畫廊完成大規模的藏品數碼化項目，累積了豐富的經驗。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Keywords 區塊 -->
+        <section class="jd-art-keywords">
+            <h2 class="jd-art-keywords-title">服務範疇</h2>
+            <div class="jd-art-keywords-grid">
+                <span class="jd-art-keyword-tag">油畫翻拍</span>
+                <span class="jd-art-keyword-tag">水彩攝影</span>
+                <span class="jd-art-keyword-tag">國畫數碼化</span>
+                <span class="jd-art-keyword-tag">書法作品拍攝</span>
+                <span class="jd-art-keyword-tag">雕塑攝影</span>
+                <span class="jd-art-keyword-tag">陶瓷藝術品拍攝</span>
+                <span class="jd-art-keyword-tag">古董攝影</span>
+                <span class="jd-art-keyword-tag">版畫翻拍</span>
+                <span class="jd-art-keyword-tag">畫廊展覽紀錄</span>
+                <span class="jd-art-keyword-tag">拍賣目錄拍攝</span>
+                <span class="jd-art-keyword-tag">藝術家作品集</span>
+                <span class="jd-art-keyword-tag">Giclée 製作</span>
+                <span class="jd-art-keyword-tag">限量版畫製作</span>
+                <span class="jd-art-keyword-tag">博物館級攝影</span>
+                <span class="jd-art-keyword-tag">色彩管理</span>
+                <span class="jd-art-keyword-tag">藝術藏品數碼化</span>
+            </div>
+        </section>
+    </div>
