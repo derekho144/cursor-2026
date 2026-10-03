@@ -41,7 +41,7 @@ Legend: ✅ strong · 🟡 partial · ❌ weak
 | `/services/event-photography` | 🟡 | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
 | `/services/art-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | Paste |
 | `/services/gallery` (AI) | ❌ | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
-| `/-menu-design` | ❌ | ❌ | 🟡 | ❌ | ❌ | ❌ | P1 |
+| `/-menu-design` | ✅ pack ready | 🟡 quote-only (no food $) | ✅ visible FAQ | ❌ no FAQPage (2026) | ✅ | ✅ Offer quote | Paste — replace any food-photo block |
 | `/contact-us` | — | — | ❌ | ❌ | ❌ | — | P2 |
 | Pricing **blogs** | ✅ | ✅ | ✅ | ✅ | — | — | Keep + cross-link |
 
