@@ -1,0 +1,296 @@
+<span id="jd-menu-design-anchor" aria-hidden="true"></span>
+<style>
+#jd-menu-design{
+  --bg:#07080a;--line:rgba(255,255,255,.09);--text:#f4f1ea;--muted:#b3aaa0;--dim:#7a736a;
+  --ink:#e8e2d6;--gold:#c9a962;--gold2:#e4c98a;--soft:rgba(201,169,98,.12);
+  box-sizing:border-box;width:100%;position:relative;overflow:hidden;
+  margin:0;padding:0;color:var(--text);
+  font-family:"Noto Sans TC","Source Han Sans TC","PingFang TC",-apple-system,BlinkMacSystemFont,sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.5;
+  background:
+    radial-gradient(820px 380px at 12% -10%,rgba(201,169,98,.14),transparent 56%),
+    radial-gradient(520px 280px at 100% 18%,rgba(255,255,255,.04),transparent 55%),
+    linear-gradient(180deg,#121418 0%,#090a0c 48%,#050607 100%);
+}
+#jd-menu-design *{box-sizing:border-box}
+#jd-menu-design .jd-shell{
+  position:relative;z-index:2;max-width:1040px;margin:0 auto;padding:56px 24px 72px;
+}
+#jd-menu-design .jd-glow{
+  position:absolute;inset:auto -8% -12% auto;width:48%;height:48%;
+  background:radial-gradient(circle,rgba(201,169,98,.07),transparent 70%);
+  pointer-events:none;filter:blur(36px);z-index:0;
+}
+#jd-menu-design .jd-brand{
+  margin:0 0 10px;font-size:clamp(1.35rem,3.2vw,1.75rem);font-weight:600;letter-spacing:-.03em;
+  color:var(--ink);animation:jdMenuRise .7s ease both;
+}
+#jd-menu-design .jd-kicker{
+  margin:0 0 18px;display:inline-flex;align-items:center;gap:10px;
+  font-size:11px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+  animation:jdMenuRise .7s .03s ease both;
+}
+#jd-menu-design .jd-kicker::before{
+  content:"";width:28px;height:1px;background:linear-gradient(90deg,var(--gold),transparent);
+}
+#jd-menu-design h2.jd-title{
+  margin:0;max-width:12ch;font-size:clamp(2.2rem,5.6vw,3.5rem);font-weight:600;
+  letter-spacing:-.04em;line-height:1.05;color:var(--ink);
+  animation:jdMenuRise .8s .06s ease both;
+}
+#jd-menu-design .jd-title em{
+  font-style:normal;display:block;margin-top:.1em;max-width:22ch;
+  font-size:clamp(1.05rem,2.4vw,1.35rem);font-weight:500;letter-spacing:-.02em;line-height:1.35;
+  background:linear-gradient(105deg,#f3e7c4 0%,#c9a962 48%,#e8d29a 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+#jd-menu-design .jd-sub{
+  margin:18px 0 0;max-width:38em;font-size:clamp(1rem,2vw,1.15rem);color:var(--muted);font-weight:400;
+  animation:jdMenuRise .8s .12s ease both;
+}
+#jd-menu-design .jd-cta{
+  margin-top:28px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+  animation:jdMenuRise .8s .18s ease both;
+}
+#jd-menu-design .jd-btn{
+  display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 24px;
+  border-radius:2px;background:var(--ink);color:#121418;font-size:.92rem;font-weight:600;letter-spacing:.04em;text-decoration:none;
+  transition:transform .25s ease,box-shadow .25s ease,background .25s ease;
+}
+#jd-menu-design .jd-btn:hover{background:#fff;transform:translateY(-1px);box-shadow:0 14px 40px -18px rgba(201,169,98,.5)}
+#jd-menu-design .jd-link{
+  display:inline-flex;align-items:center;min-height:48px;padding:0 12px;color:var(--muted);font-size:.95rem;text-decoration:none;
+}
+#jd-menu-design .jd-link:hover{color:var(--ink)}
+#jd-menu-design .jd-block{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+#jd-menu-design .jd-label{
+  margin:0 0 14px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+}
+#jd-menu-design .jd-def p,#jd-menu-design .jd-use p{margin:0;font-size:1.06rem;line-height:1.75;color:var(--muted);font-weight:300}
+#jd-menu-design .jd-def p+p,#jd-menu-design .jd-use p+p{margin-top:12px}
+#jd-menu-design .jd-def strong,#jd-menu-design .jd-use strong{color:var(--ink);font-weight:500}
+#jd-menu-design .jd-facts,#jd-menu-design .jd-stats{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;padding:0;list-style:none;
+  border:1px solid var(--line);border-radius:4px;overflow:hidden;background:rgba(255,255,255,.025);
+}
+#jd-menu-design .jd-facts li,#jd-menu-design .jd-stats li{
+  margin:0;padding:20px 18px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);
+}
+#jd-menu-design .jd-facts li:nth-child(2n),#jd-menu-design .jd-stats li:nth-child(2n){border-right:0}
+#jd-menu-design .jd-facts li:nth-last-child(-n+2),#jd-menu-design .jd-stats li:nth-last-child(-n+2){border-bottom:0}
+#jd-menu-design .jd-facts strong,#jd-menu-design .jd-stats strong{
+  display:block;margin-bottom:6px;font-size:.92rem;font-weight:500;color:var(--ink);
+}
+#jd-menu-design .jd-stats .jd-num{
+  display:block;margin-bottom:8px;font-size:clamp(1.8rem,4vw,2.4rem);font-weight:600;letter-spacing:-.03em;color:var(--ink);line-height:1;
+}
+#jd-menu-design .jd-stats .jd-num span{color:var(--gold);font-size:.55em;vertical-align:super}
+#jd-menu-design .jd-facts span,#jd-menu-design .jd-stats span{
+  display:block;font-size:.88rem;line-height:1.55;color:var(--dim);
+}
+#jd-menu-design .jd-scope{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin:0;padding:0;list-style:none;counter-reset:scope;
+}
+#jd-menu-design .jd-scope li{
+  counter-increment:scope;position:relative;margin:0;padding:16px 16px 16px 52px;
+  border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);
+  color:var(--ink);font-size:.98rem;font-weight:500;
+}
+#jd-menu-design .jd-scope li::before{
+  content:counter(scope,decimal-leading-zero);position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  font-size:12px;letter-spacing:.08em;color:var(--gold);font-weight:500;
+}
+#jd-menu-design .jd-steps{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none;counter-reset:step;
+}
+#jd-menu-design .jd-steps li{
+  counter-increment:step;margin:0;padding:18px 16px;border:1px solid var(--line);border-radius:4px;
+  background:rgba(255,255,255,.03);
+}
+#jd-menu-design .jd-steps strong{
+  display:block;margin:0 0 8px;font-size:.95rem;font-weight:500;color:var(--ink);
+}
+#jd-menu-design .jd-steps strong::before{
+  content:counter(step,decimal-leading-zero) " · ";color:var(--gold);font-weight:500;letter-spacing:.04em;
+}
+#jd-menu-design .jd-steps span{display:block;font-size:.86rem;line-height:1.55;color:var(--dim)}
+#jd-menu-design .jd-quote-box{
+  padding:22px;border:1px solid var(--line);border-radius:4px;
+  background:linear-gradient(135deg,rgba(201,169,98,.1),rgba(255,255,255,.02));
+}
+#jd-menu-design .jd-quote-box p{margin:0;font-size:1.02rem;line-height:1.7;color:var(--muted);font-weight:300}
+#jd-menu-design .jd-quote-box strong{color:var(--ink);font-weight:500}
+#jd-menu-design .jd-note{margin:14px 0 0;font-size:.88rem;color:var(--dim)}
+#jd-menu-design a.jd-inline,#jd-menu-design .jd-note a,#jd-menu-design details a{color:var(--gold2);text-decoration:none}
+#jd-menu-design a.jd-inline:hover,#jd-menu-design .jd-note a:hover{text-decoration:underline}
+#jd-menu-design .jd-related{display:grid;gap:12px}
+#jd-menu-design .jd-related a{
+  display:block;padding:18px 20px;border:1px solid var(--line);border-radius:4px;
+  background:rgba(255,255,255,.025);color:var(--ink);text-decoration:none;
+  transition:border-color .25s ease,background .25s ease;
+}
+#jd-menu-design .jd-related a:hover{border-color:rgba(201,169,98,.35);background:var(--soft)}
+#jd-menu-design .jd-related strong{display:block;margin-bottom:6px;color:var(--gold2);font-weight:600}
+#jd-menu-design .jd-related span{display:block;font-size:.9rem;line-height:1.6;color:var(--muted);font-weight:300}
+#jd-menu-design details{margin:0;border-bottom:1px solid var(--line)}
+#jd-menu-design details:first-of-type{border-top:1px solid var(--line)}
+#jd-menu-design summary{
+  list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:16px;align-items:center;
+  padding:18px 2px;font-size:1.02rem;font-weight:500;color:var(--ink);
+}
+#jd-menu-design summary::-webkit-details-marker{display:none}
+#jd-menu-design summary:after{
+  content:"+";flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;
+  display:grid;place-items:center;color:var(--muted);font-weight:300;
+}
+#jd-menu-design details[open] summary:after{
+  content:"–";color:var(--gold);border-color:rgba(201,169,98,.45);background:var(--soft);
+}
+#jd-menu-design details p{margin:0;padding:0 2px 18px;font-size:.96rem;line-height:1.75;color:var(--muted);font-weight:300}
+@keyframes jdMenuRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (max-width:900px){
+  #jd-menu-design .jd-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:720px){
+  #jd-menu-design .jd-shell{padding:40px 16px 56px}
+  #jd-menu-design .jd-facts,#jd-menu-design .jd-stats,#jd-menu-design .jd-scope{grid-template-columns:1fr}
+  #jd-menu-design .jd-facts li,#jd-menu-design .jd-stats li{border-right:0}
+  #jd-menu-design .jd-facts li:nth-last-child(-n+2),
+  #jd-menu-design .jd-stats li:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  #jd-menu-design .jd-facts li:last-child,#jd-menu-design .jd-stats li:last-child{border-bottom:0}
+}
+@media (max-width:420px){
+  #jd-menu-design .jd-cta{flex-direction:column;align-items:stretch}
+  #jd-menu-design .jd-btn{width:100%}
+  #jd-menu-design .jd-steps{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  #jd-menu-design .jd-brand,#jd-menu-design .jd-kicker,#jd-menu-design h2.jd-title,#jd-menu-design .jd-sub,#jd-menu-design .jd-cta{animation:none}
+}
+.sqs-block-content #jd-menu-design{width:100%}
+</style>
+
+<div id="jd-menu-design" lang="zh-HK">
+  <div class="jd-glow" aria-hidden="true"></div>
+  <div class="jd-shell">
+    <header>
+      <p class="jd-brand">JD Studio</p>
+      <p class="jd-kicker">Hong Kong · Menu Design</p>
+      <h2 class="jd-title">香港菜單設計服務<em>餐廳菜牌 · 外賣餐牌 · 品牌視覺</em></h2>
+      <p class="jd-sub">為餐廳、咖啡店、甜品店、酒吧與酒店餐飲策劃菜牌結構、排版與視覺呈現，提升點餐清晰度與品牌形象。</p>
+      <div class="jd-cta">
+        <a class="jd-btn" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp +852 9153 1976</a>
+        <a class="jd-link" href="https://www.jdstudiohk.com/services/food-photography">需要食物攝影？</a>
+        <a class="jd-link" href="https://www.jdstudiohk.com/contact-us">查詢報價</a>
+      </div>
+    </header>
+
+    <section class="jd-block jd-def">
+      <p class="jd-label">什麼是菜單設計？</p>
+      <p><strong>菜單設計是為餐廳與食肆策劃菜牌結構、排版與視覺呈現的專業設計服務。</strong> JD Studio 協助整理分類、層級、字體與圖像配置，讓堂食餐牌、外賣餐牌或數碼菜單更易讀、更一致，並與品牌視覺對齊。</p>
+      <p>設計可單獨委託；若同時需要菜式影像，可另配<a class="jd-inline" href="https://www.jdstudiohk.com/services/food-photography">食物攝影服務</a>（攝影收費以食物攝影頁／套餐指南為準，不在本頁列出）。</p>
+    </section>
+
+    <section class="jd-block jd-use">
+      <p class="jd-label">適合邊啲用途？</p>
+      <p><strong>搜尋「香港菜單設計／菜牌設計」嘅商戶，多數想解決：菜式難搵、版面雜亂、印刷同外賣版本不統一。</strong> 常見項目包括新店開業菜牌、季節菜單更新、多語言／多頁菜牌、外賣紙牌與品牌視覺統一。</p>
+      <p>報價前請準備：頁數或菜式數量、尺寸／摺法、語言（中／英）、印刷或數碼用途、參考風格，以及是否已有食物照片。</p>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">可核對的服務重點</p>
+      <ul class="jd-stats">
+        <li><span class="jd-num">3–5</span><strong>工作天交付（設計參考）</strong><span>一般約 3–5 個工作天；急件或大量頁數另議，實際以項目確認為準。</span></li>
+        <li><span class="jd-num">Print</span><strong>堂食／外賣／數碼</strong><span>可輸出印刷檔、外賣紙牌比例或螢幕用菜單版面。</span></li>
+        <li><span class="jd-num">HK</span><strong>本地溝通</strong><span>WhatsApp／電郵對稿；工作室位於九龍新蒲崗。</span></li>
+        <li><span class="jd-num">Photo</span><strong>可另配攝影</strong><span>需要菜式影像時，另見<a class="jd-inline" href="https://www.jdstudiohk.com/services/food-photography">食物攝影</a>，本頁唔列攝影價。</span></li>
+      </ul>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">設計流程</p>
+      <ol class="jd-steps">
+        <li><strong>確認需求</strong><span>頁數、尺寸、語言、印刷／數碼用途與參考風格。</span></li>
+        <li><strong>結構與草稿</strong><span>整理分類層級、版面節奏與重點菜式位置。</span></li>
+        <li><strong>對稿精修</strong><span>字體、間距、圖像配置與品牌一致性調整。</span></li>
+        <li><strong>交付檔案</strong><span>提供適合印刷或數碼使用的最終檔。</span></li>
+      </ol>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">服務範圍</p>
+      <ul class="jd-scope">
+        <li>堂食餐牌／多頁菜單</li>
+        <li>外賣餐牌／紙牌</li>
+        <li>多語言排版</li>
+        <li>季節／限時菜單更新</li>
+      </ul>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">收費方式</p>
+      <div class="jd-quote-box">
+        <p><strong>菜單設計按項目另行報價</strong>，視乎頁數、尺寸、語言、改稿次數與是否需要圖像處理。本頁<strong>不包含</strong>食物攝影套餐價；攝影請見<a class="jd-inline" href="https://www.jdstudiohk.com/services/food-photography">食物攝影服務</a>或《<a class="jd-inline" href="https://www.jdstudiohk.com/blog/food-photography-package-contents">食物攝影套餐包括什麼？</a>》。</p>
+      </div>
+      <p class="jd-note">WhatsApp +852 9153 1976 提供頁數／用途／參考，即可初步報價。</p>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">為什麼需要專業菜單設計</p>
+      <ul class="jd-facts">
+        <li><strong>更快搵到菜</strong><span>清楚分類與層級，減少客人問單、加快點餐。</span></li>
+        <li><strong>印刷同外賣一致</strong><span>同一視覺系統可延伸堂食、外賣紙牌與數碼版。</span></li>
+        <li><strong>品牌形象</strong><span>字體、留白與圖像配置對齊餐廳定位，避免「拼貼感」。</span></li>
+        <li><strong>本地對稿</strong><span>WhatsApp +852 9153 1976 · info.exposurehk@gmail.com；九龍新蒲崗。</span></li>
+      </ul>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">相關服務</p>
+      <div class="jd-related">
+        <a href="https://www.jdstudiohk.com/services/food-photography">
+          <strong>食物攝影服務</strong>
+          <span>需要菜式、飲品影像時另配；攝影收費見該頁與套餐指南，唔喺本頁重複。</span>
+        </a>
+        <a href="https://www.jdstudiohk.com/services/product-photography">
+          <strong>產品攝影服務</strong>
+          <span>食品包裝、周邊產品或電商白底圖可另行安排。</span>
+        </a>
+        <a href="https://www.jdstudiohk.com/contact-us">
+          <strong>立即查詢菜單設計報價</strong>
+          <span>提供頁數、尺寸、語言、用途與參考風格，我們按實際需要建議方案。</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="jd-block">
+      <p class="jd-label">常見問題</p>
+      <details>
+        <summary>什麼是菜單設計？</summary>
+        <p>菜單設計是為餐廳與食肆策劃菜牌結構、排版與視覺呈現的專業設計服務。JD Studio 協助堂食餐牌、外賣餐牌與數碼菜單的版面規劃，提升易讀性與品牌一致性。</p>
+      </details>
+      <details>
+        <summary>菜單設計怎樣收費？</summary>
+        <p>按頁數、尺寸、語言、改稿次數與圖像處理需求另行報價。本頁不列出食物攝影套餐價；若同時需要拍攝，請另見食物攝影服務頁。</p>
+      </details>
+      <details>
+        <summary>一般多久可以收到設計稿？</summary>
+        <p>一般約 3–5 個工作天，實際視頁數與改稿輪次而定。如需配合開業或印刷廠截稿，請先說明交付日期。</p>
+      </details>
+      <details>
+        <summary>沒有食物照片可以先做菜單設計嗎？</summary>
+        <p>可以。可先用版面與文字結構完成設計；之後再補照片，或另行安排食物攝影。攝影與設計可分開報價。</p>
+      </details>
+      <details>
+        <summary>如何查詢？</summary>
+        <p>WhatsApp +852 9153 1976、電郵 info.exposurehk@gmail.com，或經聯絡頁提交需求。請附頁數／尺寸／語言／用途與參考風格；工作室位於九龍新蒲崗。</p>
+      </details>
+    </section>
+
+    <div class="jd-cta" style="margin-top:36px">
+      <a class="jd-btn" href="https://wa.me/85291531976" target="_blank" rel="noopener noreferrer">WhatsApp 免費報價</a>
+      <a class="jd-link" href="https://www.jdstudiohk.com/services/food-photography">食物攝影（另頁）</a>
+      <a class="jd-link" href="https://www.jdstudiohk.com/contact-us">聯絡我們</a>
+    </div>
+  </div>
+</div>
