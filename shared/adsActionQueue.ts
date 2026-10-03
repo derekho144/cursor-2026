@@ -76,9 +76,50 @@ export type AdsActionCandidate = {
     avgCpcHKD: number | null;
     weightedQualityScore: number | null;
     lowQualitySpendHKD: number;
+    conversions?: number;
   };
-  revenue: { acceptedCount: number; acceptedRevenueHKD: number };
+  searchTerms?: {
+    termCount: number;
+    conversions: number;
+    spendHKD: number;
+    clicks: number;
+    topTerms: string[];
+  };
+  revenue: {
+    acceptedCount: number;
+    acceptedRevenueHKD: number;
+    leadCount?: number;
+    searchLeads?: number;
+    winRate?: number | null;
+  };
 };
+
+function hasPaidEvidence(row: AdsActionCandidate): boolean {
+  const terms = row.searchTerms;
+  return (
+    row.ads.commercialSignal === "available" &&
+    (row.ads.keywordCount > 0 ||
+      (terms?.termCount ?? 0) > 0 ||
+      (row.ads.conversions ?? 0) > 0 ||
+      (terms?.conversions ?? 0) > 0)
+  );
+}
+
+function searchTermProofLine(row: AdsActionCandidate): string {
+  const terms = row.searchTerms;
+  if (!terms || terms.termCount === 0) return "";
+  const examples = terms.topTerms.slice(0, 2).join("、");
+  if (terms.conversions > 0) {
+    return ` Ads 搜尋字詞已有 ${terms.conversions} 次轉換${examples ? `（${examples}）` : ""}。`;
+  }
+  return ` 已匹配 ${terms.termCount} 個 Ads 搜尋字詞${examples ? `（${examples}）` : ""}。`;
+}
+
+function funnelProofLine(row: AdsActionCandidate): string {
+  const searchLeads = row.revenue.searchLeads ?? 0;
+  if (searchLeads <= 0) return "";
+  return ` 近窗有 ${searchLeads} 個 Google／網站來源詢價。`;
+}
 
 export const TRUSTED_SEARCH_CAMPAIGN_ID = "24002224927";
 export const TRUSTED_AD_GROUP_MAPPINGS = {
@@ -180,14 +221,20 @@ export function buildAdsActionQueue(rows: AdsActionCandidate[]): AdsActionItem[]
   const actions: AdsActionItem[] = [];
 
   for (const row of rows) {
-    if (row.ads.commercialSignal !== "available" || row.ads.keywordCount === 0) continue;
+    if (!hasPaidEvidence(row)) continue;
+    const termProof = searchTermProofLine(row);
+    const funnelProof = funnelProofLine(row);
+    const termConversions = row.searchTerms?.conversions ?? 0;
+    const termClicks = row.searchTerms?.clicks ?? 0;
+    const effectiveClicks = Math.max(row.ads.clicks, termClicks);
+    const effectiveSpend = Math.max(row.ads.spendHKD, row.searchTerms?.spendHKD ?? 0);
 
     if (row.ads.weightedQualityScore != null && row.ads.weightedQualityScore <= 5) {
       actions.push({
         id: `${row.id}:quality-review`, backlogId: row.id, actionType: "quality_review",
         query: row.query, targetPath: row.targetPath,
         title: `先改善「${row.query}」相關性，再考慮競價`,
-        rationale: `此服務已有 Ads 訊號，但加權 QS 只有 ${row.ads.weightedQualityScore}，且低 QS 花費約 HK$${Math.round(row.ads.lowQualitySpendHKD).toLocaleString("en-HK")}。`,
+        rationale: `此服務已有 Ads 訊號，但加權 QS 只有 ${row.ads.weightedQualityScore}，且低 QS 花費約 HK$${Math.round(row.ads.lowQualitySpendHKD).toLocaleString("en-HK")}。${termProof}${funnelProof}`,
         expectedImpact: "可能改善廣告相關性、預期 CTR 及 Ad Rank；不保證增加轉換。",
         risk: "medium",
         proposedScope: `只審核 ${row.serviceLabel} ad group 的 RSA、keyword、search term 與 ${row.targetPath} 一致性；不改 budget、tCPA 或 pause 核心詞。`,
@@ -196,13 +243,20 @@ export function buildAdsActionQueue(rows: AdsActionCandidate[]): AdsActionItem[]
       continue;
     }
 
-    if (row.ads.clicks > 0 && row.organicPosition != null && row.organicPosition > 10) {
+    // Converting search terms + weak organic → landing alignment first.
+    if (
+      (effectiveClicks > 0 || termConversions > 0) &&
+      row.organicPosition != null &&
+      row.organicPosition > 10
+    ) {
       actions.push({
         id: `${row.id}:landing-page-review`, backlogId: row.id, actionType: "landing_page_review",
         query: row.query, targetPath: row.targetPath,
         title: `核對「${row.query}」廣告與落地頁對口度`,
-        rationale: `有 ${row.ads.clicks} clicks、約 HK$${Math.round(row.ads.spendHKD).toLocaleString("en-HK")} 花費，但自然排名仍在第 ${Math.round(row.organicPosition)} 位以後。`,
-        expectedImpact: "先改善頁面訊息與 CTA 對口度，降低把流量導入弱頁面的風險。",
+        rationale: `有 ${effectiveClicks} clicks、約 HK$${Math.round(effectiveSpend).toLocaleString("en-HK")} 花費，但自然排名仍在第 ${Math.round(row.organicPosition)} 位以後。${termProof}${funnelProof}`,
+        expectedImpact: termConversions > 0
+          ? "已有搜尋字詞轉換；先對齊落地頁訊息與 CTA，再考慮加價。"
+          : "先改善頁面訊息與 CTA 對口度，降低把流量導入弱頁面的風險。",
         risk: "low",
         proposedScope: `只檢查 ${row.targetPath} 的首屏、服務定義、報價 CTA、FAQ 及 RSA 用語；不直接修改網站。`,
         status: "pending",
@@ -210,13 +264,13 @@ export function buildAdsActionQueue(rows: AdsActionCandidate[]): AdsActionItem[]
       continue;
     }
 
-    if (row.ads.spendHKD > 0 && row.ads.clicks > 0) {
+    if (effectiveSpend > 0 && effectiveClicks > 0) {
       actions.push({
         id: `${row.id}:keyword-review`, backlogId: row.id, actionType: "keyword_review",
         query: row.query, targetPath: row.targetPath,
         executionPlan: trustedNegativePlan(row),
         title: `審核「${row.query}」是否值得保留或加價`,
-        rationale: `此主題已有 ${row.ads.clicks} clicks、約 HK$${Math.round(row.ads.spendHKD).toLocaleString("en-HK")} 花費及商業意圖資料。`,
+        rationale: `此主題已有 ${effectiveClicks} clicks、約 HK$${Math.round(effectiveSpend).toLocaleString("en-HK")} 花費及商業意圖資料。${termProof}${funnelProof}`,
         expectedImpact: "先排除免費、教學、課程、招聘及 DIY 等明顯非商業意圖，再評估競價；避免只因 CPC 低就加價。",
         risk: "high",
         proposedScope: `只對已映射的 ${row.serviceLabel} ad group 建立 campaign PHRASE negatives；不改 budget、tCPA 或核心服務詞。`,

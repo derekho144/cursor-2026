@@ -161,7 +161,7 @@ describe("Google Ads Service", () => {
                   postClickQualityScore: "BELOW_AVERAGE",
                 },
               },
-              metrics: { impressions: "100", clicks: "5", costMicros: "500000000", ctr: 0.05 },
+              metrics: { impressions: "100", clicks: "5", costMicros: "500000000", ctr: 0.05, conversions: 1 },
             },
             {
               campaign: { id: "1", name: "Brand" },
@@ -175,7 +175,7 @@ describe("Google Ads Service", () => {
                   postClickQualityScore: "AVERAGE",
                 },
               },
-              metrics: { impressions: "200", clicks: "20", costMicros: "200000000", ctr: 0.1 },
+              metrics: { impressions: "200", clicks: "20", costMicros: "200000000", ctr: 0.1, conversions: 0 },
             },
           ]);
         }
@@ -242,6 +242,7 @@ describe("Google Ads Service", () => {
           clicks: 1,
           costHKD: 100,
           ctr: 10,
+          conversions: 0,
         },
         {
           campaignId: "1",
@@ -257,9 +258,38 @@ describe("Google Ads Service", () => {
           clicks: 1,
           costHKD: 100,
           ctr: 10,
+          conversions: 1,
         },
       ]
     );
     expect(campaigns[0].avgQualityScore).toBe(6);
+  });
+
+  it("should fetch search term insights with conversions", async () => {
+    mockFetch
+      .mockResolvedValueOnce(mockTokenResponse())
+      .mockResolvedValueOnce(
+        mockAdsSearchResponse([
+          {
+            searchTermView: { searchTerm: "香港產品攝影" },
+            campaign: { name: "Search" },
+            adGroup: { name: "產品" },
+            metrics: {
+              impressions: "50",
+              clicks: "8",
+              costMicros: "120000000",
+              conversions: 2,
+              ctr: 0.16,
+            },
+          },
+        ])
+      );
+
+    const { fetchSearchTermInsights } = await import("./googleAds");
+    const terms = await fetchSearchTermInsights(28, 50);
+    expect(terms).toHaveLength(1);
+    expect(terms[0].searchTerm).toBe("香港產品攝影");
+    expect(terms[0].conversions).toBe(2);
+    expect(terms[0].costHKD).toBeCloseTo(120, 1);
   });
 });

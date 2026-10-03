@@ -292,6 +292,18 @@ export interface GoogleAdsKeywordQuality {
   clicks: number;
   costHKD: number;
   ctr: number;
+  conversions: number;
+}
+
+export interface GoogleAdsSearchTerm {
+  searchTerm: string;
+  campaignName: string;
+  adGroupName: string;
+  impressions: number;
+  clicks: number;
+  costHKD: number;
+  conversions: number;
+  ctr: number;
 }
 
 export interface GoogleAdsQualityDistributionRow {
@@ -430,7 +442,8 @@ export async function fetchKeywordQualityScores(
       metrics.impressions,
       metrics.clicks,
       metrics.cost_micros,
-      metrics.ctr
+      metrics.ctr,
+      metrics.conversions
     FROM keyword_view
     WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
       AND campaign.advertising_channel_type = 'SEARCH'
@@ -461,6 +474,61 @@ export async function fetchKeywordQualityScores(
       impressions,
       clicks,
       costHKD: Math.round(costHKD * 100) / 100,
+      ctr: impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0,
+      conversions: Math.round(toNumber(row.metrics?.conversions) * 100) / 100,
+    };
+  });
+}
+
+/**
+ * Search-term view: what users actually typed, with conversions.
+ * Used by Growth Priorities to validate commercial demand beyond keyword QS.
+ */
+export async function fetchSearchTermInsights(
+  days = 30,
+  limit = 200
+): Promise<GoogleAdsSearchTerm[]> {
+  checkEnvVars();
+  const safeDays = Math.max(7, Math.min(90, days));
+  const safeLimit = Math.max(20, Math.min(500, limit));
+  const { startDate, endDate } = adsDateRange(safeDays);
+
+  const query = `
+    SELECT
+      search_term_view.search_term,
+      campaign.name,
+      ad_group.name,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.cost_micros,
+      metrics.conversions,
+      metrics.ctr
+    FROM search_term_view
+    WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
+      AND campaign.advertising_channel_type = 'SEARCH'
+      AND metrics.impressions > 0
+    ORDER BY metrics.conversions DESC, metrics.cost_micros DESC
+    LIMIT ${safeLimit}
+  `;
+
+  const rows = await executeGaqlQuery(query);
+  return rows.map((row) => {
+    const impressions = toNumber(row.metrics?.impressions);
+    const clicks = toNumber(row.metrics?.clicks);
+    const costHKD = microsToHkd(row.metrics?.costMicros ?? row.metrics?.cost_micros);
+    const searchTerm = String(
+      row.searchTermView?.searchTerm ??
+        row.search_term_view?.search_term ??
+        ""
+    );
+    return {
+      searchTerm,
+      campaignName: String(row.campaign?.name ?? "Unknown"),
+      adGroupName: String(row.adGroup?.name ?? row.ad_group?.name ?? ""),
+      impressions,
+      clicks,
+      costHKD: Math.round(costHKD * 100) / 100,
+      conversions: Math.round(toNumber(row.metrics?.conversions) * 100) / 100,
       ctr: impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0,
     };
   });

@@ -197,8 +197,12 @@ export default function GrowthPriorities() {
     return {
       quickWins: rows.filter((row) => row.organic.position != null && row.organic.position <= 20).length,
       currentPageOne: rows.filter((row) => row.organic.position != null && row.organic.position <= 10).length,
-      paidValidated: rows.filter((row) => row.ads.commercialSignal === "available" && row.ads.keywordCount > 0).length,
+      paidValidated: rows.filter((row) =>
+        row.ads.commercialSignal === "available" &&
+        (row.ads.keywordCount > 0 || row.searchTerms.termCount > 0 || row.searchTerms.conversions > 0)
+      ).length,
       aeoGaps: rows.filter((row) => row.aeo.status === "partial" || row.aeo.status === "weak").length,
+      searchLeads: rows.reduce((sum, row) => sum + (row.revenue.searchLeads ?? 0), 0),
     };
   }, [data]);
 
@@ -212,6 +216,7 @@ export default function GrowthPriorities() {
       score: item.score,
       organicPosition: item.organic.position,
       ads: item.ads,
+      searchTerms: item.searchTerms,
       revenue: item.revenue,
     })));
     const trusted = buildTrustedServiceNegativeQueue();
@@ -493,18 +498,20 @@ export default function GrowthPriorities() {
           </div>
         </section>
 
-        <section className="grid gap-3 rounded p-4 md:grid-cols-4" style={{ background: panel, border: "1px solid rgba(212,168,67,0.15)" }}>
+        <section className="grid gap-3 rounded p-4 md:grid-cols-5" style={{ background: panel, border: "1px solid rgba(212,168,67,0.15)" }}>
           <Metric label="Backlog 項目" value={`${data?.backlog.length ?? 0} / 10`} hint="符合篩選條件的 query" />
           <Metric label="接近第一頁" value={`${summary.quickWins}`} hint="平均排名第 11–20 位" />
-          <Metric label="已驗證 Ads 意圖" value={`${summary.paidValidated}`} hint="有關鍵字、點擊與花費資料" />
+          <Metric label="已驗證 Ads 意圖" value={`${summary.paidValidated}`} hint="關鍵字或搜尋字詞轉換" />
+          <Metric label="搜尋來源詢價" value={`${summary.searchLeads}`} hint="Google／Website leadSource" />
           <Metric label="AEO 可補強項目" value={`${summary.aeoGaps}`} hint="FAQ／Schema／定義／CTA 尚有缺口" />
         </section>
 
         <section className="flex flex-wrap items-center gap-2 text-xs">
           <span className="mr-1 text-muted-foreground">資料來源：</span>
-          <SourceBadge ok={Boolean(data?.sources.revenue.available)} label="已接受報價" />
+          <SourceBadge ok={Boolean(data?.sources.revenue.available)} label="報價 funnel" />
           <SourceBadge ok={Boolean(data?.sources.googleSearchConsole.available)} label="Search Console" />
           <SourceBadge ok={Boolean(data?.sources.googleAds.available)} label="Google Ads" />
+          <SourceBadge ok={Boolean(data?.sources.googleAds.searchTerms)} label="Ads 搜尋字詞" />
           <SourceBadge ok={Boolean(data?.sources.ahrefs.available)} label="Ahrefs" />
           <SourceBadge ok={Boolean(data?.sources.livePageAudit.available)} label="Live AEO 檢查" />
           {data?.sources.ahrefs.cached && <span className="text-[10px] text-muted-foreground">Ahrefs 使用快取結果</span>}
@@ -650,17 +657,57 @@ export default function GrowthPriorities() {
           <section className="flex items-start gap-3 rounded p-4 text-sm" style={{ background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.3)" }}>
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" style={{ color: "#fbbf24" }} />
             <div>
-              <div style={{ color: "#fbbf24" }}>部分外部來源暫不可用；GSC、收入與 AEO 資料仍可生成 backlog。</div>
+              <div style={{ color: "#fbbf24" }}>部分外部來源暫不可用；GSC、報價 funnel 與 AEO 資料仍可生成 backlog。</div>
               <div className="mt-1 text-xs text-muted-foreground">{sourceError}</div>
               <div className="mt-1 text-xs text-muted-foreground">來源恢復後，頁面每 5 分鐘會重試；成功的 Ahrefs 結果會快取 24 小時，避免重複 API 消耗。</div>
             </div>
           </section>
         )}
 
-        {isLoading && <div className="py-16 text-center text-sm text-muted-foreground">正在組合 GSC query、收入、Ads、Ahrefs 與 live AEO 訊號…</div>}
+        {isLoading && <div className="py-16 text-center text-sm text-muted-foreground">正在組合 GSC、報價 funnel、Ads 搜尋字詞、Ahrefs 與 live AEO 訊號…</div>}
 
         {data && (
           <>
+            {!!data.priorities?.length && (
+              <section className="overflow-hidden rounded" style={{ border: "1px solid rgba(212,168,67,0.15)", background: panel }} data-testid="service-priorities">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "rgba(212,168,67,0.12)" }}>
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" style={{ color: gold }} />
+                    <h2 className="text-sm font-medium" style={{ color: "#e8e0d0" }}>服務優先（系統數據）</h2>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">收入 + funnel + Ads QS／搜尋字詞 + GSC + AEO</div>
+                </div>
+                <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                  {data.priorities.map((service, index) => (
+                    <article key={service.id} className="flex flex-wrap gap-4 p-4">
+                      <div className="flex min-w-[220px] flex-1 items-start gap-3">
+                        <ScoreBadge score={service.score} />
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px]" style={{ color: gold }}>#{index + 1}</span>
+                            <h3 className="font-medium" style={{ color: "#e8e0d0" }}>{service.label}</h3>
+                            <StatusBadge label={service.confidence} tone={service.confidence === "high" ? "ready" : service.confidence === "medium" ? "warning" : "muted"} />
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">{service.path}</div>
+                          <ul className="mt-2 space-y-1 text-xs leading-relaxed text-muted-foreground">
+                            {service.recommendations.slice(0, 2).map((line) => (
+                              <li key={line} className="flex gap-2"><ArrowUpRight className="mt-0.5 h-3 w-3 shrink-0" style={{ color: gold }} />{line}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="grid min-w-full grid-cols-2 gap-x-5 gap-y-3 text-xs sm:min-w-[480px] sm:grid-cols-4">
+                        <Metric label="接受收入" value={currency(service.acceptedRevenueHKD)} hint={`${service.acceptedCount} 接受`} />
+                        <Metric label="Funnel" value={`${service.funnel.leadCount} 詢價`} hint={`搜尋來源 ${service.funnel.searchLeads}${service.funnel.openInquiryLeads ? ` · 未開單 ${service.funnel.openInquiryLeads}` : ""}${service.funnel.winRate != null ? ` · 成交率 ${service.funnel.winRate}%` : ""}`} />
+                        <Metric label="Ads QS" value={service.ads.weightedQualityScore == null ? "—" : `QS ${service.ads.weightedQualityScore}`} hint={`${service.ads.keywordCount} 關鍵字 · ${currency(service.ads.spendHKD)}`} />
+                        <Metric label="搜尋字詞" value={service.searchTerms.termCount ? `${service.searchTerms.termCount} 個` : "—"} hint={service.searchTerms.termCount ? `${number(service.searchTerms.conversions)} 轉換 · ${service.searchTerms.topTerms.slice(0, 2).join("、") || "—"}` : "無匹配"} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section className="overflow-hidden rounded" style={{ border: "1px solid rgba(212,168,67,0.15)", background: panel }}>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor: "rgba(212,168,67,0.12)" }}>
                 <div className="flex items-center gap-2">
@@ -699,12 +746,13 @@ export default function GrowthPriorities() {
                           </div>
                         </div>
 
-                        <div className="grid min-w-full grid-cols-2 gap-x-5 gap-y-3 text-xs sm:min-w-[570px] sm:grid-cols-5">
+                        <div className="grid min-w-full grid-cols-2 gap-x-5 gap-y-3 text-xs sm:min-w-[640px] sm:grid-cols-3 lg:grid-cols-6">
                           <Metric label="GSC 位置" value={item.organic.position == null ? "—" : <span className="inline-flex items-center gap-1">第 {item.organic.position} {gscPositionTrend(item.organic)}</span>} hint={<span>{number(item.organic.impressions)} 曝光 · CTR {item.organic.ctr}%{item.organic.previousPosition != null ? ` · 前期第 ${item.organic.previousPosition}` : ""}</span>} />
-                          <Metric label="Ads 商業意圖" value={item.ads.commercialSignal === "available" ? `${item.ads.keywordCount} 個關鍵字` : "待授權"} hint={item.ads.commercialSignal === "available" ? `${item.ads.clicks} clicks · ${currency(item.ads.spendHKD)}` : "恢復後自動補齊"} />
+                          <Metric label="Ads 商業意圖" value={item.ads.commercialSignal === "available" ? `${item.ads.keywordCount} 個關鍵字` : "待授權"} hint={item.ads.commercialSignal === "available" ? `${item.ads.clicks} clicks · ${currency(item.ads.spendHKD)}${item.ads.conversions ? ` · ${number(item.ads.conversions)} 轉換` : ""}` : "恢復後自動補齊"} />
                           <Metric label="Ads 品質" value={item.ads.weightedQualityScore == null ? "—" : `QS ${item.ads.weightedQualityScore}`} hint={item.ads.avgCpcHKD == null ? "無足夠 clicks" : `平均 CPC ${currency(item.ads.avgCpcHKD)}`} />
+                          <Metric label="Ads 搜尋字詞" value={item.searchTerms.termCount ? `${item.searchTerms.termCount} 個字詞` : "—"} hint={item.searchTerms.termCount ? `${number(item.searchTerms.conversions)} 轉換 · ${item.searchTerms.topTerms.slice(0, 2).join("、") || "相關字詞"}` : "無匹配字詞"} />
                           <Metric label="Ahrefs 難度" value={item.ahrefs.available ? `KD ${number(item.ahrefs.difficulty)}` : "待連線"} hint={item.ahrefs.available ? `Volume ${number(item.ahrefs.volume)}` : "恢復後自動補齊"} />
-                          <Metric label="商業價值" value={currency(item.revenue.acceptedRevenueHKD)} hint={`${item.revenue.acceptedCount} 個已接受報價`} />
+                          <Metric label="商業價值" value={currency(item.revenue.acceptedRevenueHKD)} hint={`${item.revenue.acceptedCount} 接受 · ${item.revenue.leadCount} 詢價${item.revenue.searchLeads ? ` · ${item.revenue.searchLeads} 搜尋來源` : ""}${item.revenue.openInquiryLeads ? ` · ${item.revenue.openInquiryLeads} 未開單` : ""}${item.revenue.winRate != null ? ` · 成交率 ${item.revenue.winRate}%` : ""}`} />
                         </div>
                       </div>
 

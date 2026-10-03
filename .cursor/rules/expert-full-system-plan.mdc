@@ -1,0 +1,17 @@
+---
+description: Always plan end-to-end and perfect the whole system; never one-question-one-fix
+alwaysApply: true
+---
+
+# Expert full-system planning (JD Studio)
+
+For **every** user request (Cantonese or English):
+
+1. **Plan first** — state the whole system surface: data → scoring → UI → actions → deploy/ops → verification. Do not wait for the user to ask each layer.
+2. **Extend to completion** — when fixing one symptom, finish the adjacent gaps in the same turn (types, queue, UI, tests, docs/rules, fail-soft behaviour). Prefer one coherent PR over drip-feed patches.
+3. **No one-question-one-fix** — do not stop at the narrow literal ask if the surrounding workflow would still be half-wired.
+4. **Prioritise** — P0 = broken/blind operators; P1 = missing UI/operator clarity; P2 = soft signals/docs. Ship P0+P1 in the same change set when practical.
+5. **Prove** — run focused tests / `tsc --noEmit`; present evidence; then commit, push, update PR.
+6. **Deploy path** — if the change is deployable admin/site behaviour, follow Manus JD SYS sync after it lands on `main` (see manus-sync-workflow). Do not ask the user to notify Manus.
+
+Tone with the user: short verdict + what was perfected. Keep the long plan in the work, not as a questionnaire.
