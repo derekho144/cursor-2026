@@ -49,7 +49,6 @@ export default function Dashboard() {
   const pendingInquiries = dashData?.pendingCount ?? 0;
   const receivables = dashData?.receivables;
   const acceptedCalendar = dashData?.acceptedCalendar ?? [];
-  const fhHealth = dashData?.fhHealth;
   const { data: gcalFeed } = trpc.dashboard.googleCalendarFeed.useQuery(undefined, {
     enabled: !authLoading && !!user,
     staleTime: 60_000,
@@ -147,21 +146,6 @@ export default function Dashboard() {
             </span>
             <span className="text-sm" style={{ color: "#d4a843" }}>
               有 {pendingInquiries} 封詢價郵件待處理 — 點擊前往查看
-            </span>
-            <span className="ml-auto text-xs text-muted-foreground">→</span>
-          </button>
-        )}
-
-        {fhHealth?.scrapeStale && (
-          <button
-            onClick={() => setLocation("/freehunter-board")}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-opacity hover:opacity-80"
-            style={{ background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.3)" }}
-          >
-            <span className="text-sm" style={{ color: "#FF6B6B" }}>
-              FH 爬取可能已停滯
-              {fhHealth.ageHours != null ? `（約 ${fhHealth.ageHours} 小時無新資料）` : "（尚無爬取紀錄）"}
-              — 請檢查登入／立即爬取
             </span>
             <span className="ml-auto text-xs text-muted-foreground">→</span>
           </button>

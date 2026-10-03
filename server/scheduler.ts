@@ -124,9 +124,75 @@ const PITCH_OUTREACH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24 hours
 export let lastPitchOutreachAt: Date | null = null;
 export let lastPitchOutreachResult: { scraped: number; saved?: number; emailsFound: number; sent: number; skipped: number } | null = null;
 
-// Track last Gmail scan time for frontend display
+// Track last Gmail scan time (in-memory + persisted for silent heal across restarts)
 export let lastGmailScanAt: Date | null = null;
 export let lastGmailScanResult: { scanned: number; newInquiries: number } | null = null;
+
+const GMAIL_SCAN_STATUS_KEY = "gmail-scan-status";
+
+/** Persist last Gmail scan so watchdog heal survives cold starts. */
+export async function recordGmailScanResult(opts: {
+  ok: boolean;
+  scanned?: number;
+  newInquiries?: number;
+  error?: string;
+}): Promise<void> {
+  const scanned = opts.scanned ?? 0;
+  const newInquiries = opts.newInquiries ?? 0;
+  lastGmailScanAt = new Date();
+  if (opts.ok) {
+    lastGmailScanResult = { scanned, newInquiries };
+  }
+
+  const by = (
+    opts.ok
+      ? `ok:${scanned}/${newInquiries}`
+      : `fail:${(opts.error || "error").replace(/\s+/g, " ").slice(0, 55)}`
+  ).slice(0, 64);
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+    await db.execute(sql`
+      INSERT INTO scheduler_locks (lock_key, locked_at, locked_until, locked_by)
+      VALUES (${GMAIL_SCAN_STATUS_KEY}, NOW(), NOW(), ${by})
+      ON DUPLICATE KEY UPDATE
+        locked_at = NOW(),
+        locked_until = NOW(),
+        locked_by = VALUES(locked_by)
+    `);
+  } catch (e) {
+    console.warn("[Scheduler] Failed to persist Gmail scan status:", e);
+  }
+}
+
+export async function getPersistedGmailScanStatus(): Promise<{
+  at: Date | null;
+  ok: boolean | null;
+  raw: string | null;
+}> {
+  try {
+    const db = await getDb();
+    if (!db) return { at: null, ok: null, raw: null };
+    const { schedulerLocks } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const [row] = await db
+      .select({
+        at: schedulerLocks.lockedAt,
+        raw: schedulerLocks.lockedBy,
+      })
+      .from(schedulerLocks)
+      .where(eq(schedulerLocks.lockKey, GMAIL_SCAN_STATUS_KEY))
+      .limit(1);
+    if (!row) return { at: null, ok: null, raw: null };
+    const at = row.at ? new Date(row.at) : null;
+    const raw = String(row.raw ?? "");
+    return { at, ok: raw.startsWith("ok:"), raw };
+  } catch (e) {
+    console.warn("[Scheduler] Failed to read Gmail scan status:", e);
+    return { at: null, ok: null, raw: null };
+  }
+}
 
 /**
  * Returns true if current HKT time is within active scanning hours.
@@ -269,8 +335,11 @@ export async function runScheduledGmailScan(): Promise<void> {
   console.log("[Scheduler] Starting scheduled Gmail scan...");
   try {
     const result = await runEmailScan(30);
-    lastGmailScanAt = new Date();
-    lastGmailScanResult = { scanned: result.scanned, newInquiries: result.newInquiries };
+    await recordGmailScanResult({
+      ok: true,
+      scanned: result.scanned,
+      newInquiries: result.newInquiries,
+    });
     console.log(`[Scheduler] Gmail scan done: ${result.scanned} scanned, ${result.newInquiries} new, ${result.skipped} skipped`);
 
     if (result.newInquiries > 0) {
@@ -284,7 +353,9 @@ export async function runScheduledGmailScan(): Promise<void> {
       }
     }
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[Scheduler] Gmail scan error:", err);
+    await recordGmailScanResult({ ok: false, error: msg });
   }
   }); // end withSchedulerLock("gmail-scan")
 }
