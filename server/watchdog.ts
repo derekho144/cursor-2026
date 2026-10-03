@@ -1,41 +1,40 @@
 /**
- * System Watchdog & Self-Healing Module
+ * System Watchdog — silent self-healing
  *
- * Runs every hour (triggered by Heartbeat fh-followup task) to:
- * 1. Detect common failure scenarios
- * 2. Auto-repair what it can
- * 3. Alert the owner when manual intervention is needed
+ * Runs every hour. Prefer auto-repair; only notifyOwner when a human
+ * reauth/credential step is required AFTER repair failed.
+ * Do not spam "what's broken" status — heal quietly when possible.
  *
- * Failure scenarios covered:
- * A. FH jobs stuck in 'new' with no email > 2 hours → auto-backfill
- * B. FH session expired / invalid → alert owner to re-login
- * C. FH scrape stalled (no scrape in > 2 hours during active hours) → alert
- * D. Gmail scan stalled (no scan in > 90 min during active hours) → alert
- * E. Freehunter session expiry approaching (< 2 days) → auto-renew or alert
+ * A. FH jobs stuck without email → fetch email / auto-send
+ * B. FH session weak/expired → renew expiry + getOrLogin
+ * C. FH scrape stale/failed → trigger scrape (retry once after session heal)
+ * D. Gmail scan stale → trigger scan
  */
 
 import { notifyOwner } from "./_core/notification";
 import { getDb } from "./db";
 import { freehunterJobs } from "../drizzle/schema";
-import { sql, desc } from "drizzle-orm";
-import { getFreehunterStatus, renewFreehunterSessionExpiry } from "./freehunter";
-import { scrapeFreehunterBoard, fetchEmailForJob } from "./scrapers/freehunterBoard";
+import { sql, desc, eq } from "drizzle-orm";
+import {
+  getFreehunterStatus,
+  renewFreehunterSessionExpiry,
+  getOrLoginFreehunter,
+  closeFreehunterBrowserSession,
+} from "./freehunter";
+import { fetchEmailForJob } from "./scrapers/freehunterBoard";
 import { sendFHFirstEmail } from "./routers/emailInquiries";
 import { lastFreehunterScrapeAt, lastGmailScanAt } from "./scheduler";
 import { withSchedulerLock } from "./schedulerLock";
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const NINETY_MIN_MS = 90 * 60 * 1000;
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
-// Track last watchdog run to avoid duplicate alerts within same hour
 let lastWatchdogRunAt: Date | null = null;
-let lastAlertSentAt: Date | null = null;
-const ALERT_COOLDOWN_MS = 4 * 60 * 60 * 1000; // Don't re-alert same issue within 4 hours
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+let lastHumanAlertAt: Date | null = null;
+/** Per-issue cooldown so one reauth ping doesn't mute another forever. */
+const humanAlertCooldown = new Map<string, number>();
+const HUMAN_ALERT_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12h per issue key
 
 function isWithinActiveHours(): boolean {
   const nowHKT = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -43,36 +42,28 @@ function isWithinActiveHours(): boolean {
   return h >= 8 && h < 21;
 }
 
-function canSendAlert(): boolean {
-  if (!lastAlertSentAt) return true;
-  return Date.now() - lastAlertSentAt.getTime() > ALERT_COOLDOWN_MS;
-}
-
-async function sendAlert(title: string, content: string): Promise<void> {
-  if (!canSendAlert()) {
-    console.log(`[Watchdog] Alert suppressed (cooldown): ${title}`);
+async function notifyHumanOnly(issueKey: string, title: string, content: string): Promise<void> {
+  const last = humanAlertCooldown.get(issueKey) ?? 0;
+  if (Date.now() - last < HUMAN_ALERT_COOLDOWN_MS) {
+    console.log(`[Watchdog] Human alert suppressed (${issueKey}): ${title}`);
     return;
   }
   try {
     await notifyOwner({ title, content });
-    lastAlertSentAt = new Date();
-    console.log(`[Watchdog] Alert sent: ${title}`);
+    humanAlertCooldown.set(issueKey, Date.now());
+    lastHumanAlertAt = new Date();
+    console.log(`[Watchdog] Human alert sent (${issueKey}): ${title}`);
   } catch (e) {
-    console.warn("[Watchdog] Failed to send alert:", e);
+    console.warn("[Watchdog] Failed to send human alert:", e);
   }
 }
 
-// ─── Check A: FH jobs stuck without email ─────────────────────────────────────
-
-async function checkAndRepairStuckFHJobs(): Promise<{ fixed: number; alerts: string[] }> {
-  const alerts: string[] = [];
+async function healStuckFHJobs(): Promise<number> {
   let fixed = 0;
-
   try {
     const db = await getDb();
-    if (!db) return { fixed, alerts };
+    if (!db) return 0;
 
-    // Find jobs stuck in 'new' with no email for more than 2 hours
     const stuckJobs = await db
       .select()
       .from(freehunterJobs)
@@ -85,223 +76,263 @@ async function checkAndRepairStuckFHJobs(): Promise<{ fixed: number; alerts: str
       .limit(10);
 
     if (stuckJobs.length === 0) {
-      console.log("[Watchdog] Check A: No stuck FH jobs found.");
-      return { fixed, alerts };
+      console.log("[Watchdog] A: no stuck FH jobs");
+      return 0;
     }
 
-    console.log(`[Watchdog] Check A: ${stuckJobs.length} FH job(s) stuck without email. Attempting repair...`);
+    console.log(`[Watchdog] A: repairing ${stuckJobs.length} stuck FH job(s)…`);
 
     for (const job of stuckJobs) {
       try {
         await new Promise((r) => setTimeout(r, 1500));
         const { email } = await fetchEmailForJob(job.jobId);
-        if (email) {
-          fixed++;
-          const isHighConfidence = (job.aiScore ?? 0) >= 80;
-          if (isHighConfidence) {
-            const sendResult = await sendFHFirstEmail(email, job.clientName || "", job.title || "");
-            if (sendResult.success) {
-              const { eq } = await import("drizzle-orm");
-              await db.update(freehunterJobs)
-                .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
-                .where(eq(freehunterJobs.jobId, job.jobId));
-              console.log(`[Watchdog] Repaired + auto-sent: job ${job.jobId} (score: ${job.aiScore})`);
-            }
-          } else {
-            console.log(`[Watchdog] Repaired email for job ${job.jobId} (score: ${job.aiScore}, awaiting manual review)`);
+        if (!email) continue;
+        fixed++;
+        if ((job.aiScore ?? 0) >= 80) {
+          const sendResult = await sendFHFirstEmail(email, job.clientName || "", job.title || "");
+          if (sendResult.success) {
+            await db
+              .update(freehunterJobs)
+              .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
+              .where(eq(freehunterJobs.jobId, job.jobId));
+            console.log(`[Watchdog] A: repaired+sent job ${job.jobId}`);
           }
         } else {
-          alerts.push(`工作 #${job.jobId}「${(job.title || "").slice(0, 30)}」仍無法取得電郵`);
+          console.log(`[Watchdog] A: repaired email for job ${job.jobId}`);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.warn(`[Watchdog] Repair failed for job ${job.jobId}:`, msg);
+        console.warn(`[Watchdog] A: repair failed job ${job.jobId}:`, msg);
         if (msg.includes("登入失敗") || msg.includes("Login") || msg.includes("session expired")) {
-          alerts.push("FH 登入失敗，session 可能已過期，請重新登入");
+          // Session heal runs in B; stop burning more jobs on a dead session.
           break;
         }
-        alerts.push(`工作 #${job.jobId} 修復失敗: ${msg.slice(0, 60)}`);
       }
     }
   } catch (e) {
-    console.error("[Watchdog] Check A error:", e);
+    console.error("[Watchdog] A error:", e);
   }
-
-  return { fixed, alerts };
+  return fixed;
 }
 
-// ─── Check B: FH session health ───────────────────────────────────────────────
-
-async function checkFHSessionHealth(): Promise<{ ok: boolean; alerts: string[] }> {
-  const alerts: string[] = [];
-
+/** Returns true if FH session looks usable after heal attempts. */
+async function healFHSession(): Promise<{ ok: boolean; needsHumanReauth: boolean }> {
   try {
     const status = await getFreehunterStatus();
 
-    if (!status.connected) {
-      alerts.push("⚠️ Freehunter session 未連接，請前往系統設定重新登入");
-      return { ok: false, alerts };
-    }
-
-    // Check if session is expiring soon (< 2 days)
     if (status.expiresAt) {
       const msUntilExpiry = status.expiresAt - Date.now();
-      if (msUntilExpiry < TWO_DAYS_MS && msUntilExpiry > 0) {
-        console.log("[Watchdog] Check B: FH session expiring soon, attempting renewal...");
+      if (msUntilExpiry > 0 && msUntilExpiry < TWO_DAYS_MS) {
         try {
           await renewFreehunterSessionExpiry();
-          console.log("[Watchdog] FH session expiry renewed successfully.");
+          console.log("[Watchdog] B: renewed FH session expiry");
         } catch (e) {
-          alerts.push(`⚠️ FH session 即將在 ${Math.round(msUntilExpiry / 3600000)} 小時後過期，自動更新失敗，請手動重新登入`);
+          console.warn("[Watchdog] B: renew expiry failed:", e);
         }
-      } else if (msUntilExpiry <= 0) {
-        alerts.push("❌ Freehunter session 已過期，請重新登入");
-        return { ok: false, alerts };
       }
     }
 
-    return { ok: true, alerts };
+    if (!status.connected) {
+      console.log("[Watchdog] B: session not connected — trying getOrLogin…");
+      try {
+        await closeFreehunterBrowserSession().catch(() => {});
+        await getOrLoginFreehunter();
+        const again = await getFreehunterStatus();
+        if (again.connected) {
+          console.log("[Watchdog] B: session restored via login");
+          return { ok: true, needsHumanReauth: false };
+        }
+      } catch (e) {
+        console.warn("[Watchdog] B: getOrLogin failed:", e);
+        return { ok: false, needsHumanReauth: true };
+      }
+      return { ok: false, needsHumanReauth: true };
+    }
+
+    if (status.expiresAt && status.expiresAt - Date.now() <= 0) {
+      console.log("[Watchdog] B: session expired — trying getOrLogin…");
+      try {
+        await closeFreehunterBrowserSession().catch(() => {});
+        await getOrLoginFreehunter();
+        const again = await getFreehunterStatus();
+        if (again.connected) {
+          console.log("[Watchdog] B: expired session restored");
+          return { ok: true, needsHumanReauth: false };
+        }
+      } catch (e) {
+        console.warn("[Watchdog] B: restore expired session failed:", e);
+      }
+      return { ok: false, needsHumanReauth: true };
+    }
+
+    return { ok: true, needsHumanReauth: false };
   } catch (e) {
-    console.error("[Watchdog] Check B error:", e);
-    return { ok: false, alerts: ["FH session 狀態檢查失敗"] };
+    console.error("[Watchdog] B error:", e);
+    return { ok: false, needsHumanReauth: true };
   }
 }
 
-// ─── Check C: FH scrape staleness ─────────────────────────────────────────────
+async function fhScrapeIsStale(): Promise<boolean> {
+  if (!isWithinActiveHours()) return false;
 
-function checkFHScrapeStaleness(): { stale: boolean; alerts: string[] } {
-  // Async persistence is checked in runWatchdog via getPersistedFreehunterScrapeStatus
-  const alerts: string[] = [];
-
-  if (!isWithinActiveHours()) return { stale: false, alerts };
-
-  if (!lastFreehunterScrapeAt) {
-    // Server just started — do not treat as stale yet (persisted check runs separately)
-    return { stale: false, alerts };
+  if (lastFreehunterScrapeAt) {
+    if (Date.now() - lastFreehunterScrapeAt.getTime() > TWO_HOURS_MS) return true;
   }
 
-  const elapsed = Date.now() - lastFreehunterScrapeAt.getTime();
-  if (elapsed > TWO_HOURS_MS) {
-    const elapsedMin = Math.round(elapsed / 60000);
-    alerts.push(`⚠️ FH 工作板已 ${elapsedMin} 分鐘未更新（正常應每 15–30 分鐘一次）`);
-    return { stale: true, alerts };
-  }
+  try {
+    const { getPersistedFreehunterScrapeStatus } = await import("./scheduler");
+    const persisted = await getPersistedFreehunterScrapeStatus();
+    if (persisted.at && Date.now() - persisted.at.getTime() > TWO_HOURS_MS) return true;
+    if (persisted.ok === false) return true;
+    if (!persisted.at && !lastFreehunterScrapeAt) return true;
+  } catch (_) {}
 
-  return { stale: false, alerts };
+  return false;
 }
 
-// ─── Check D: Gmail scan staleness ────────────────────────────────────────────
-
-function checkGmailScanStaleness(): { stale: boolean; alerts: string[] } {
-  const alerts: string[] = [];
-
-  if (!isWithinActiveHours()) return { stale: false, alerts };
-
-  if (!lastGmailScanAt) {
-    return { stale: false, alerts };
+async function healFHScrape(): Promise<boolean> {
+  if (!(await fhScrapeIsStale())) {
+    console.log("[Watchdog] C: FH scrape fresh — skip");
+    return true;
   }
 
-  const elapsed = Date.now() - lastGmailScanAt.getTime();
-  if (elapsed > NINETY_MIN_MS) {
-    const elapsedMin = Math.round(elapsed / 60000);
-    alerts.push(`⚠️ Gmail 掃描已 ${elapsedMin} 分鐘未執行（正常應每 30 分鐘一次）`);
-    return { stale: true, alerts };
+  console.log("[Watchdog] C: FH scrape stale/failed — triggering scrape…");
+  try {
+    const { runScheduledFreehunterScrape } = await import("./scheduler");
+    await runScheduledFreehunterScrape();
+    const { getPersistedFreehunterScrapeStatus } = await import("./scheduler");
+    const persisted = await getPersistedFreehunterScrapeStatus();
+    if (persisted.ok === true && persisted.at && Date.now() - persisted.at.getTime() < TWO_HOURS_MS) {
+      console.log("[Watchdog] C: scrape heal OK");
+      return true;
+    }
+    // One more attempt after killing browser
+    await closeFreehunterBrowserSession().catch(() => {});
+    await getOrLoginFreehunter().catch(() => {});
+    await runScheduledFreehunterScrape();
+    const again = await getPersistedFreehunterScrapeStatus();
+    const ok =
+      again.ok === true && again.at != null && Date.now() - again.at.getTime() < TWO_HOURS_MS;
+    console.log(`[Watchdog] C: scrape heal retry ${ok ? "OK" : "still failing"}`);
+    return ok;
+  } catch (e) {
+    console.warn("[Watchdog] C: scrape heal error:", e);
+    return false;
   }
-
-  return { stale: false, alerts };
 }
 
-// ─── Main Watchdog Runner ─────────────────────────────────────────────────────
+async function gmailScanIsStale(): Promise<boolean> {
+  if (!isWithinActiveHours()) return false;
+
+  if (lastGmailScanAt) {
+    return Date.now() - lastGmailScanAt.getTime() > NINETY_MIN_MS;
+  }
+
+  try {
+    const { getPersistedGmailScanStatus } = await import("./scheduler");
+    const persisted = await getPersistedGmailScanStatus();
+    if (!persisted.at) return true; // no record during active hours → try scan
+    return Date.now() - persisted.at.getTime() > NINETY_MIN_MS;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function healGmailScan(): Promise<boolean> {
+  if (!(await gmailScanIsStale())) {
+    console.log("[Watchdog] D: Gmail scan fresh — skip");
+    return true;
+  }
+
+  console.log("[Watchdog] D: Gmail scan stale — triggering scan…");
+  try {
+    const { runScheduledGmailScan } = await import("./scheduler");
+    await runScheduledGmailScan();
+    const { getPersistedGmailScanStatus } = await import("./scheduler");
+    const persisted = await getPersistedGmailScanStatus();
+    const ok =
+      persisted.ok === true &&
+      persisted.at != null &&
+      Date.now() - persisted.at.getTime() < NINETY_MIN_MS;
+    console.log(`[Watchdog] D: gmail heal ${ok ? "OK" : "still failing"}`);
+    return ok;
+  } catch (e) {
+    console.warn("[Watchdog] D: gmail heal error:", e);
+    return false;
+  }
+}
 
 /**
- * Run all watchdog checks and self-repair routines.
- * Called every hour from the Heartbeat fh-followup endpoint.
+ * Run silent self-heal. Notify only when credentials/reauth need a human.
  */
 export async function runWatchdog(): Promise<void> {
   await withSchedulerLock("watchdog", 55 * 60 * 1000, async () => {
-  const now = new Date();
-  console.log(`[Watchdog] Starting health check at ${now.toISOString()}`);
-  lastWatchdogRunAt = now;
+    const now = new Date();
+    console.log(`[Watchdog] Starting silent heal at ${now.toISOString()}`);
+    lastWatchdogRunAt = now;
 
-  const allAlerts: string[] = [];
-  let totalFixed = 0;
+    try {
+      const fixedJobs = await healStuckFHJobs();
+      if (fixedJobs > 0) {
+        console.log(`[Watchdog] A: fixed ${fixedJobs} job(s) (silent)`);
+      }
 
-  try {
-    // Check A: Stuck FH jobs
-    const { fixed, alerts: stuckAlerts } = await checkAndRepairStuckFHJobs();
-    totalFixed += fixed;
-    allAlerts.push(...stuckAlerts);
+      const session = await healFHSession();
+      if (session.needsHumanReauth) {
+        await notifyHumanOnly(
+          "fh-reauth",
+          "Freehunter 需要重新登入",
+          "系統已自動嘗試恢復 FH session 但失敗。請在「平台同步／FH 工作板」重新登入一次；其餘會繼續自動修復。"
+        );
+      }
 
-    // Check B: FH session health
-    const { ok: sessionOk, alerts: sessionAlerts } = await checkFHSessionHealth();
-    allAlerts.push(...sessionAlerts);
-
-    // Check C: FH scrape staleness (only alert if session is OK — stale scrape with bad session is expected)
-    if (sessionOk) {
-      const { alerts: scrapeAlerts } = checkFHScrapeStaleness();
-      allAlerts.push(...scrapeAlerts);
-
-      // Also check persisted status (survives cold start when in-memory stamp is null)
-      try {
-        const { getPersistedFreehunterScrapeStatus } = await import("./scheduler");
-        const persisted = await getPersistedFreehunterScrapeStatus();
-        if (persisted.at) {
-          const age = Date.now() - persisted.at.getTime();
-          if (age > TWO_HOURS_MS) {
-            const elapsedMin = Math.round(age / 60000);
-            allAlerts.push(
-              `⚠️ FH 持久化狀態顯示已 ${elapsedMin} 分鐘未成功爬取${persisted.raw ? `（${persisted.raw}）` : ""}`
+      if (session.ok || !session.needsHumanReauth) {
+        const scrapeOk = await healFHScrape();
+        if (!scrapeOk && session.needsHumanReauth === false) {
+          // Scrape still failing with a "connected" session — often still auth; try login once more then stop.
+          try {
+            await closeFreehunterBrowserSession().catch(() => {});
+            await getOrLoginFreehunter();
+            const retryOk = await healFHScrape();
+            if (!retryOk) {
+              await notifyHumanOnly(
+                "fh-scrape",
+                "Freehunter 自動爬取仍失敗",
+                "系統已重試登入與爬取仍失敗。請檢查 FREEHUNTER 帳密／網站是否改版後再登入一次。"
+              );
+            }
+          } catch (_) {
+            await notifyHumanOnly(
+              "fh-scrape",
+              "Freehunter 自動爬取仍失敗",
+              "系統已重試登入與爬取仍失敗。請檢查 FREEHUNTER 帳密／網站是否改版後再登入一次。"
             );
-          } else if (persisted.ok === false) {
-            allAlerts.push(`⚠️ FH 最近一次爬取失敗：${persisted.raw || "unknown"}`);
           }
-        } else if (!lastFreehunterScrapeAt) {
-          allAlerts.push("⚠️ FH 尚無成功爬取紀錄（Heartbeat / 排程可能未運行）");
         }
-      } catch (_) {}
+      }
+
+      const gmailOk = await healGmailScan();
+      if (!gmailOk) {
+        await notifyHumanOnly(
+          "gmail-creds",
+          "Gmail 自動掃描失敗",
+          "系統已自動重試 Gmail 掃描仍失敗。請檢查 GMAIL_USER／GMAIL_APP_PASSWORD 是否有效。"
+        );
+      }
+
+      console.log("[Watchdog] Silent heal pass finished.");
+    } catch (e) {
+      console.error("[Watchdog] Unexpected error:", e);
     }
-
-    // Check D: Gmail scan staleness
-    const { alerts: gmailAlerts } = checkGmailScanStaleness();
-    allAlerts.push(...gmailAlerts);
-
-    // Report results
-    const parts: string[] = [];
-    if (totalFixed > 0) parts.push(`✅ 自動修復 ${totalFixed} 個工作的電郵`);
-    if (allAlerts.length > 0) parts.push(`⚠️ 發現 ${allAlerts.length} 個問題需要注意`);
-
-    if (totalFixed > 0 || allAlerts.length > 0) {
-      const title = allAlerts.length > 0
-        ? `🔧 系統 Watchdog 警報 (${allAlerts.length} 個問題)`
-        : `✅ Watchdog 自動修復完成 (${totalFixed} 個工作)`;
-
-      const content = [
-        parts.join("，"),
-        "",
-        ...(allAlerts.length > 0 ? ["**需要注意：**", ...allAlerts.map((a) => `• ${a}`)] : []),
-        ...(totalFixed > 0 ? [`\n已自動補抓 ${totalFixed} 個工作的客戶電郵。`] : []),
-        "\n請前往「FH 工作板」確認狀態。",
-      ].join("\n");
-
-      await sendAlert(title, content);
-    } else {
-      console.log("[Watchdog] All checks passed. System is healthy.");
-    }
-  } catch (e) {
-    console.error("[Watchdog] Unexpected error:", e);
-  }
-  }); // end withSchedulerLock("watchdog")
+  });
 }
 
-/**
- * Expose watchdog status for frontend/admin display.
- */
 export function getWatchdogStatus(): {
   lastRunAt: Date | null;
   lastAlertAt: Date | null;
 } {
   return {
     lastRunAt: lastWatchdogRunAt,
-    lastAlertAt: lastAlertSentAt,
+    lastAlertAt: lastHumanAlertAt,
   };
 }
