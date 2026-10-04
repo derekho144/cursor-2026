@@ -11,7 +11,10 @@ Interior photography pack is the gold template (already live).
 | Corporate event | `corporate-event.squarespace-codeblock.html` |
 | Party / event | `event-photography.squarespace-codeblock.html` |
 | Jewelry | `jewelry-photography.squarespace-codeblock.html` |
+| Video / TVC | `video-project.squarespace-codeblock.html` + `video-project.schema.jsonld.html` |
+| AI gallery | `gallery-ai.squarespace-codeblock.html` + `gallery-ai.schema.jsonld.html` |
+| Menu design | `menu-design.squarespace-codeblock.html` + `menu-design.schema.jsonld.html` |
 
-Each pack includes: visible definition + pricing table + FAQ UI + `FAQPage` / `Service` / `Offer` JSON-LD.
+Each pack includes: visible definition + pricing/quote + FAQ UI + `Service` / `Offer` JSON-LD (+ FAQPage where pack includes it).
 
-Apply: `APPLY-REMAINING-SERVICES.md`
+Apply: `APPLY-EXECUTABLE-BACKLOG.md` (preferred) or `APPLY-REMAINING-SERVICES.md`
