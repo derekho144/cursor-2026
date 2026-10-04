@@ -41,7 +41,9 @@ Legend: ✅ strong · 🟡 partial · ❌ weak
 | `/services/event-photography` | 🟡 | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
 | `/services/art-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | Paste |
 | `/services/gallery` (AI) | ❌ | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
-| `/-menu-design` | ✅ pack ready | 🟡 quote-only (no food $) | ✅ visible FAQ | ❌ no FAQPage (2026) | ✅ | ✅ Offer quote | Paste — replace any food-photo block |
+| `/-menu-design` | ✅ pack ready | 🟡 quote-only (no food $) | ✅ visible FAQ | ❌ no FAQPage (2026) | ✅ | ✅ Offer quote | Re-paste def「是專門」 |
+| `/services/video-project` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ | ✅ | Paste |
+| `/services/gallery` (AI) | ✅ pack ready | 🟡 quote-only | ✅ pack ready | ✅ pack ready | ✅ | ✅ quote Offer | Paste |
 | `/contact-us` | — | — | ❌ | ❌ | ❌ | — | P2 |
 | Pricing **blogs** | ✅ | ✅ | ✅ | ✅ | — | — | Keep + cross-link |
 

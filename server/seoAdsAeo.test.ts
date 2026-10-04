@@ -31,6 +31,7 @@ describe("SEO + Ads + AEO priority model", () => {
       classifyAeoReadiness({
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: true,
         hasOffer: true,
         hasDefinition: true,
@@ -44,12 +45,27 @@ describe("SEO + Ads + AEO priority model", () => {
       classifyAeoReadiness({
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: false,
         hasOffer: false,
         hasDefinition: false,
         hasContactCta: true,
       })
     ).toBe("partial");
+  });
+
+  it("treats visible FAQ as enough FAQ signal without FAQPage (2026)", () => {
+    expect(
+      classifyAeoReadiness({
+        httpStatus: 200,
+        hasFaqPage: false,
+        hasFaqVisible: true,
+        hasService: true,
+        hasOffer: true,
+        hasDefinition: true,
+        hasContactCta: true,
+      })
+    ).toBe("ready");
   });
 
   it("gives a transparent higher priority to revenue, SEO and paid-search gaps", () => {
@@ -74,6 +90,7 @@ describe("SEO + Ads + AEO priority model", () => {
         status: "partial",
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: true,
         hasOffer: false,
         hasDefinition: true,
@@ -105,6 +122,7 @@ describe("SEO + Ads + AEO priority model", () => {
         status: "ready",
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: true,
         hasOffer: true,
         hasDefinition: true,
@@ -132,6 +150,7 @@ describe("SEO + Ads + AEO priority model", () => {
         status: "partial",
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: true,
         hasOffer: false,
         hasDefinition: true,
@@ -240,6 +259,7 @@ describe("SEO + Ads + AEO priority model", () => {
         status: "partial",
         httpStatus: 200,
         hasFaqPage: true,
+        hasFaqVisible: true,
         hasService: true,
         hasOffer: false,
         hasDefinition: true,

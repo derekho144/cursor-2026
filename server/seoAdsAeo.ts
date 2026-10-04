@@ -36,6 +36,8 @@ export type AeoSignals = {
   status: AeoReadiness;
   httpStatus: number | null;
   hasFaqPage: boolean;
+  /** Visible FAQ block for users / AI (details or 常見問題) — preferred over FAQPage alone in 2026. */
+  hasFaqVisible: boolean;
   hasService: boolean;
   hasOffer: boolean;
   hasDefinition: boolean;
@@ -630,7 +632,9 @@ export function backlogScore(input: {
 
 export function classifyAeoReadiness(input: Omit<AeoSignals, "status">): AeoReadiness {
   if (!input.httpStatus || input.httpStatus < 200 || input.httpStatus >= 400) return "unavailable";
-  const structuredCount = [input.hasFaqPage, input.hasService, input.hasOffer].filter(Boolean).length;
+  // 2026: visible FAQ counts toward readiness; FAQPage alone is no longer required for SERP.
+  const faqSignal = Boolean(input.hasFaqVisible || input.hasFaqPage);
+  const structuredCount = [faqSignal, input.hasService, input.hasOffer].filter(Boolean).length;
   if (structuredCount === 3 && input.hasDefinition && input.hasContactCta) return "ready";
   if (structuredCount >= 1 || input.hasDefinition || input.hasContactCta) return "partial";
   return "weak";
@@ -649,10 +653,15 @@ export async function inspectServicePageAeo(profile: Pick<ServiceProfile, "path"
     const lower = html.toLowerCase();
     const base = {
       httpStatus: response.status,
-      hasFaqPage: /"@type"\s*:\s*"faqpage"|"faqpage"/i.test(html),
-      hasService: /"@type"\s*:\s*"service"|"service"/i.test(html),
-      hasOffer: /"@type"\s*:\s*"offer(?:catalog)?"|"offer(?:catalog)?"/i.test(html),
-      hasDefinition: lower.includes("是專門") || lower.includes("專門提供") || lower.includes("speciali[sz]es in"),
+      hasFaqPage: /"@type"\s*:\s*"faqpage"/i.test(html),
+      hasFaqVisible: /常見問題/.test(html) || /<details[\s>]/i.test(html),
+      hasService: /"@type"\s*:\s*"service"/i.test(html),
+      hasOffer: /"@type"\s*:\s*"offer(?:catalog)?"/i.test(html),
+      hasDefinition:
+        lower.includes("是專門") ||
+        lower.includes("專門提供") ||
+        /是為.{0,48}專業/.test(html) ||
+        /speciali[sz]es in/i.test(html),
       hasContactCta: lower.includes("whatsapp") || lower.includes("立即報價") || lower.includes("立即查詢"),
     };
     return { ...base, status: classifyAeoReadiness(base) };
@@ -660,6 +669,7 @@ export async function inspectServicePageAeo(profile: Pick<ServiceProfile, "path"
     const base = {
       httpStatus: null,
       hasFaqPage: false,
+      hasFaqVisible: false,
       hasService: false,
       hasOffer: false,
       hasDefinition: false,
@@ -995,6 +1005,7 @@ export async function getGrowthPriorities(days = 28) {
       status: "unavailable" as const,
       httpStatus: null,
       hasFaqPage: false,
+      hasFaqVisible: false,
       hasService: false,
       hasOffer: false,
       hasDefinition: false,
@@ -1019,7 +1030,8 @@ export async function getGrowthPriorities(days = 28) {
     const content: string[] = [];
     if (organic.position != null && organic.position <= 20) content.push("把此 query 放入目標頁的 H2、首段答案及報價／服務 FAQ，保留自然語句。");
     else content.push("建立或擴寫對應的商業問題段落、服務流程、價錢／報價 FAQ 及實際案例。");
-    if (!aeo.hasFaqPage) content.push("補上可見 FAQ 與 FAQPage JSON-LD，優先回答香港客戶的服務範圍、報價及交付問題。");
+    if (!aeo.hasFaqVisible) content.push("補上可見 FAQ，優先回答香港客戶的服務範圍、報價及交付問題。");
+    if (!aeo.hasService) content.push("補上 Service JSON-LD，並與頁面可見服務名稱／定義一致。");
     if (!aeo.hasOffer) content.push("補足 Offer／OfferCatalog 結構化資料及可見的服務範圍與報價 CTA。");
     if (metric?.serpFeatures.includes("local_pack")) content.push("SERP 有本地圖包：補強一致的香港本地實體、服務區與案例佐證。");
     if (metric?.serpFeatures.includes("ai_overview")) content.push("SERP 有 AI Overview：加入可引用的定義、流程、數字與精簡問答。");
