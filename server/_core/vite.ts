@@ -8,6 +8,7 @@ import viteConfig from "../../vite.config";
 import { getDb } from "../db";
 import { deliveries } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { shouldSpaFallback } from "./spaFallback";
 
 const DELIVERY_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/jd-studio-logo-dark_3217ad3b.png";
 const CRAWLER_UA_REGEX = /whatsapp|facebookexternalhit|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|applebot|googlebot|bingbot|crawler|spider|bot/i;
@@ -120,6 +121,12 @@ export function serveStatic(app: Express) {
   // fall through to index.html if the file doesn't exist
   // But first check if this is a crawler requesting a delivery page
   app.use("*", async (req, res) => {
+    const pathname = (req.originalUrl || req.url || "/").split("?")[0] || "/";
+    // Missing hashed assets must 404 as plain text — never index.html.
+    if (!shouldSpaFallback(pathname)) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+
     const deliveryMatch = req.originalUrl.match(/^\/delivery\/([a-f0-9]{48})/);
     if (deliveryMatch && CRAWLER_UA_REGEX.test(req.headers["user-agent"] || "")) {
       const ogHtml = await buildDeliveryOgHtml(
