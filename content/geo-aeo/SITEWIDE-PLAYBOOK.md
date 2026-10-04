@@ -36,14 +36,12 @@ Legend: ✅ strong · 🟡 partial · ❌ weak
 | `/services/product-photography` | 🟡 | 🟡 (meta/FAQ) | ✅ | ✅ | ✅ | ❌ | **P0** |
 | `/services/food-photography` | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | **P0** |
 | `/services/jewelry-photography` | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | **P0** |
-| `/services/video-project` | ❌ | ❌ | ❌ | ❌ | 🟡 | ❌ | **P0** |
-| `/services/corporate-event` | 🟡 | ❌ | ✅ | ✅ | ✅ | ❌ | P1 |
-| `/services/event-photography` | 🟡 | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
-| `/services/art-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | Paste |
-| `/services/gallery` (AI) | ❌ | ❌ | 🟡 | ✅ | ✅ | ❌ | P1 |
-| `/-menu-design` | ✅ pack ready | 🟡 quote-only (no food $) | ✅ visible FAQ | ❌ no FAQPage (2026) | ✅ | ✅ Offer quote | Re-paste def「是專門」 |
 | `/services/video-project` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ | ✅ | Paste |
-| `/services/gallery` (AI) | ✅ pack ready | 🟡 quote-only | ✅ pack ready | ✅ pack ready | ✅ | ✅ quote Offer | Paste |
+| `/services/corporate-event` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ | ✅ | Paste |
+| `/services/event-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ | ✅ | Paste |
+| `/services/art-photography` | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | ✅ pack ready | Paste |
+| `/services/gallery` (AI) | ✅ pack ready | 🟡 quote-only | ✅ pack ready | ✅ pack ready | ✅ | ✅ | Paste |
+| `/-menu-design` | ✅ pack ready | 🟡 quote-only (no food $) | ✅ visible FAQ | ❌ no FAQPage (2026) | ✅ | ✅ Offer quote | Re-paste def「是專門」 |
 | `/contact-us` | — | — | ❌ | ❌ | ❌ | — | P2 |
 | Pricing **blogs** | ✅ | ✅ | ✅ | ✅ | — | — | Keep + cross-link |
 
