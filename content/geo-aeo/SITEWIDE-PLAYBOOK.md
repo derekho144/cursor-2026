@@ -152,3 +152,25 @@ Prices must stay consistent with already-published blogs (do not invent new rate
 Ready-to-paste Squarespace codeblocks generated for:
 `product-photography`, `food-photography`, `corporate-event`, `event-photography`, `jewelry-photography`.
 See `APPLY-REMAINING-SERVICES.md`. Interior remains the live gold template — do not overwrite.
+
+---
+
+## 8. Growth Priorities Top 10 (jdsys.biz admin)
+
+**Path:** `/growth-priorities` on the admin app (not Squarespace).
+
+**Purpose:** Rank executable SEO/Ads/AEO work by business impact — not to predict rankings.
+
+| Source | What it contributes | Fail-soft |
+|---|---|---|
+| GSC | Commercial HK queries with position > 10 | Required for backlog selection |
+| Quotes funnel | Accepted revenue + `leadSource` Google/Website + win rate | Soft demand floor when $ is thin |
+| Email inquiries | Unlinked `aiParsed.serviceType` counts only (no landing URL in schema) | Soft; never equal to Ads conversions |
+| Google Ads keywords | Spend, QS, clicks, conversions | Optional |
+| Ads `search_term_view` | Actual typed terms + conversions | Optional; can prove commercial intent alone |
+| Ahrefs | KD / volume / SERP features (24h cache) | Optional |
+| Live page audit | FAQ / Service / Offer / definition / CTA | Optional |
+
+**Action Queue rule:** evidence = keyword rows **or** converting/matched search terms. Prefer landing-page review when search-term conversions exist and organic is still page 2+.
+
+**Do not:** invent UTM/landing attribution without schema; treat marketplace leads (HelloToby / FH) as SEO proof; mutate Ads without the fail-closed executor gates.
