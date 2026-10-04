@@ -1,42 +1,43 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
+import { lazyRetry } from "./lib/lazyRetry";
 
 // Eagerly load the most-visited pages for instant navigation
 import Dashboard from "./pages/Dashboard";
 import QuotesList from "./pages/QuotesList";
 
 // Lazy-load all other pages to reduce initial bundle size
-const QuoteForm = lazy(() => import("./pages/QuoteForm"));
-const QuoteDetail = lazy(() => import("./pages/QuoteDetail"));
-const AdExpenses = lazy(() => import("./pages/AdExpenses"));
-const AdSync = lazy(() => import("./pages/AdSync"));
-const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
-const PlatformEfficiency = lazy(() => import("./pages/PlatformEfficiency"));
-const GoogleAdsQuality = lazy(() => import("./pages/GoogleAdsQuality"));
-const GrowthPriorities = lazy(() => import("./pages/GrowthPriorities"));
-const ClientsList = lazy(() => import("./pages/ClientsList"));
-const ClientDetail = lazy(() => import("./pages/ClientDetail"));
-const DeliveryList = lazy(() => import("./pages/DeliveryList"));
-const DeliveryPage = lazy(() => import("./pages/DeliveryPage"));
-const SignPage = lazy(() => import("./pages/SignPage"));
-const QuotePrintPage = lazy(() => import("./pages/QuotePrintPage"));
-const EmailInquiries = lazy(() => import("./pages/EmailInquiries"));
-const FreehunterBoard = lazy(() => import("./pages/FreehunterBoard"));
-const Expenses = lazy(() => import("./pages/Expenses"));
-const LoyaltyPage = lazy(() => import("./pages/Loyalty"));
-const ReceiptPrintPage = lazy(() => import("./pages/ReceiptPrintPage"));
-const QuoteFollowUp = lazy(() => import("./pages/QuoteFollowUp"));
-const PitchOutreach = lazy(() => import("./pages/PitchOutreach"));
-const LinkedInOps = lazy(() => import("./pages/LinkedInOps"));
-const AcceptedMerchantsBank = lazy(() => import("./pages/AcceptedMerchantsBank"));
-const Employees = lazy(() => import("./pages/Employees"));
-const PricingLearning = lazy(() => import("./pages/PricingLearning"));
+const QuoteForm = lazyRetry(() => import("./pages/QuoteForm"));
+const QuoteDetail = lazyRetry(() => import("./pages/QuoteDetail"));
+const AdExpenses = lazyRetry(() => import("./pages/AdExpenses"));
+const AdSync = lazyRetry(() => import("./pages/AdSync"));
+const MonthlyReport = lazyRetry(() => import("./pages/MonthlyReport"));
+const PlatformEfficiency = lazyRetry(() => import("./pages/PlatformEfficiency"));
+const GoogleAdsQuality = lazyRetry(() => import("./pages/GoogleAdsQuality"));
+const GrowthPriorities = lazyRetry(() => import("./pages/GrowthPriorities"));
+const ClientsList = lazyRetry(() => import("./pages/ClientsList"));
+const ClientDetail = lazyRetry(() => import("./pages/ClientDetail"));
+const DeliveryList = lazyRetry(() => import("./pages/DeliveryList"));
+const DeliveryPage = lazyRetry(() => import("./pages/DeliveryPage"));
+const SignPage = lazyRetry(() => import("./pages/SignPage"));
+const QuotePrintPage = lazyRetry(() => import("./pages/QuotePrintPage"));
+const EmailInquiries = lazyRetry(() => import("./pages/EmailInquiries"));
+const FreehunterBoard = lazyRetry(() => import("./pages/FreehunterBoard"));
+const Expenses = lazyRetry(() => import("./pages/Expenses"));
+const LoyaltyPage = lazyRetry(() => import("./pages/Loyalty"));
+const ReceiptPrintPage = lazyRetry(() => import("./pages/ReceiptPrintPage"));
+const QuoteFollowUp = lazyRetry(() => import("./pages/QuoteFollowUp"));
+const PitchOutreach = lazyRetry(() => import("./pages/PitchOutreach"));
+const LinkedInOps = lazyRetry(() => import("./pages/LinkedInOps"));
+const AcceptedMerchantsBank = lazyRetry(() => import("./pages/AcceptedMerchantsBank"));
+const Employees = lazyRetry(() => import("./pages/Employees"));
+const PricingLearning = lazyRetry(() => import("./pages/PricingLearning"));
 
 // Minimal spinner shown while lazy chunks are loading
 function PageLoader() {
