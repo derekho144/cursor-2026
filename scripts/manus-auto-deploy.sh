@@ -163,12 +163,18 @@ def verify_live_revision() -> None:
         "https://jdsys.manus.space/deploy-revision.txt",
     ]
     # Unified Ad Expenses page markers live in the lazy AdExpenses chunk (not index).
-    must_have = ["Ad Spend & Monthly Report", "ad-expenses-report", "開支記錄"]
+    # jd-chunk-reload proves the asset SPA-fallback fix (#114) is in the live client.
+    must_have = [
+        "Ad Spend & Monthly Report",
+        "ad-expenses-report",
+        "開支記錄",
+        "jd-chunk-reload",
+    ]
     must_not = [
         'id:"reports",label:"月度報表",path:"/reports"',
         "ad-expenses-tabs",
     ]
-    stale_versions = {"8043430f", "b7c0ce4d"}
+    stale_versions = {"8043430f", "b7c0ce4d", "f6c7e274"}
     last_err = ""
     for attempt in range(10):
         ok = True
@@ -237,13 +243,37 @@ def verify_live_revision() -> None:
                                 ok = False
                                 last_err = f"live JS still has stale UI {needle!r}"
                                 break
+                    if ok:
+                        miss = subprocess.run(
+                            [
+                                "curl", "-sS", "-L", "-A", "JD-Studio-Deploy-Verify/1.0",
+                                "-o", "/tmp/jd-missing-asset.body",
+                                "-w", "%{http_code}:%{content_type}",
+                                "https://jdsys.biz/assets/missing-chunk-test.js",
+                            ],
+                            text=True,
+                            timeout=30,
+                            capture_output=True,
+                        )
+                        code_ct = (miss.stdout or "").strip()
+                        miss_body = ""
+                        try:
+                            miss_body = open("/tmp/jd-missing-asset.body", encoding="utf-8", errors="ignore").read(200)
+                        except OSError:
+                            miss_body = ""
+                        if code_ct.startswith("200") or "text/html" in code_ct or miss_body.lstrip().lower().startswith("<!doctype"):
+                            ok = False
+                            last_err = (
+                                "missing /assets/* still SPA-falls back to HTML "
+                                f"({code_ct}; body={miss_body[:80]!r})"
+                            )
             except Exception as exc:  # noqa: BLE001
                 ok = False
                 last_err = str(exc)
         if ok:
             print(
                 "manus-auto-deploy: live revision OK "
-                f"(deploy-revision + unified Ad Expenses UI; version_id={vid})"
+                f"(deploy-revision + chunk-fallback fix; version_id={vid})"
             )
             return
         print(f"manus-auto-deploy: live revision not ready (attempt {attempt + 1}/10): {last_err}")
@@ -257,7 +287,7 @@ def verify_live_revision() -> None:
 
 
 def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None:
-    stale_versions = {"8043430f", "b7c0ce4d"}
+    stale_versions = {"8043430f", "b7c0ce4d", "f6c7e274"}
     before = api("GET", f"website.status?website_id={website_id}")
     before_vid = str(before.get("version_id") or "")
     print(
@@ -306,11 +336,12 @@ def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None
     if require_new_version and (
         final_vid in stale_versions
         or (before_vid in stale_versions and final_vid == before_vid)
+        or (before_vid and final_vid and final_vid == before_vid)
     ):
         print(
             "manus-auto-deploy: REFUSING stale publish — "
-            f"version_id={final_vid} is not a new unified-page checkpoint. "
-            "JD SYS must save a new checkpoint after syncing GitHub main, then re-publish.",
+            f"version_id={final_vid} unchanged from before_vid={before_vid}. "
+            "JD SYS must save a NEW checkpoint after syncing GitHub main, then re-publish.",
             file=sys.stderr,
         )
         sys.exit(11)
@@ -374,14 +405,18 @@ prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 syn
    - `client/src/components/DashboardLayout.tsx`：menu **唔可以**有 `id: "reports"` / label「月度報表」獨立項
    - `client/src/pages/MonthlyReport.tsx`：必須係 `Redirect` 去 `/ad-expenses?tab=report`
    - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔可以**有 `ad-expenses-tabs`（單一頁：分析＋記錄，無 tabs）
-   - `client/public/deploy-revision.txt`：首行必須係 `unified-ad-expenses-report-v2`（或至少含 `{sha}`）
+   - `client/public/deploy-revision.txt`：首行必須係 `asset-spa-fallback-v1`（或至少含 `{sha}`）
+   - `client/src/lib/lazyRetry.ts` 存在且含 `jd-chunk-reload`
+   - `server/_core/spaFallback.ts` 存在且含 `shouldSpaFallback`
 3. 執行 frontend production build（`npm run build` 或專案既定 build），確保 `dist/public`／網站靜態資產已更新
 4. **授權**：為保存 checkpoint，允許 WebDev workspace 內 commit／merge／清理 conflict／暫存 version.json；GitHub 業務內容必須保持與 main@{full} 一致。同意移除阻擋 checkpoint 的大型本地資產副本（保留 File Storage）。
 5. 保存 **全新** checkpoint — `version_id` **禁止** 再係 `8043430f` 或 `b7c0ce4d`
 6. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
 7. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
 8. 驗證：
-   - `https://jdsys.biz/deploy-revision.txt` 含 `unified-ad-expenses-report-v2`
+   - `https://jdsys.biz/deploy-revision.txt` 含 `asset-spa-fallback-v1`
+   - live `/assets/index-*.js` 含 `jd-chunk-reload`
+   - `https://jdsys.biz/assets/missing-chunk-test.js` 必須 404 plain（**唔可以**係 HTML index）
    - live `AdExpenses-*.js` 含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔含** `ad-expenses-tabs` 同舊 nav `id:"reports",label:"月度報表",path:"/reports"`
 9. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
 
@@ -466,7 +501,9 @@ while time.time() < deadline:
                                 f"（保留 File Storage／manus-storage 引用）→ "
                                 f"npm run build → 新 checkpoint（version_id 禁止 8043430f/b7c0ce4d）→ "
                                 f"website.publish (website_id={website_id}, visibility=public) → "
-                                "驗證 deploy-revision=unified-ad-expenses-report-v2 且 "
+                                "驗證 deploy-revision=asset-spa-fallback-v1、"
+                                "live JS 含 jd-chunk-reload、"
+                                "missing /assets/*.js 回 404 唔好 HTML、"
                                 "AdExpenses chunk 有 ad-expenses-report、無 ad-expenses-tabs。"
                                 "唔切舊 task、唔改業務代碼、唔改 DNS/Railway。唔使再問。"
                             )
