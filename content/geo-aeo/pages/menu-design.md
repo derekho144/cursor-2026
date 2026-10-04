@@ -18,18 +18,21 @@
 - Menu design pricing: project quote only（頁數／尺寸／語言／改稿）  
 - Delivery honesty: ~3–5 working days for design  
 
+## UI (align JD homepage Darkroom Catalogue)
+- Palette: `#050507` / gold `#c9a962` / cream `#d8cfb4`
+- Display: Instrument Serif italic + Noto Sans TC
+- Hero: brand-first one composition, gold rail, no cards / no year
+- Motions: rise, rail draw, marquee strip, FAQ cross-rotate（≥3）
+- Sections: editorial heads + metric columns + process rail（not pill cards）
+
 ## Block order
-1. Brand + kicker + H2 + sub + CTA  
-2. Definition（可另配食物攝影，收費見該頁）  
-3. Use cases + prep checklist  
-4. Stats: 3–5 days / Print / HK / Photo link  
-5. Visible design process（no HowTo schema）  
-6. Scope  
-7. Pricing box: 另行報價 + explicit「不含攝影價」  
-8. Why / trust facts  
-9. Related links  
-10. Visible FAQ  
-11. CTA  
+1. Brand lock + H2 + sub + CTA  
+2. Kinetic marquee  
+3. Definition / use cases  
+4. Metrics / process / scope  
+5. Pricing quote（no food $）  
+6. Why + related + visible FAQ  
+7. Foot CTA  
 
 ## Paste
 - Code Block (above portfolio gallery): `menu-design.squarespace-codeblock.html`  
