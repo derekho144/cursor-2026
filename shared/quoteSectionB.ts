@@ -197,18 +197,46 @@ export function applySectionBForServiceType<T extends ItemLike>(
   return [...core, ...injected];
 }
 
-/** Toggle event B2 between charged ($800) and waived (strikethrough). */
-export function toggleEventRushWaived<T extends ItemLike>(items: T[]): T[] {
-  return items.map((it) => {
-    if (!isEventRushFeeItem(it.description)) return it;
-    const unitPrice = Number(it.unitPrice) > 0 ? Number(it.unitPrice) : EVENT_RUSH_FEE_HKD;
-    const currentlyWaived = isQuoteWaivedPrice(unitPrice, Number(it.amount));
+/** Any priced line can be optionally strikethrough-waived by the editor. */
+export function canToggleQuoteWaive(item: {
+  description?: string | null;
+  unitPrice?: number | string | null;
+}): boolean {
+  if (isQuoteSectionHeader(item.description)) return false;
+  return Number(item.unitPrice) > 0;
+}
+
+/**
+ * Toggle one line between charged (amount = qty * unitPrice) and waived
+ * (amount = 0, unitPrice kept for strikethrough display).
+ */
+export function toggleQuoteItemWaived<T extends ItemLike>(
+  items: T[],
+  index: number
+): T[] {
+  if (index < 0 || index >= items.length) return items;
+  const target = items[index]!;
+  if (!canToggleQuoteWaive(target)) return items;
+
+  const unitPrice = Number(target.unitPrice);
+  const qty = Number(target.quantity) > 0 ? Number(target.quantity) : 1;
+  const currentlyWaived = isQuoteWaivedPrice(unitPrice, Number(target.amount));
+
+  return items.map((it, i) => {
+    if (i !== index) return it;
     return {
       ...it,
       unitPrice,
-      quantity: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
-      amount: currentlyWaived ? unitPrice : 0,
+      quantity: qty,
+      amount: currentlyWaived ? Math.round(unitPrice * qty * 100) / 100 : 0,
       isIncluded: false,
     };
   });
+}
+
+/** @deprecated Prefer toggleQuoteItemWaived — kept for event B2 convenience. */
+export function toggleEventRushWaived<T extends ItemLike>(items: T[]): T[] {
+  const idx = items.findIndex((it) => isEventRushFeeItem(it.description));
+  if (idx < 0) return items;
+  return toggleQuoteItemWaived(items, idx);
 }

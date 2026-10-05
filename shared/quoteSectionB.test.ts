@@ -4,6 +4,7 @@ import {
   applySectionBForServiceType,
   buildEventSectionBLines,
   buildFoodSectionBLines,
+  canToggleQuoteWaive,
   hasConditionalSectionB,
   isEventRushFeeItem,
   isManagedSectionBItem,
@@ -12,6 +13,7 @@ import {
   isQuoteWaivedPrice,
   parseQuoteItemCode,
   toggleEventRushWaived,
+  toggleQuoteItemWaived,
 } from "./quoteSectionB";
 
 describe("quoteSectionB", () => {
@@ -68,5 +70,26 @@ describe("quoteSectionB", () => {
     const food = applySectionBForServiceType(kept, "food_beverage", createId);
     expect(food.some((i) => /食物造型/.test(i.description))).toBe(true);
     expect(food.some((i) => isEventRushFeeItem(i.description))).toBe(false);
+  });
+
+  it("lets the editor pick any priced line for strikethrough waive", () => {
+    const items = [
+      { id: "1", description: "Retouch", quantity: 1, unitPrice: 1200, amount: 1200 },
+      { id: "2", description: "B2 快速交相（12小時內）", quantity: 1, unitPrice: 800, amount: 800 },
+      { id: "3", description: "SECTION B · 活動攝影與線上直播", quantity: 0, unitPrice: 0, amount: 0 },
+    ];
+    expect(canToggleQuoteWaive(items[0]!)).toBe(true);
+    expect(canToggleQuoteWaive(items[2]!)).toBe(false);
+
+    const waivedRetouch = toggleQuoteItemWaived(items, 0);
+    expect(waivedRetouch[0]!.amount).toBe(0);
+    expect(waivedRetouch[0]!.unitPrice).toBe(1200);
+    expect(waivedRetouch[1]!.amount).toBe(800);
+
+    const restored = toggleQuoteItemWaived(waivedRetouch, 0);
+    expect(restored[0]!.amount).toBe(1200);
+
+    const waivedRush = toggleQuoteItemWaived(items, 1);
+    expect(isQuoteWaivedPrice(waivedRush[1]!.unitPrice, waivedRush[1]!.amount)).toBe(true);
   });
 });

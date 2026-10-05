@@ -46,12 +46,12 @@ import {
 } from "@shared/quoteDiscount";
 import {
   applySectionBForServiceType,
+  canToggleQuoteWaive,
   hasConditionalSectionB,
-  isEventRushFeeItem,
   isManagedSectionBItem,
   isQuoteSectionHeader,
   isQuoteWaivedPrice,
-  toggleEventRushWaived,
+  toggleQuoteItemWaived,
 } from "@shared/quoteSectionB";
 
 // 設計類別（不需要拍攝日期和報價有效期）
@@ -374,7 +374,7 @@ function SortableQuoteItem({
   onUpdate,
   onRemove,
   canRemove,
-  onToggleRushWaive,
+  onToggleWaive,
 }: {
   item: QuoteItem;
   idx: number;
@@ -386,7 +386,7 @@ function SortableQuoteItem({
   ) => void;
   onRemove: (idx: number) => void;
   canRemove: boolean;
-  onToggleRushWaive?: () => void;
+  onToggleWaive?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style: React.CSSProperties = {
@@ -398,8 +398,9 @@ function SortableQuoteItem({
   const inferred = classifyQuoteLineItem(item.description);
   const categoryValue = item.category || "auto";
   const isSection = isQuoteSectionHeader(item.description);
-  const isRush = isEventRushFeeItem(item.description);
+  const canWaive = canToggleQuoteWaive(item);
   const isWaived = isQuoteWaivedPrice(Number(item.unitPrice), Number(item.amount));
+  const waiveLabelAmount = Number(item.unitPrice).toLocaleString();
   return (
     <div ref={setNodeRef} style={style}>
       {isSection && (
@@ -421,10 +422,10 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
-          {isRush && onToggleRushWaive && (
+          {canWaive && onToggleWaive && (
             <button
               type="button"
-              onClick={onToggleRushWaive}
+              onClick={onToggleWaive}
               className="text-[11px] px-2 py-1 rounded transition-colors"
               style={{
                 border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
@@ -432,7 +433,9 @@ function SortableQuoteItem({
                 background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
               }}
             >
-              {isWaived ? "已劃線豁免 · 取消升級" : "免費升級（劃線豁免 $800）"}
+              {isWaived
+                ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
+                : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
             </button>
           )}
         </div>
@@ -461,7 +464,7 @@ function SortableQuoteItem({
           <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
           {isWaived && (
             <div className="text-[10px] text-right pr-1" style={{ color: "#86efac" }}>
-              列印顯示 <span style={{ textDecoration: "line-through" }}>{Number(item.unitPrice).toLocaleString()}</span> 豁免
+              列印顯示 <span style={{ textDecoration: "line-through" }}>{waiveLabelAmount}</span> 豁免
             </div>
           )}
         </div>
@@ -482,10 +485,10 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
-            {isRush && onToggleRushWaive && (
+            {canWaive && onToggleWaive && (
               <button
                 type="button"
-                onClick={onToggleRushWaive}
+                onClick={onToggleWaive}
                 className="mt-2 text-[11px] px-2 py-1 rounded"
                 style={{
                   border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
@@ -493,7 +496,9 @@ function SortableQuoteItem({
                   background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
                 }}
               >
-                {isWaived ? "已劃線豁免 · 取消升級" : "免費升級（劃線豁免 $800）"}
+                {isWaived
+                  ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
+                  : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
               </button>
             )}
           </div>
@@ -1018,10 +1023,10 @@ export default function QuoteForm() {
     });
   };
 
-  const handleToggleRushWaive = () => {
+  const handleToggleItemWaive = (idx: number) => {
     setForm((prev) => ({
       ...prev,
-      items: toggleEventRushWaived(prev.items),
+      items: toggleQuoteItemWaived(prev.items, idx),
     }));
   };
 
@@ -1883,8 +1888,8 @@ export default function QuoteForm() {
                     onUpdate={updateItem}
                     onRemove={removeItem}
                     canRemove={form.items.length > 1}
-                    onToggleRushWaive={
-                      isEventRushFeeItem(item.description) ? handleToggleRushWaive : undefined
+                    onToggleWaive={
+                      canToggleQuoteWaive(item) ? () => handleToggleItemWaive(idx) : undefined
                     }
                   />
                 ))}
