@@ -12,6 +12,12 @@ import { existsSync } from "fs";
 import { LOGO_BASE64_URL } from "./logoBase64";
 import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
 import { QUOTE_PRINT_DESIGN } from "../../shared/quotePrintDesign";
+import {
+  isQuoteSectionHeader,
+  isQuoteTbdPrice,
+  isQuoteWaivedPrice,
+  parseQuoteItemCode,
+} from "../../shared/quoteSectionB";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
 export { SERVICE_TYPE_LABELS } from "./quotePdfKit";
@@ -147,24 +153,50 @@ export function generateQuotePdfHtml(
 
   const itemRows = items
     .map((item: any, idx: number) => {
-      const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
-      const priceCell = isIncluded
-        ? `<em style="font-style:italic;color:#888;">Included</em>`
-        : money(Number(item.unitPrice));
-      const amountCell = isIncluded
-        ? `<em style="font-style:italic;color:#888;">Included</em>`
-        : money(Number(item.amount));
+      const desc = String(item.description || "");
+      if (isQuoteSectionHeader(desc)) {
+        return `
+      <div style="display:flex;align-items:stretch;border-bottom:1px solid #dddddd;margin-top:${idx === 0 ? 0 : 6}px;background:#eeeeee;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <div style="width:3px;background:#111111;"></div>
+        <div style="flex:1;padding:8px 10px;font-size:11px;font-weight:700;color:#111111;letter-spacing:0.04em;">${escapeHtml(desc)}</div>
+      </div>`;
+      }
+
+      const code = parseQuoteItemCode(desc);
+      const unitPrice = Number(item.unitPrice);
+      const amount = Number(item.amount);
+      const isWaived = isQuoteWaivedPrice(unitPrice, amount);
+      const isTbd = isQuoteTbdPrice(desc, unitPrice);
+      const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
+      const priceCell = isWaived
+        ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
+        : isTbd
+          ? `<em style="font-style:italic;color:#888;">報價另議</em>`
+          : isIncluded
+            ? `<em style="font-style:italic;color:#888;">Included</em>`
+            : money(unitPrice);
+      const amountCell = isWaived
+        ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
+        : isTbd
+          ? `<em style="font-style:italic;color:#888;">報價另議</em>`
+          : isIncluded
+            ? `<em style="font-style:italic;color:#888;">Included</em>`
+            : money(amount);
       const rowBg = idx % 2 === 0 ? "#ffffff" : "#f7f7f7";
-      const descHtml = String(item.description || "")
+      const descHtml = desc
         .split("\n")
-        .map((line: string, i: number, arr: string[]) =>
-          `${escapeHtml(line)}${i < arr.length - 1 ? "<br/>" : ""}`
-        )
+        .map((line: string, i: number, arr: string[]) => {
+          const weight = i === 0 ? "600" : "400";
+          const color = i === 0 ? "#111" : "#666";
+          const size = i === 0 ? "10.5px" : "9.5px";
+          return `<span style="font-weight:${weight};color:${color};font-size:${size};">${escapeHtml(line)}</span>${i < arr.length - 1 ? "<br/>" : ""}`;
+        })
         .join("");
+      const qtyLabel = code ? escapeHtml(code) : String(Number(item.quantity));
       return `
       <div style="display:flex;border-bottom:1px solid #eeeeee;padding:7px 0;background:${rowBg};-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="width:48px;text-align:center;font-size:10.5px;color:#444;">${Number(item.quantity)}</div>
-        <div style="flex:1;font-size:10.5px;color:#111;font-weight:500;word-break:break-word;padding-right:8px;">${descHtml}</div>
+        <div style="width:48px;text-align:center;font-size:10.5px;color:#444;font-weight:${code ? 600 : 400};">${qtyLabel}</div>
+        <div style="flex:1;word-break:break-word;padding-right:8px;">${descHtml}</div>
         <div style="width:110px;text-align:right;font-size:10.5px;color:#444;white-space:nowrap;">${priceCell}</div>
         <div style="width:110px;text-align:right;font-size:10.5px;color:#222;white-space:nowrap;padding-right:4px;">${amountCell}</div>
       </div>`;

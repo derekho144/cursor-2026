@@ -10,6 +10,12 @@ import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
+import {
+  isQuoteSectionHeader,
+  isQuoteTbdPrice,
+  isQuoteWaivedPrice,
+  parseQuoteItemCode,
+} from "@shared/quoteSectionB";
 
 const LOGO_URL =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/jd-studio-logo-original_0081e5b2.png";
@@ -319,7 +325,59 @@ export default function ReceiptPrintPage() {
               <div style={S.thAmount}>AMOUNT</div>
             </div>
             {items.map((item: any, idx: number) => {
-              const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
+              const desc = String(item.description || "");
+              if (isQuoteSectionHeader(desc)) {
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      borderBottom: "1px solid #dddddd",
+                      padding: "8px 0",
+                      background: "#eeeeee",
+                      WebkitPrintColorAdjust: "exact" as const,
+                      printColorAdjust: "exact" as const,
+                      marginTop: idx === 0 ? 0 : 6,
+                    }}
+                  >
+                    <div style={{ width: 3, alignSelf: "stretch", background: "#111", marginRight: 10 }} />
+                    <div style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "#111", letterSpacing: "0.04em" }}>
+                      {desc}
+                    </div>
+                  </div>
+                );
+              }
+              const code = parseQuoteItemCode(desc);
+              const unitPrice = Number(item.unitPrice);
+              const amount = Number(item.amount);
+              const isWaived = isQuoteWaivedPrice(unitPrice, amount);
+              const isTbd = isQuoteTbdPrice(desc, unitPrice);
+              const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
+              const priceCell = isWaived ? (
+                <span>
+                  <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
+                  <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
+                </span>
+              ) : isTbd ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
+              ) : isIncluded ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
+              ) : (
+                formatMoney(unitPrice)
+              );
+              const amountCell = isWaived ? (
+                <span>
+                  <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
+                  <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
+                </span>
+              ) : isTbd ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
+              ) : isIncluded ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
+              ) : (
+                formatMoney(amount)
+              );
               return (
                 <div key={idx} style={{
                   display: "flex",
@@ -329,19 +387,21 @@ export default function ReceiptPrintPage() {
                   WebkitPrintColorAdjust: "exact" as const,
                   printColorAdjust: "exact" as const,
                 }}>
-                  <div style={{ width: 48, textAlign: "center", fontSize: 10.5, color: "#444" }}>
-                    {Number(item.quantity)}
+                  <div style={{ width: 48, textAlign: "center", fontSize: 10.5, color: "#444", fontWeight: code ? 600 : 400 }}>
+                    {code ?? Number(item.quantity)}
                   </div>
                   <div style={{ flex: 1, fontSize: 10.5, color: "#111", fontWeight: 500, wordBreak: "break-word", paddingRight: 8 }}>
-                    {item.description.split("\n").map((line: string, i: number) => (
-                      <span key={i}>{line}{i < item.description.split("\n").length - 1 && <br />}</span>
+                    {desc.split("\n").map((line: string, i: number, arr: string[]) => (
+                      <span key={i} style={i === 0 ? { fontWeight: 600 } : { fontWeight: 400, color: "#666", fontSize: 9.5 }}>
+                        {line}{i < arr.length - 1 && <br />}
+                      </span>
                     ))}
                   </div>
                   <div style={{ width: 110, textAlign: "right", fontSize: 10.5, color: "#444", whiteSpace: "nowrap" }}>
-                    {isIncluded ? <em style={{ fontStyle: "italic", color: "#888" }}>Included</em> : formatMoney(item.unitPrice)}
+                    {priceCell}
                   </div>
                   <div style={{ width: 110, textAlign: "right", fontSize: 10.5, color: "#222", whiteSpace: "nowrap", paddingRight: 4 }}>
-                    {isIncluded ? <em style={{ fontStyle: "italic", color: "#888" }}>Included</em> : formatMoney(item.amount)}
+                    {amountCell}
                   </div>
                 </div>
               );

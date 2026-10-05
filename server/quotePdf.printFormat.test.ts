@@ -66,6 +66,53 @@ describe("generateQuotePdfHtml print-format template", () => {
     expect(html).not.toContain("Google Review");
   });
 
+  it("renders Section B header, TBD and waived rush fee", () => {
+    const eventQuote = {
+      ...quote,
+      serviceType: "corporate_event",
+      items: [
+        { description: "Event Photoshoot", quantity: 1, unitPrice: 5000, amount: 5000 },
+        { description: "SECTION B · 活動攝影與線上直播", quantity: 0, unitPrice: 0, amount: 0 },
+        { description: "B1 QRCODE 相片直播", quantity: 1, unitPrice: 0, amount: 0 },
+        { description: "B2 快速交相（12小時內）", quantity: 1, unitPrice: 800, amount: 0 },
+      ],
+    };
+    const html = generateQuotePdfHtml(eventQuote, "專業活動攝影服務。", {
+      corporate_event: "企業活動攝影",
+    });
+    expect(html).toContain("SECTION B · 活動攝影與線上直播");
+    expect(html).toContain("text-decoration:line-through");
+    expect(html).toContain("豁免");
+    expect(html).toContain(">B2<");
+  });
+
+  it("renders food Section B with 報價另議", () => {
+    const foodQuote = {
+      ...quote,
+      serviceType: "food_beverage",
+      items: [
+        {
+          description: "SECTION B · 食物攝影與現場食物造型",
+          quantity: 0,
+          unitPrice: 0,
+          amount: 0,
+        },
+        {
+          description: "B1.1 現場藝術指導及食物造型（2 day · 9 hours per day）\n報價另議",
+          quantity: 1,
+          unitPrice: 0,
+          amount: 0,
+        },
+      ],
+    };
+    const html = generateQuotePdfHtml(foodQuote, "專業食物攝影。", {
+      food_beverage: "食物攝影",
+    });
+    expect(html).toContain("SECTION B · 食物攝影與現場食物造型");
+    expect(html).toContain("報價另議");
+    expect(html).toContain(">B1.1<");
+  });
+
   it("keeps payment detail together and wraps long equipment/delivery", () => {
     const longQuote = {
       ...quote,
