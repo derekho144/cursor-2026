@@ -49,10 +49,18 @@ import {
   canToggleQuoteWaive,
   hasConditionalSectionB,
   isManagedSectionBItem,
+  isQuoteSectionBOptionItem,
   isQuoteSectionHeader,
   isQuoteWaivedPrice,
   toggleQuoteItemWaived,
 } from "@shared/quoteSectionB";
+import {
+  QUOTE_TEMPLATES,
+  extrasFromSelectedTemplates,
+  mergeQuoteTemplateItems,
+  toggleQuoteTemplateSelection,
+  type QuoteTemplateId,
+} from "@shared/quoteTemplates";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -101,51 +109,8 @@ function normalizeLeadSource(raw: unknown): string {
   return LEAD_SOURCE_VALUES.has(s) ? s : "";
 }
 
-/** Default extras for quote templates → 「額外資訊」fields (not line items). */
-const TEMPLATE_DEFAULT_EQUIPMENT =
-  "CAMERA/ Sony A7R4  Lighting AD200 / AD600 / FLASHLIGHT X2";
-const TEMPLATE_DEFAULT_PHOTO_DELIVERY = "BY LINKS  5-10 DAY";
-const TEMPLATE_DEFAULT_VIDEO_DELIVERY =
-  "Video first cut BY LINKS  7-10 DAY";
-
-// Universal quote templates — billable lines only; Team / Equipment / Delivery go to 額外資訊
-export const QUOTE_TEMPLATES = [
-  {
-    id: "photoshoot",
-    label: "攝影 Photoshoot",
-    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
-    deliveryMethod: TEMPLATE_DEFAULT_PHOTO_DELIVERY,
-    items: [
-      { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
-      { description: "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)", quantity: 1, unitPrice: 0 },
-      { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-    ],
-  },
-  {
-    id: "photo_video",
-    label: "攝影加錄影 Photo + Video",
-    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
-    deliveryMethod: `Photo: ${TEMPLATE_DEFAULT_PHOTO_DELIVERY} | ${TEMPLATE_DEFAULT_VIDEO_DELIVERY}`,
-    items: [
-      { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
-      { description: "Post-Production (Video Editing 1min, Color Grading, Background Mixing)", quantity: 1, unitPrice: 0 },
-      { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
-      { description: "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)", quantity: 1, unitPrice: 0 },
-      { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-    ],
-  },
-  {
-    id: "video_only",
-    label: "純錄影 Video Only",
-    equipment: TEMPLATE_DEFAULT_EQUIPMENT,
-    deliveryMethod: TEMPLATE_DEFAULT_VIDEO_DELIVERY,
-    items: [
-      { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
-      { description: "Post-Production (Video Editing 1min, Color Grading, Background Mixing)", quantity: 1, unitPrice: 0 },
-      { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
-    ],
-  },
-];
+// Re-export for any legacy imports; source of truth is @shared/quoteTemplates
+export { QUOTE_TEMPLATES };
 
 const DEFAULT_ITEMS_BY_TYPE: Record<string, { description: string; quantity: number; unitPrice: number }[]> = {};
 
@@ -398,6 +363,7 @@ function SortableQuoteItem({
   const inferred = classifyQuoteLineItem(item.description);
   const categoryValue = item.category || "auto";
   const isSection = isQuoteSectionHeader(item.description);
+  const isSectionBOption = isQuoteSectionBOptionItem(item.description);
   const canWaive = canToggleQuoteWaive(item);
   const isWaived = isQuoteWaivedPrice(Number(item.unitPrice), Number(item.amount));
   const waiveLabelAmount = Number(item.unitPrice).toLocaleString();
@@ -422,6 +388,11 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
+          {isSectionBOption && (
+            <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
+              客戶可見：Option（可選項目，唔係套餐內含）
+            </div>
+          )}
           {canWaive && onToggleWaive && (
             <button
               type="button"
@@ -485,6 +456,11 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
+            {isSectionBOption && (
+              <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
+                客戶可見：Option（可選項目，唔係套餐內含）
+              </div>
+            )}
             {canWaive && onToggleWaive && (
               <button
                 type="button"
@@ -599,6 +575,8 @@ export default function QuoteForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed once for new forms
   }, [isEdit]);
   const [hasDraft, setHasDraft] = useState(() => !isEdit && !!safeLSGet('quote_draft_new'));
+  // Multi-select quick templates (攝影 + 攝影加錄影 can both stay on)
+  const [selectedTemplates, setSelectedTemplates] = useState<QuoteTemplateId[]>([]);
   // For edit mode: per-quote draft key
   const editDraftKey = isEdit && quoteId ? `quote_draft_edit_${quoteId}` : null;
   const [hasEditDraft, setHasEditDraft] = useState(() => !!(editDraftKey && safeLSGet(editDraftKey)));
@@ -1005,6 +983,72 @@ export default function QuoteForm() {
   const removeItem = (idx: number) => {
     if (form.items.length <= 1) return;
     setForm((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+  };
+
+  /** Multi-select templates: keep Section B, rebuild billable lines from selected set. */
+  const handleToggleTemplate = (templateId: QuoteTemplateId) => {
+    const nextSelected = toggleQuoteTemplateSelection(selectedTemplates, templateId);
+    setSelectedTemplates(nextSelected);
+
+    setForm((prev) => {
+      const sectionB = prev.items.filter((it) => isManagedSectionBItem(it.description));
+      const merged = mergeQuoteTemplateItems(nextSelected);
+      const extras = extrasFromSelectedTemplates(nextSelected);
+
+      let core: QuoteItem[] =
+        merged.length > 0
+          ? merged.map((item) => ({
+              id: crypto.randomUUID(),
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              amount: item.quantity * item.unitPrice,
+              isIncluded: item.isIncluded ?? false,
+              category: "" as const,
+            }))
+          : [];
+
+      // No template selected → keep a blank starter if Section B is also empty
+      if (core.length === 0 && sectionB.length === 0) {
+        core = [
+          {
+            id: crypto.randomUUID(),
+            description: "",
+            quantity: 1,
+            unitPrice: 0,
+            amount: 0,
+            category: "",
+          },
+        ];
+      }
+
+      const crew = extras.primaryTemplateId
+        ? crewFromTemplateItems([], extras.primaryTemplateId)
+        : {
+            crewPhotographers: prev.crewPhotographers,
+            crewAssistants: prev.crewAssistants,
+            crewVideographers: prev.crewVideographers,
+            crewOthers: prev.crewOthers,
+          };
+      const auto = buildTeamLabel(crew);
+
+      let items = [...core, ...sectionB];
+      if (hasConditionalSectionB(prev.serviceType) && sectionB.length === 0) {
+        items = applySectionBForServiceType(items, prev.serviceType, () =>
+          crypto.randomUUID()
+        );
+      }
+
+      return {
+        ...prev,
+        items,
+        ...(extras.primaryTemplateId ? crew : {}),
+        team: extras.primaryTemplateId ? auto || prev.team : prev.team,
+        equipment: extras.equipment || prev.equipment,
+        deliveryMethod: extras.deliveryMethod || prev.deliveryMethod,
+        shootHours: prev.shootHours,
+      };
+    });
   };
 
   const handleServiceTypeChange = (value: string) => {
@@ -1823,46 +1867,34 @@ export default function QuoteForm() {
           {!isEdit && (
             <div className="mb-4">
               <div style={{ fontSize: "0.6rem", letterSpacing: "0.15em", color: "#888", textTransform: "uppercase", marginBottom: "8px" }}>
-                快速模板
+                快速模板（可多選：攝影 + 攝影加錄影）
               </div>
-              <div className="flex gap-2">
-                {QUOTE_TEMPLATES.map((tpl) => (
-                  <button
-                    key={tpl.id}
-                    type="button"
-                    onClick={() =>
-                      setForm((p) => {
-                        const items = tpl.items.map((item) => ({
-                          id: crypto.randomUUID(),
-                          description: item.description,
-                          quantity: item.quantity,
-                          unitPrice: item.unitPrice,
-                          amount: item.quantity * item.unitPrice,
-                          isIncluded: (item as any).isIncluded ?? false,
-                          category: "" as const,
-                        }));
-                        // Templates put Team/Equipment/Delivery in 額外資訊, not line items
-                        const crew = crewFromTemplateItems([], tpl.id);
-                        const auto = buildTeamLabel(crew);
-                        return {
-                          ...p,
-                          items,
-                          ...crew,
-                          team: auto || p.team,
-                          equipment: tpl.equipment || p.equipment,
-                          deliveryMethod:
-                            tpl.deliveryMethod || p.deliveryMethod,
-                          // Keep existing hours if user already filled; otherwise leave blank to force fill
-                          shootHours: p.shootHours,
-                        };
-                      })
-                    }
-                    className="px-4 py-2 text-xs font-medium transition-all hover:opacity-80"
-                    style={{ border: "1px solid rgba(212,168,67,0.4)", color: "#d4a843", borderRadius: "2px", background: "rgba(212,168,67,0.06)" }}
-                  >
-                    {tpl.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                {QUOTE_TEMPLATES.map((tpl) => {
+                  const active = selectedTemplates.includes(tpl.id);
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleToggleTemplate(tpl.id)}
+                      className="px-4 py-2 text-xs font-medium transition-all hover:opacity-80"
+                      aria-pressed={active}
+                      style={{
+                        border: active
+                          ? "1px solid #d4a843"
+                          : "1px solid rgba(212,168,67,0.35)",
+                        color: active ? "#1a1a1a" : "#d4a843",
+                        borderRadius: "2px",
+                        background: active
+                          ? "#d4a843"
+                          : "rgba(212,168,67,0.06)",
+                        fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      {tpl.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

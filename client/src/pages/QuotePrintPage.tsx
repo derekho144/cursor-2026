@@ -14,10 +14,10 @@ import { LOGO_BASE64_URL } from "@/lib/logoBase64";
 import { sanitizeQuoteNotesForClientPdf } from "@shared/inquiryDraftReadiness";
 import { QUOTE_PRINT_DESIGN } from "@shared/quotePrintDesign";
 import {
+  SECTION_B_OPTION_LABEL,
   isQuoteSectionHeader,
-  isQuoteTbdPrice,
-  isQuoteWaivedPrice,
   parseQuoteItemCode,
+  resolveQuotePriceDisplay,
 } from "@shared/quoteSectionB";
 
 // Use inlined base64 logo to avoid CDN dependency - prevents print crash when CDN is slow
@@ -402,34 +402,38 @@ export default function QuotePrintPage() {
             const code = parseQuoteItemCode(desc);
             const unitPrice = Number(item.unitPrice);
             const amount = Number(item.amount);
-            const isWaived = isQuoteWaivedPrice(unitPrice, amount);
-            const isTbd = isQuoteTbdPrice(desc, unitPrice);
-            const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
+            const priceKind = resolveQuotePriceDisplay(item);
             const qtyLabel = code ?? String(Number(item.quantity));
-            const priceCell = isWaived ? (
-              <span>
-                <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
-                <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
-              </span>
-            ) : isTbd ? (
-              <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
-            ) : isIncluded ? (
-              <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
-            ) : (
-              formatMoney(unitPrice)
-            );
-            const amountCell = isWaived ? (
-              <span>
-                <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
-                <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
-              </span>
-            ) : isTbd ? (
-              <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
-            ) : isIncluded ? (
-              <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
-            ) : (
-              formatMoney(amount)
-            );
+            const priceCell =
+              priceKind === "waived" ? (
+                <span>
+                  <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
+                  <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
+                </span>
+              ) : priceKind === "tbd" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
+              ) : priceKind === "option" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>{SECTION_B_OPTION_LABEL}</em>
+              ) : priceKind === "included" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
+              ) : (
+                formatMoney(unitPrice)
+              );
+            const amountCell =
+              priceKind === "waived" ? (
+                <span>
+                  <span style={{ textDecoration: "line-through", color: "#999" }}>{formatMoney(unitPrice)}</span>
+                  <span style={{ marginLeft: 6, fontStyle: "italic", color: "#666", fontSize: 10 }}>豁免</span>
+                </span>
+              ) : priceKind === "tbd" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>報價另議</em>
+              ) : priceKind === "option" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>{SECTION_B_OPTION_LABEL}</em>
+              ) : priceKind === "included" ? (
+                <em style={{ fontStyle: "italic", color: "#888" }}>Included</em>
+              ) : (
+                formatMoney(amount)
+              );
 
             return (
               <div key={idx} style={{

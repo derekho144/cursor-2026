@@ -13,10 +13,10 @@ import { LOGO_BASE64_URL } from "./logoBase64";
 import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
 import { QUOTE_PRINT_DESIGN } from "../../shared/quotePrintDesign";
 import {
+  SECTION_B_OPTION_LABEL,
   isQuoteSectionHeader,
-  isQuoteTbdPrice,
-  isQuoteWaivedPrice,
   parseQuoteItemCode,
+  resolveQuotePriceDisplay,
 } from "../../shared/quoteSectionB";
 
 // SERVICE_TYPE_LABELS is defined in quotePdfKit.ts (single source of truth)
@@ -165,23 +165,27 @@ export function generateQuotePdfHtml(
       const code = parseQuoteItemCode(desc);
       const unitPrice = Number(item.unitPrice);
       const amount = Number(item.amount);
-      const isWaived = isQuoteWaivedPrice(unitPrice, amount);
-      const isTbd = isQuoteTbdPrice(desc, unitPrice);
-      const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
-      const priceCell = isWaived
-        ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
-        : isTbd
-          ? `<em style="font-style:italic;color:#888;">報價另議</em>`
-          : isIncluded
-            ? `<em style="font-style:italic;color:#888;">Included</em>`
-            : money(unitPrice);
-      const amountCell = isWaived
-        ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
-        : isTbd
-          ? `<em style="font-style:italic;color:#888;">報價另議</em>`
-          : isIncluded
-            ? `<em style="font-style:italic;color:#888;">Included</em>`
-            : money(amount);
+      const priceKind = resolveQuotePriceDisplay(item);
+      const priceCell =
+        priceKind === "waived"
+          ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
+          : priceKind === "tbd"
+            ? `<em style="font-style:italic;color:#888;">報價另議</em>`
+            : priceKind === "option"
+              ? `<em style="font-style:italic;color:#888;">${SECTION_B_OPTION_LABEL}</em>`
+              : priceKind === "included"
+                ? `<em style="font-style:italic;color:#888;">Included</em>`
+                : money(unitPrice);
+      const amountCell =
+        priceKind === "waived"
+          ? `<span style="text-decoration:line-through;color:#999;">${money(unitPrice)}</span> <em style="font-style:italic;color:#666;font-size:10px;">豁免</em>`
+          : priceKind === "tbd"
+            ? `<em style="font-style:italic;color:#888;">報價另議</em>`
+            : priceKind === "option"
+              ? `<em style="font-style:italic;color:#888;">${SECTION_B_OPTION_LABEL}</em>`
+              : priceKind === "included"
+                ? `<em style="font-style:italic;color:#888;">Included</em>`
+                : money(amount);
       const rowBg = idx % 2 === 0 ? "#ffffff" : "#f7f7f7";
       const descHtml = desc
         .split("\n")
