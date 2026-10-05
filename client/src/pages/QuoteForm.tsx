@@ -49,6 +49,7 @@ import {
   canToggleQuoteWaive,
   hasConditionalSectionB,
   isManagedSectionBItem,
+  isQuoteSectionBOptionItem,
   isQuoteSectionHeader,
   isQuoteWaivedPrice,
   toggleQuoteItemWaived,
@@ -362,6 +363,7 @@ function SortableQuoteItem({
   const inferred = classifyQuoteLineItem(item.description);
   const categoryValue = item.category || "auto";
   const isSection = isQuoteSectionHeader(item.description);
+  const isSectionBOption = isQuoteSectionBOptionItem(item.description);
   const canWaive = canToggleQuoteWaive(item);
   const isWaived = isQuoteWaivedPrice(Number(item.unitPrice), Number(item.amount));
   const waiveLabelAmount = Number(item.unitPrice).toLocaleString();
@@ -386,6 +388,11 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
+          {isSectionBOption && (
+            <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
+              客戶可見：Option（可選項目，唔係套餐內含）
+            </div>
+          )}
           {canWaive && onToggleWaive && (
             <button
               type="button"
@@ -449,6 +456,11 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
+            {isSectionBOption && (
+              <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
+                客戶可見：Option（可選項目，唔係套餐內含）
+              </div>
+            )}
             {canWaive && onToggleWaive && (
               <button
                 type="button"

@@ -9,10 +9,10 @@ import { join as pathJoin } from "path";
 import { tmpdir } from "os";
 import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
 import {
+  SECTION_B_OPTION_LABEL,
   isQuoteSectionHeader,
-  isQuoteTbdPrice,
-  isQuoteWaivedPrice,
   parseQuoteItemCode,
+  resolveQuotePriceDisplay,
 } from "../../shared/quoteSectionB";
 
 // ─── Font CDN URLs (uploaded to Manus CDN) ─────────────────────────
@@ -368,9 +368,7 @@ export async function generateQuotePdfBuffer(
       const code = parseQuoteItemCode(desc);
       const unitPrice = Number(item.unitPrice);
       const amount = Number(item.amount);
-      const isWaived = isQuoteWaivedPrice(unitPrice, amount);
-      const isTbd = isQuoteTbdPrice(desc, unitPrice);
-      const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
+      const priceKind = resolveQuotePriceDisplay(item);
       const descLines = desc.split("\n");
 
       // Calculate row height based on description lines
@@ -414,7 +412,7 @@ export async function generateQuotePdfBuffer(
 
       // Unit Price / Amount
       const drawPrice = (x: number, width: number, labelNormal: string) => {
-        if (isWaived) {
+        if (priceKind === "waived") {
           doc.fontSize(9).font("NotoSans").fillColor("#999999");
           const struck = fmtNum(unitPrice);
           doc.text(struck, x, y + rowH / 2 - 8, { width, align: "right", lineBreak: false });
@@ -429,10 +427,17 @@ export async function generateQuotePdfBuffer(
             .stroke();
           doc.fontSize(8).font("NotoSans").fillColor("#666666");
           doc.text("豁免", x, y + rowH / 2 + 2, { width, align: "right", lineBreak: false });
-        } else if (isTbd) {
+        } else if (priceKind === "tbd") {
           doc.fontSize(9).font("NotoSans").fillColor("#888888");
           doc.text("報價另議", x, y + rowH / 2 - 5, { width, align: "right", lineBreak: false });
-        } else if (isIncluded) {
+        } else if (priceKind === "option") {
+          doc.fontSize(10).font("NotoSans").fillColor("#888888");
+          doc.text(SECTION_B_OPTION_LABEL, x, y + rowH / 2 - 5, {
+            width,
+            align: "right",
+            lineBreak: false,
+          });
+        } else if (priceKind === "included") {
           doc.fontSize(10).font("NotoSans").fillColor("#888888");
           doc.text("Included", x, y + rowH / 2 - 5, { width, align: "right", lineBreak: false });
         } else {

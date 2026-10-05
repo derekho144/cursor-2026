@@ -1,16 +1,19 @@
 /**
  * Conditional Quote 「SECTION B」 blocks by service type.
  *
- * Food  → 食物攝影與現場食物造型
- * Event → 活動攝影與線上直播（含快速交相 $800 + 劃線豁免）
+ * Food  → 食物攝影與現場食物造型（全部為可選 Option）
+ * Event → 活動攝影與線上直播（含快速交相 $800 + 劃線豁免；全部為可選 Option）
  *
  * Persistence: plain line items (no DB migration).
  * - Section header: description starts with "SECTION B · …"
  * - Managed lines: description starts with B1 / B1.1 / B2
  * - Waived rush fee: unitPrice > 0 && amount === 0 (print shows strikethrough)
+ * - Customer-facing: never label Section B lines as "Included" — use "Option"
  */
 
 export const EVENT_RUSH_FEE_HKD = 800;
+/** Customer-facing label for every Section B add-on line. */
+export const SECTION_B_OPTION_LABEL = "Option";
 
 export type QuoteSectionBService =
   | "food_beverage"
@@ -26,8 +29,8 @@ export type SectionBLineSeed = {
   amount: number;
 };
 
-const FOOD_SECTION_TITLE = "SECTION B · 食物攝影與現場食物造型";
-const EVENT_SECTION_TITLE = "SECTION B · 活動攝影與線上直播";
+const FOOD_SECTION_TITLE = "SECTION B · OPTIONAL · 食物攝影與現場食物造型";
+const EVENT_SECTION_TITLE = "SECTION B · OPTIONAL · 活動攝影與線上直播";
 
 export function isFoodPhotographyService(serviceType: string): boolean {
   return serviceType === "food_beverage";
@@ -63,9 +66,47 @@ export function isManagedSectionBItem(description: string | null | undefined): b
   return /^(B1(?:\.1)?|B2)\b/i.test(d);
 }
 
+/** Non-header Section B lines — always customer-facing options (never "Included"). */
+export function isQuoteSectionBOptionItem(
+  description: string | null | undefined
+): boolean {
+  const d = String(description ?? "").trim();
+  if (!d || isQuoteSectionHeader(d)) return false;
+  return isManagedSectionBItem(d);
+}
+
 export function isQuoteTbdPrice(description: string | null | undefined, unitPrice: number): boolean {
   if (Number(unitPrice) !== 0) return false;
   return /報價另議|tbd|to be (decided|advised|quoted)/i.test(String(description ?? ""));
+}
+
+/**
+ * How UNIT PRICE / AMOUNT should render for a quote line.
+ * Section B $0 add-ons → "Option" (not Included).
+ */
+export type QuotePriceDisplayKind =
+  | "waived"
+  | "tbd"
+  | "option"
+  | "included"
+  | "money";
+
+export function resolveQuotePriceDisplay(item: {
+  description?: string | null;
+  unitPrice?: number | string | null;
+  amount?: number | string | null;
+  isIncluded?: boolean | null;
+}): QuotePriceDisplayKind {
+  const desc = item.description;
+  const unitPrice = Number(item.unitPrice);
+  const amount = Number(item.amount);
+  if (isQuoteWaivedPrice(unitPrice, amount)) return "waived";
+  if (isQuoteTbdPrice(desc, unitPrice)) return "tbd";
+  // Section B add-ons: zero-price → Option; priced lines still show money
+  // (Option is already in section title + line description).
+  if (isQuoteSectionBOptionItem(desc) && !(unitPrice > 0)) return "option";
+  if (item.isIncluded || unitPrice === 0) return "included";
+  return "money";
 }
 
 /** List price shown with strikethrough; amount must stay 0 so totals exclude it. */
@@ -89,7 +130,8 @@ export function buildFoodSectionBLines(): SectionBLineSeed[] {
     },
     {
       code: "B1",
-      description: "B1 拍攝前期策劃\n拍攝概念、Moodboard、及道具建議",
+      description:
+        "B1 拍攝前期策劃（Option）\n拍攝概念、Moodboard、及道具建議",
       quantity: 1,
       unitPrice: 0,
       amount: 0,
@@ -97,7 +139,7 @@ export function buildFoodSectionBLines(): SectionBLineSeed[] {
     {
       code: "B1.1",
       description:
-        "B1.1 現場藝術指導及食物造型（2 day · 9 hours per day）\n報價另議",
+        "B1.1 現場藝術指導及食物造型（2 day · 9 hours per day）（Option）\n報價另議",
       quantity: 1,
       unitPrice: 0,
       amount: 0,
@@ -120,14 +162,14 @@ export function buildEventSectionBLines(opts?: {
     },
     {
       code: "B1",
-      description: "B1 QRCODE 相片直播",
+      description: "B1 QRCODE 相片直播（Option）",
       quantity: 1,
       unitPrice: 0,
       amount: 0,
     },
     {
       code: "B2",
-      description: "B2 快速交相（12小時內）",
+      description: "B2 快速交相（12小時內）（Option）",
       quantity: 1,
       unitPrice: EVENT_RUSH_FEE_HKD,
       amount: waived ? 0 : EVENT_RUSH_FEE_HKD,
@@ -181,7 +223,8 @@ export function applySectionBForServiceType<T extends ItemLike>(
       quantity: seed.quantity,
       unitPrice: seed.unitPrice,
       amount: seed.amount,
-      isIncluded: seed.unitPrice === 0 && seed.amount === 0 && !isQuoteSectionHeader(seed.description),
+      // Section B lines are optional add-ons — never mark as included package
+      isIncluded: false,
       category: "included_meta" as const,
     };
     return base as unknown as T;
