@@ -23,7 +23,7 @@ export function isExpeditedFeeDescription(
   description: string | null | undefined
 ): boolean {
   const d = String(description ?? "").toLowerCase();
-  return /expedited|加急|urgent fee|rush fee|express fee/.test(d);
+  return /expedited|加急|urgent fee|rush fee|express fee|快速交相/.test(d);
 }
 
 export function isDiscountExcludedQuoteLine(

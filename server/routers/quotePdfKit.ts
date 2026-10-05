@@ -8,6 +8,12 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 import { join as pathJoin } from "path";
 import { tmpdir } from "os";
 import { sanitizeQuoteNotesForClientPdf } from "../../shared/inquiryDraftReadiness";
+import {
+  isQuoteSectionHeader,
+  isQuoteTbdPrice,
+  isQuoteWaivedPrice,
+  parseQuoteItemCode,
+} from "../../shared/quoteSectionB";
 
 // ─── Font CDN URLs (uploaded to Manus CDN) ─────────────────────────
 const FONT_CDN = {
@@ -340,8 +346,32 @@ export async function generateQuotePdfBuffer(
     };
 
     items.forEach((item: any, idx: number) => {
-      const isIncluded = item.isIncluded || Number(item.unitPrice) === 0;
-      const descLines = String(item.description).split("\n");
+      const desc = String(item.description || "");
+
+      if (isQuoteSectionHeader(desc)) {
+        const rowH = 22;
+        if (y + rowH > PH - 40) {
+          doc.addPage();
+          y = 32;
+          redrawTableHeader();
+        }
+        if (idx > 0) y += 4;
+        doc.rect(0, y, PW, rowH).fill("#EEEEEE");
+        doc.rect(ML - 8, y, 3, rowH).fill(C.black);
+        doc.fontSize(9).font("NotoSansBold").fillColor(C.black);
+        doc.text(desc, ML + 4, y + 6, { lineBreak: false });
+        doc.rect(0, y + rowH, PW, 0.5).fill(C.border);
+        y += rowH + 0.5;
+        return;
+      }
+
+      const code = parseQuoteItemCode(desc);
+      const unitPrice = Number(item.unitPrice);
+      const amount = Number(item.amount);
+      const isWaived = isQuoteWaivedPrice(unitPrice, amount);
+      const isTbd = isQuoteTbdPrice(desc, unitPrice);
+      const isIncluded = !isWaived && !isTbd && (item.isIncluded || unitPrice === 0);
+      const descLines = desc.split("\n");
 
       // Calculate row height based on description lines
       doc.fontSize(10).font("NotoSans");
@@ -362,18 +392,19 @@ export async function generateQuotePdfBuffer(
       const rowBg = idx % 2 === 0 ? C.rowWhite : C.rowAlt;
       doc.rect(0, y, PW, rowH).fill(rowBg);
 
-      // QTY
-      doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
-      doc.text(String(Number(item.quantity)), ML, y + rowH / 2 - 5, {
+      // QTY / item code
+      doc.fontSize(10).font(code ? "NotoSansBold" : "NotoSans").fillColor(C.darkGray);
+      doc.text(code ?? String(Number(item.quantity)), ML, y + rowH / 2 - 5, {
         width: colQty,
         align: "center",
         lineBreak: false,
       });
 
       // Description — regular weight like print page
-      doc.fontSize(10).font("NotoSans").fillColor(C.black);
       let descY = y + 8;
-      for (const line of descLines) {
+      for (let li = 0; li < descLines.length; li++) {
+        const line = descLines[li]!;
+        doc.fontSize(li === 0 ? 10 : 9).font(li === 0 ? "NotoSansBold" : "NotoSans").fillColor(li === 0 ? C.black : C.medGray);
         const wrapped = wrapText(doc, line, colDesc - 10);
         for (const wl of wrapped) {
           doc.text(wl, ML + colQty, descY, { lineBreak: false });
@@ -381,39 +412,37 @@ export async function generateQuotePdfBuffer(
         }
       }
 
-      // Unit Price
-      if (isIncluded) {
-        doc.fontSize(10).font("NotoSans").fillColor("#888888");
-        doc.text("Included", ML + colQty + colDesc, y + rowH / 2 - 5, {
-          width: colPrice,
-          align: "right",
-          lineBreak: false,
-        });
-      } else {
-        doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
-        doc.text(fmtNum(item.unitPrice), ML + colQty + colDesc, y + rowH / 2 - 5, {
-          width: colPrice,
-          align: "right",
-          lineBreak: false,
-        });
-      }
+      // Unit Price / Amount
+      const drawPrice = (x: number, width: number, labelNormal: string) => {
+        if (isWaived) {
+          doc.fontSize(9).font("NotoSans").fillColor("#999999");
+          const struck = fmtNum(unitPrice);
+          doc.text(struck, x, y + rowH / 2 - 8, { width, align: "right", lineBreak: false });
+          // Approximate strikethrough
+          const tw = doc.widthOfString(struck);
+          const lineY = y + rowH / 2 - 4;
+          doc
+            .moveTo(x + width - tw, lineY)
+            .lineTo(x + width, lineY)
+            .strokeColor("#999999")
+            .lineWidth(0.6)
+            .stroke();
+          doc.fontSize(8).font("NotoSans").fillColor("#666666");
+          doc.text("豁免", x, y + rowH / 2 + 2, { width, align: "right", lineBreak: false });
+        } else if (isTbd) {
+          doc.fontSize(9).font("NotoSans").fillColor("#888888");
+          doc.text("報價另議", x, y + rowH / 2 - 5, { width, align: "right", lineBreak: false });
+        } else if (isIncluded) {
+          doc.fontSize(10).font("NotoSans").fillColor("#888888");
+          doc.text("Included", x, y + rowH / 2 - 5, { width, align: "right", lineBreak: false });
+        } else {
+          doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
+          doc.text(labelNormal, x, y + rowH / 2 - 5, { width, align: "right", lineBreak: false });
+        }
+      };
 
-      // Amount
-      if (isIncluded) {
-        doc.fontSize(10).font("NotoSans").fillColor("#888888");
-        doc.text("Included", ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, {
-          width: colAmt - 4,
-          align: "right",
-          lineBreak: false,
-        });
-      } else {
-        doc.fontSize(10).font("NotoSans").fillColor(C.darkGray);
-        doc.text(fmtNum(item.amount), ML + colQty + colDesc + colPrice, y + rowH / 2 - 5, {
-          width: colAmt - 4,
-          align: "right",
-          lineBreak: false,
-        });
-      }
+      drawPrice(ML + colQty + colDesc, colPrice, fmtNum(unitPrice));
+      drawPrice(ML + colQty + colDesc + colPrice, colAmt - 4, fmtNum(amount));
 
       // Row bottom border
       doc.rect(0, y + rowH, PW, 0.5).fill(C.border);

@@ -44,6 +44,15 @@ import {
   computeQuoteDiscountAmount,
   discountableQuoteSubtotal,
 } from "@shared/quoteDiscount";
+import {
+  applySectionBForServiceType,
+  canToggleQuoteWaive,
+  hasConditionalSectionB,
+  isManagedSectionBItem,
+  isQuoteSectionHeader,
+  isQuoteWaivedPrice,
+  toggleQuoteItemWaived,
+} from "@shared/quoteSectionB";
 
 // 設計類別（不需要拍攝日期和報價有效期）
 const DESIGN_SERVICE_TYPES = new Set([
@@ -365,6 +374,7 @@ function SortableQuoteItem({
   onUpdate,
   onRemove,
   canRemove,
+  onToggleWaive,
 }: {
   item: QuoteItem;
   idx: number;
@@ -376,6 +386,7 @@ function SortableQuoteItem({
   ) => void;
   onRemove: (idx: number) => void;
   canRemove: boolean;
+  onToggleWaive?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style: React.CSSProperties = {
@@ -386,14 +397,48 @@ function SortableQuoteItem({
   };
   const inferred = classifyQuoteLineItem(item.description);
   const categoryValue = item.category || "auto";
+  const isSection = isQuoteSectionHeader(item.description);
+  const canWaive = canToggleQuoteWaive(item);
+  const isWaived = isQuoteWaivedPrice(Number(item.unitPrice), Number(item.amount));
+  const waiveLabelAmount = Number(item.unitPrice).toLocaleString();
   return (
     <div ref={setNodeRef} style={style}>
+      {isSection && (
+        <div
+          className="mb-1 flex items-center gap-2 px-3 py-2 text-xs font-semibold tracking-[0.14em]"
+          style={{
+            background: "rgba(245,245,245,0.08)",
+            borderLeft: "3px solid #e8e0d0",
+            color: "#e8e0d0",
+          }}
+        >
+          {item.description}
+        </div>
+      )}
       {/* Desktop layout */}
       <div className="hidden md:grid gap-2 items-center" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 100px 36px" }}>
         <div {...attributes} {...listeners} className="flex items-center justify-center cursor-grab active:cursor-grabbing" style={{ color: "rgba(212,168,67,0.4)", touchAction: "none" }}>
           <GripVertical className="h-4 w-4" />
         </div>
-        <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
+        <div className="space-y-1">
+          <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
+          {canWaive && onToggleWaive && (
+            <button
+              type="button"
+              onClick={onToggleWaive}
+              className="text-[11px] px-2 py-1 rounded transition-colors"
+              style={{
+                border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
+                color: isWaived ? "#86efac" : "#d4a843",
+                background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
+              }}
+            >
+              {isWaived
+                ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
+                : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
+            </button>
+          )}
+        </div>
         <Select
           value={categoryValue}
           onValueChange={(v) =>
@@ -414,9 +459,18 @@ function SortableQuoteItem({
             ))}
           </SelectContent>
         </Select>
-        <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
-        <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
-        <div className="text-sm font-medium text-right pr-2" style={{ color: "#d4a843" }}>{item.amount.toLocaleString()}</div>
+        <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
+        <div className="space-y-0.5">
+          <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
+          {isWaived && (
+            <div className="text-[10px] text-right pr-1" style={{ color: "#86efac" }}>
+              列印顯示 <span style={{ textDecoration: "line-through" }}>{waiveLabelAmount}</span> 豁免
+            </div>
+          )}
+        </div>
+        <div className="text-sm font-medium text-right pr-2" style={{ color: isWaived ? "#86efac" : "#d4a843" }}>
+          {isWaived ? "0（豁免）" : item.amount.toLocaleString()}
+        </div>
         <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20">
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </button>
@@ -431,6 +485,22 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
+            {canWaive && onToggleWaive && (
+              <button
+                type="button"
+                onClick={onToggleWaive}
+                className="mt-2 text-[11px] px-2 py-1 rounded"
+                style={{
+                  border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
+                  color: isWaived ? "#86efac" : "#d4a843",
+                  background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
+                }}
+              >
+                {isWaived
+                  ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
+                  : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
+              </button>
+            )}
           </div>
           <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20 flex-shrink-0">
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -462,15 +532,17 @@ function SortableQuoteItem({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>數量</div>
-            <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
+            <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
           </div>
           <div>
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>單價 (HKD)</div>
-            <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} />
+            <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
           </div>
         </div>
         <div className="flex justify-end">
-          <div className="text-sm font-medium" style={{ color: "#d4a843" }}>金額：HKD {item.amount.toLocaleString()}</div>
+          <div className="text-sm font-medium" style={{ color: isWaived ? "#86efac" : "#d4a843" }}>
+            金額：HKD {isWaived ? "0（豁免）" : item.amount.toLocaleString()}
+          </div>
         </div>
       </div>
     </div>
@@ -514,6 +586,18 @@ export default function QuoteForm() {
       setForm((p) => normalizeFormData(p));
     }
   }, [form.shotCount, form.shootHours]);
+
+  // New quotes default to corporate_event — inject Section B once if missing
+  useEffect(() => {
+    if (isEdit) return;
+    if (!hasConditionalSectionB(form.serviceType)) return;
+    if (form.items.some((it) => isManagedSectionBItem(it.description))) return;
+    setForm((p) => ({
+      ...p,
+      items: applySectionBForServiceType(p.items, p.serviceType, () => crypto.randomUUID()),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed once for new forms
+  }, [isEdit]);
   const [hasDraft, setHasDraft] = useState(() => !isEdit && !!safeLSGet('quote_draft_new'));
   // For edit mode: per-quote draft key
   const editDraftKey = isEdit && quoteId ? `quote_draft_edit_${quoteId}` : null;
@@ -886,7 +970,15 @@ export default function QuoteForm() {
       const items = [...prev.items];
       const item = { ...items[idx], [field]: value } as QuoteItem;
       if (field === "quantity" || field === "unitPrice") {
-        item.amount = Number(item.quantity) * Number(item.unitPrice);
+        // Preserve waived rush (amount 0 with list unitPrice) unless user edits unitPrice while charged
+        const wasWaived = isQuoteWaivedPrice(Number(items[idx].unitPrice), Number(items[idx].amount));
+        if (wasWaived && field === "quantity") {
+          item.amount = 0;
+        } else if (wasWaived && field === "unitPrice") {
+          item.amount = 0;
+        } else {
+          item.amount = Number(item.quantity) * Number(item.unitPrice);
+        }
       }
       items[idx] = item;
       return { ...prev, items };
@@ -916,9 +1008,25 @@ export default function QuoteForm() {
   };
 
   const handleServiceTypeChange = (value: string) => {
+    setForm((prev) => {
+      const nextItems = hasConditionalSectionB(value)
+        ? applySectionBForServiceType(prev.items, value, () => crypto.randomUUID())
+        : prev.items.filter((it) => !isManagedSectionBItem(it.description));
+      return {
+        ...prev,
+        serviceType: value,
+        items:
+          nextItems.length > 0
+            ? nextItems
+            : [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0, category: "" }],
+      };
+    });
+  };
+
+  const handleToggleItemWaive = (idx: number) => {
     setForm((prev) => ({
       ...prev,
-      serviceType: value,
+      items: toggleQuoteItemWaived(prev.items, idx),
     }));
   };
 
@@ -1780,6 +1888,9 @@ export default function QuoteForm() {
                     onUpdate={updateItem}
                     onRemove={removeItem}
                     canRemove={form.items.length > 1}
+                    onToggleWaive={
+                      canToggleQuoteWaive(item) ? () => handleToggleItemWaive(idx) : undefined
+                    }
                   />
                 ))}
               </SortableContext>
