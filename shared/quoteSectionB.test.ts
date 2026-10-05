@@ -32,6 +32,9 @@ describe("quoteSectionB", () => {
     expect(
       lines.every((l) => l.code === "HEADER" || /（Option）/.test(l.description))
     ).toBe(true);
+    expect(lines.filter((l) => l.code !== "HEADER").every((l) => l.quantity === 0)).toBe(
+      true
+    );
     expect(lines.some((l) => l.code === "B1.1" && /報價另議/.test(l.description))).toBe(true);
     expect(isQuoteTbdPrice(lines.find((l) => l.code === "B1.1")!.description, 0)).toBe(true);
   });
@@ -41,10 +44,15 @@ describe("quoteSectionB", () => {
     expect(charged[0]?.description).toMatch(/^SECTION B · OPTIONAL · 活動攝影/);
     const rush = charged.find((l) => l.code === "B2")!;
     expect(rush.unitPrice).toBe(EVENT_RUSH_FEE_HKD);
-    expect(rush.amount).toBe(EVENT_RUSH_FEE_HKD);
+    expect(rush.quantity).toBe(0);
+    expect(rush.amount).toBe(0);
     expect(rush.description).toContain("（Option）");
+    expect(charged.filter((l) => l.code !== "HEADER").every((l) => l.quantity === 0)).toBe(
+      true
+    );
     const waived = buildEventSectionBLines({ rushWaived: true }).find((l) => l.code === "B2")!;
-    expect(isQuoteWaivedPrice(waived.unitPrice, waived.amount)).toBe(true);
+    expect(waived.quantity).toBe(1);
+    expect(isQuoteWaivedPrice(waived.unitPrice, waived.amount, waived.quantity)).toBe(true);
   });
 
   it("detects headers, codes, and managed rows", () => {
@@ -61,6 +69,7 @@ describe("quoteSectionB", () => {
     expect(
       resolveQuotePriceDisplay({
         description: "B1 QRCODE 相片直播（Option）",
+        quantity: 0,
         unitPrice: 0,
         amount: 0,
         isIncluded: true, // even if legacy flag set
@@ -69,6 +78,15 @@ describe("quoteSectionB", () => {
     expect(
       resolveQuotePriceDisplay({
         description: "B2 快速交相（12小時內）（Option）",
+        quantity: 0,
+        unitPrice: 800,
+        amount: 0,
+      })
+    ).toBe("money"); // list price visible; not waived
+    expect(
+      resolveQuotePriceDisplay({
+        description: "B2 快速交相（12小時內）（Option）",
+        quantity: 1,
         unitPrice: 800,
         amount: 800,
       })
@@ -76,11 +94,34 @@ describe("quoteSectionB", () => {
     expect(
       resolveQuotePriceDisplay({
         description: "B2 快速交相（12小時內）（Option）",
+        quantity: 1,
         unitPrice: 800,
         amount: 0,
       })
     ).toBe("waived");
     expect(SECTION_B_OPTION_LABEL).toBe("Option");
+  });
+
+  it("does not allow strikethrough waive on Transportation Fee", () => {
+    expect(
+      canToggleQuoteWaive({
+        description: "Transportation Fee",
+        unitPrice: 320,
+      })
+    ).toBe(false);
+    expect(
+      canToggleQuoteWaive({
+        description: "車費",
+        unitPrice: 320,
+        category: "transport",
+      })
+    ).toBe(false);
+    expect(
+      canToggleQuoteWaive({
+        description: "B2 快速交相（12小時內）（Option）",
+        unitPrice: 800,
+      })
+    ).toBe(true);
   });
 
   it("applies Section B on service change and preserves rush waive", () => {
@@ -102,11 +143,13 @@ describe("quoteSectionB", () => {
     const waived = toggleEventRushWaived(withEvent);
     const rush = waived.find((i) => isEventRushFeeItem(i.description))!;
     expect(rush.amount).toBe(0);
+    expect(rush.quantity).toBe(1);
     expect(rush.unitPrice).toBe(EVENT_RUSH_FEE_HKD);
 
     const kept = applySectionBForServiceType(waived, "corporate_event", createId);
     const rush2 = kept.find((i) => isEventRushFeeItem(i.description))!;
     expect(rush2.amount).toBe(0);
+    expect(rush2.quantity).toBe(1);
 
     const food = applySectionBForServiceType(kept, "food_beverage", createId);
     expect(food.some((i) => /食物造型/.test(i.description))).toBe(true);
@@ -143,6 +186,12 @@ describe("quoteSectionB", () => {
     expect(restored[0]!.amount).toBe(1200);
 
     const waivedRush = toggleQuoteItemWaived(items, 1);
-    expect(isQuoteWaivedPrice(waivedRush[1]!.unitPrice, waivedRush[1]!.amount)).toBe(true);
+    expect(
+      isQuoteWaivedPrice(
+        waivedRush[1]!.unitPrice,
+        waivedRush[1]!.amount,
+        waivedRush[1]!.quantity
+      )
+    ).toBe(true);
   });
 });
