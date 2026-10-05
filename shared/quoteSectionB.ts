@@ -263,7 +263,8 @@ export function applySectionBForServiceType<T extends ItemLike>(
 }
 
 /**
- * Priced lines can be strikethrough-waived — except section headers and transport / 交通費.
+ * Strikethrough waive is only for priced Section B options (e.g. B2 快速交相).
+ * Regular lines (寵物攝影 / extra hour / transport / …) never show 劃線豁免.
  */
 export function canToggleQuoteWaive(item: {
   description?: string | null;
@@ -271,6 +272,7 @@ export function canToggleQuoteWaive(item: {
   category?: string | null;
 }): boolean {
   if (isQuoteSectionHeader(item.description)) return false;
+  if (!isQuoteSectionBOptionItem(item.description)) return false;
   if (
     resolveQuoteLineItemKind({
       description: item.description,

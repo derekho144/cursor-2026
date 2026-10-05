@@ -102,7 +102,7 @@ describe("quoteSectionB", () => {
     expect(SECTION_B_OPTION_LABEL).toBe("Option");
   });
 
-  it("does not allow strikethrough waive on Transportation Fee", () => {
+  it("only allows strikethrough waive on priced Section B options", () => {
     expect(
       canToggleQuoteWaive({
         description: "Transportation Fee",
@@ -111,9 +111,20 @@ describe("quoteSectionB", () => {
     ).toBe(false);
     expect(
       canToggleQuoteWaive({
-        description: "車費",
-        unitPrice: 320,
-        category: "transport",
+        description: "寵物攝影",
+        unitPrice: 1000,
+      })
+    ).toBe(false);
+    expect(
+      canToggleQuoteWaive({
+        description: "extra hour",
+        unitPrice: 1000,
+      })
+    ).toBe(false);
+    expect(
+      canToggleQuoteWaive({
+        description: "B1 QRCODE 相片直播（Option）",
+        unitPrice: 0,
       })
     ).toBe(false);
     expect(
@@ -156,9 +167,9 @@ describe("quoteSectionB", () => {
     expect(food.some((i) => isEventRushFeeItem(i.description))).toBe(false);
   });
 
-  it("lets the editor pick any priced line for strikethrough waive", () => {
+  it("ignores waive toggle on regular lines; only Section B B2 waives", () => {
     const items = [
-      { id: "1", description: "Retouch", quantity: 1, unitPrice: 1200, amount: 1200 },
+      { id: "1", description: "寵物攝影", quantity: 1, unitPrice: 1000, amount: 1000 },
       {
         id: "2",
         description: "B2 快速交相（12小時內）（Option）",
@@ -173,17 +184,16 @@ describe("quoteSectionB", () => {
         unitPrice: 0,
         amount: 0,
       },
+      { id: "4", description: "extra hour", quantity: 1, unitPrice: 1000, amount: 1000 },
     ];
-    expect(canToggleQuoteWaive(items[0]!)).toBe(true);
+    expect(canToggleQuoteWaive(items[0]!)).toBe(false);
+    expect(canToggleQuoteWaive(items[1]!)).toBe(true);
     expect(canToggleQuoteWaive(items[2]!)).toBe(false);
+    expect(canToggleQuoteWaive(items[3]!)).toBe(false);
 
-    const waivedRetouch = toggleQuoteItemWaived(items, 0);
-    expect(waivedRetouch[0]!.amount).toBe(0);
-    expect(waivedRetouch[0]!.unitPrice).toBe(1200);
-    expect(waivedRetouch[1]!.amount).toBe(800);
-
-    const restored = toggleQuoteItemWaived(waivedRetouch, 0);
-    expect(restored[0]!.amount).toBe(1200);
+    // Regular line: no-op
+    const ignored = toggleQuoteItemWaived(items, 0);
+    expect(ignored[0]!.amount).toBe(1000);
 
     const waivedRush = toggleQuoteItemWaived(items, 1);
     expect(
