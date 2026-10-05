@@ -365,7 +365,11 @@ function SortableQuoteItem({
   const isSection = isQuoteSectionHeader(item.description);
   const isSectionBOption = isQuoteSectionBOptionItem(item.description);
   const canWaive = canToggleQuoteWaive(item);
-  const isWaived = isQuoteWaivedPrice(Number(item.unitPrice), Number(item.amount));
+  const isWaived = isQuoteWaivedPrice(
+    Number(item.unitPrice),
+    Number(item.amount),
+    Number(item.quantity)
+  );
   const waiveLabelAmount = Number(item.unitPrice).toLocaleString();
   return (
     <div ref={setNodeRef} style={style}>
@@ -949,7 +953,11 @@ export default function QuoteForm() {
       const item = { ...items[idx], [field]: value } as QuoteItem;
       if (field === "quantity" || field === "unitPrice") {
         // Preserve waived rush (amount 0 with list unitPrice) unless user edits unitPrice while charged
-        const wasWaived = isQuoteWaivedPrice(Number(items[idx].unitPrice), Number(items[idx].amount));
+        const wasWaived = isQuoteWaivedPrice(
+          Number(items[idx].unitPrice),
+          Number(items[idx].amount),
+          Number(items[idx].quantity)
+        );
         if (wasWaived && field === "quantity") {
           item.amount = 0;
         } else if (wasWaived && field === "unitPrice") {

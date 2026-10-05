@@ -1,15 +1,18 @@
 /**
  * Conditional Quote 「SECTION B」 blocks by service type.
  *
- * Food  → 食物攝影與現場食物造型（全部為可選 Option）
- * Event → 活動攝影與線上直播（含快速交相 $800 + 劃線豁免；全部為可選 Option）
+ * Food  → 食物攝影與現場食物造型（全部為可選 Option，數量預設 0）
+ * Event → 活動攝影與線上直播（含快速交相 $800 + 劃線豁免；全部為可選 Option，數量預設 0）
  *
  * Persistence: plain line items (no DB migration).
  * - Section header: description starts with "SECTION B · …"
  * - Managed lines: description starts with B1 / B1.1 / B2
- * - Waived rush fee: unitPrice > 0 && amount === 0 (print shows strikethrough)
+ * - Waived rush fee: unitPrice > 0 && amount === 0 && quantity > 0 (print shows strikethrough)
  * - Customer-facing: never label Section B lines as "Included" — use "Option"
+ * - Transportation Fee: never strikethrough-waive
  */
+
+import { resolveQuoteLineItemKind } from "./quoteLineItemKind";
 
 export const EVENT_RUSH_FEE_HKD = 800;
 /** Customer-facing label for every Section B add-on line. */
@@ -93,25 +96,43 @@ export type QuotePriceDisplayKind =
 
 export function resolveQuotePriceDisplay(item: {
   description?: string | null;
+  quantity?: number | string | null;
   unitPrice?: number | string | null;
   amount?: number | string | null;
   isIncluded?: boolean | null;
 }): QuotePriceDisplayKind {
   const desc = item.description;
+  const qty = Number(item.quantity);
   const unitPrice = Number(item.unitPrice);
   const amount = Number(item.amount);
-  if (isQuoteWaivedPrice(unitPrice, amount)) return "waived";
+
+  // Unselected Section B option (qty 0): never treat as waived strikethrough
+  if (isQuoteSectionBOptionItem(desc) && !(qty > 0)) {
+    if (isQuoteTbdPrice(desc, unitPrice)) return "tbd";
+    if (unitPrice > 0) return "money"; // show list price; amount stays 0
+    return "option";
+  }
+
+  if (isQuoteWaivedPrice(unitPrice, amount, qty)) return "waived";
   if (isQuoteTbdPrice(desc, unitPrice)) return "tbd";
   // Section B add-ons: zero-price → Option; priced lines still show money
-  // (Option is already in section title + line description).
   if (isQuoteSectionBOptionItem(desc) && !(unitPrice > 0)) return "option";
   if (item.isIncluded || unitPrice === 0) return "included";
   return "money";
 }
 
-/** List price shown with strikethrough; amount must stay 0 so totals exclude it. */
-export function isQuoteWaivedPrice(unitPrice: number, amount: number): boolean {
-  return Number(unitPrice) > 0 && Number(amount) === 0;
+/**
+ * List price shown with strikethrough; amount must stay 0 so totals exclude it.
+ * quantity === 0 means unselected (not a waive).
+ */
+export function isQuoteWaivedPrice(
+  unitPrice: number,
+  amount: number,
+  quantity?: number | null
+): boolean {
+  if (!(Number(unitPrice) > 0 && Number(amount) === 0)) return false;
+  if (quantity != null && Number(quantity) === 0) return false;
+  return true;
 }
 
 export function isEventRushFeeItem(description: string | null | undefined): boolean {
@@ -132,7 +153,7 @@ export function buildFoodSectionBLines(): SectionBLineSeed[] {
       code: "B1",
       description:
         "B1 拍攝前期策劃（Option）\n拍攝概念、Moodboard、及道具建議",
-      quantity: 1,
+      quantity: 0,
       unitPrice: 0,
       amount: 0,
     },
@@ -140,7 +161,7 @@ export function buildFoodSectionBLines(): SectionBLineSeed[] {
       code: "B1.1",
       description:
         "B1.1 現場藝術指導及食物造型（2 day · 9 hours per day）（Option）\n報價另議",
-      quantity: 1,
+      quantity: 0,
       unitPrice: 0,
       amount: 0,
     },
@@ -148,7 +169,7 @@ export function buildFoodSectionBLines(): SectionBLineSeed[] {
 }
 
 export function buildEventSectionBLines(opts?: {
-  /** When true, rush fee shows strikethrough / 豁免 (amount 0). Default charged. */
+  /** When true, rush fee shows strikethrough / 豁免 (amount 0). Default unselected. */
   rushWaived?: boolean;
 }): SectionBLineSeed[] {
   const waived = opts?.rushWaived === true;
@@ -163,16 +184,17 @@ export function buildEventSectionBLines(opts?: {
     {
       code: "B1",
       description: "B1 QRCODE 相片直播（Option）",
-      quantity: 1,
+      quantity: 0,
       unitPrice: 0,
       amount: 0,
     },
     {
       code: "B2",
       description: "B2 快速交相（12小時內）（Option）",
-      quantity: 1,
+      // Default unselected (qty 0). Waived state keeps qty 1 so print shows strikethrough.
+      quantity: waived ? 1 : 0,
       unitPrice: EVENT_RUSH_FEE_HKD,
-      amount: waived ? 0 : EVENT_RUSH_FEE_HKD,
+      amount: 0,
     },
   ];
 }
@@ -208,7 +230,7 @@ export function applySectionBForServiceType<T extends ItemLike>(
   const preservedRushWaived = items.some(
     (it) =>
       isEventRushFeeItem(it.description) &&
-      isQuoteWaivedPrice(Number(it.unitPrice), Number(it.amount))
+      isQuoteWaivedPrice(Number(it.unitPrice), Number(it.amount), Number(it.quantity))
   );
   const without = items.filter((it) => !isManagedSectionBItem(it.description));
   const seeds = sectionBLinesForService(serviceType, {
@@ -240,12 +262,23 @@ export function applySectionBForServiceType<T extends ItemLike>(
   return [...core, ...injected];
 }
 
-/** Any priced line can be optionally strikethrough-waived by the editor. */
+/**
+ * Priced lines can be strikethrough-waived — except section headers and transport / 交通費.
+ */
 export function canToggleQuoteWaive(item: {
   description?: string | null;
   unitPrice?: number | string | null;
+  category?: string | null;
 }): boolean {
   if (isQuoteSectionHeader(item.description)) return false;
+  if (
+    resolveQuoteLineItemKind({
+      description: item.description,
+      category: item.category,
+    }) === "transport"
+  ) {
+    return false;
+  }
   return Number(item.unitPrice) > 0;
 }
 
@@ -262,8 +295,14 @@ export function toggleQuoteItemWaived<T extends ItemLike>(
   if (!canToggleQuoteWaive(target)) return items;
 
   const unitPrice = Number(target.unitPrice);
-  const qty = Number(target.quantity) > 0 ? Number(target.quantity) : 1;
-  const currentlyWaived = isQuoteWaivedPrice(unitPrice, Number(target.amount));
+  const rawQty = Number(target.quantity);
+  const currentlyWaived = isQuoteWaivedPrice(
+    unitPrice,
+    Number(target.amount),
+    rawQty
+  );
+  // Waive display needs qty ≥ 1; unselected options (qty 0) become selected when waived
+  const qty = rawQty > 0 ? rawQty : 1;
 
   return items.map((it, i) => {
     if (i !== index) return it;
