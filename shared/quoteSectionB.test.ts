@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   EVENT_RUSH_FEE_HKD,
+  PRODUCT_RUSH_FEE_HKD,
   SECTION_B_OPTION_LABEL,
   applySectionBForServiceType,
   buildEventSectionBLines,
   buildFoodSectionBLines,
+  buildProductSectionBLines,
   canToggleQuoteWaive,
   hasConditionalSectionB,
   isEventRushFeeItem,
@@ -20,10 +22,11 @@ import {
 } from "./quoteSectionB";
 
 describe("quoteSectionB", () => {
-  it("exposes food and event service gates", () => {
+  it("exposes food, event, and product service gates", () => {
     expect(hasConditionalSectionB("food_beverage")).toBe(true);
     expect(hasConditionalSectionB("corporate_event")).toBe(true);
-    expect(hasConditionalSectionB("product")).toBe(false);
+    expect(hasConditionalSectionB("product")).toBe(true);
+    expect(hasConditionalSectionB("jewelry")).toBe(false);
   });
 
   it("builds food Section B with TBD styling line and Option labels", () => {
@@ -59,12 +62,29 @@ describe("quoteSectionB", () => {
     expect(isQuoteWaivedPrice(waived.unitPrice, waived.amount, waived.quantity)).toBe(true);
   });
 
+  it("builds product Section B with 特快交相 $800 default at qty 0", () => {
+    const lines = buildProductSectionBLines();
+    expect(lines[0]?.description).toMatch(/^SECTION B · OPTIONAL · 產品攝影/);
+    const rush = lines.find((l) => l.code === "B1")!;
+    expect(rush.description).toBe("B1 特快交相（Option）");
+    expect(rush.unitPrice).toBe(PRODUCT_RUSH_FEE_HKD);
+    expect(rush.quantity).toBe(0);
+    expect(rush.amount).toBe(0);
+    expect(isEventRushFeeItem(rush.description)).toBe(true);
+    const waived = buildProductSectionBLines({ rushWaived: true }).find((l) => l.code === "B1")!;
+    expect(waived.quantity).toBe(1);
+    expect(isQuoteWaivedPrice(waived.unitPrice, waived.amount, waived.quantity)).toBe(true);
+  });
+
   it("detects headers, codes, and managed rows", () => {
     expect(isQuoteSectionHeader("SECTION B · OPTIONAL · 活動攝影與線上直播")).toBe(true);
     expect(parseQuoteItemCode("B1.1 現場藝術指導")).toBe("B1.1");
     expect(isManagedSectionBItem("B2 快速交相（12小時內）（Option）")).toBe(true);
+    expect(isManagedSectionBItem("B1 特快交相（Option）")).toBe(true);
     expect(isManagedSectionBItem("Event Photoshoot")).toBe(false);
     expect(isEventRushFeeItem("B2 快速交相（12小時內）（Option）")).toBe(true);
+    expect(isEventRushFeeItem("B1 特快交相（Option）")).toBe(true);
+    expect(isEventRushFeeItem("B1 拍攝前期策劃（Option）")).toBe(false);
     expect(isQuoteSectionBOptionItem("B1 QRCODE 相片直播（Option）")).toBe(true);
     expect(isQuoteSectionBOptionItem("SECTION B · OPTIONAL · 活動攝影")).toBe(false);
   });
@@ -177,6 +197,25 @@ describe("quoteSectionB", () => {
     const food = applySectionBForServiceType(kept, "food_beverage", createId);
     expect(food.some((i) => /食物造型/.test(i.description))).toBe(true);
     expect(food.some((i) => isEventRushFeeItem(i.description))).toBe(false);
+
+    const withProduct = applySectionBForServiceType(
+      [{ id: "p", description: "Product Photoshoot", quantity: 1, unitPrice: 3000, amount: 3000 }],
+      "product",
+      createId
+    );
+    expect(withProduct.some((i) => /SECTION B · OPTIONAL · 產品攝影/.test(i.description))).toBe(
+      true
+    );
+    const productRush = withProduct.find((i) => isEventRushFeeItem(i.description))!;
+    expect(productRush.unitPrice).toBe(PRODUCT_RUSH_FEE_HKD);
+    expect(productRush.quantity).toBe(0);
+    expect(productRush.isIncluded).toBe(false);
+
+    const productWaived = toggleEventRushWaived(withProduct);
+    const productKept = applySectionBForServiceType(productWaived, "product", createId);
+    const productRush2 = productKept.find((i) => isEventRushFeeItem(i.description))!;
+    expect(productRush2.amount).toBe(0);
+    expect(productRush2.quantity).toBe(1);
   });
 
   it("ignores waive toggle on regular lines; only Section B B2 waives", () => {
