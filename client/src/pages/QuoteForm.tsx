@@ -1663,7 +1663,7 @@ export default function QuoteForm() {
                   <SelectItem value="Facebook">Facebook</SelectItem>
                   <SelectItem value="Google">Google Ads</SelectItem>
                   <SelectItem value="Referral">朋友介紹</SelectItem>
-                  <SelectItem value="Website">自家網站</SelectItem>
+                  <SelectItem value="Website">自然流量</SelectItem>
                   <SelectItem value="Repeat">舊客回頭</SelectItem>
                   <SelectItem value="Other">其他</SelectItem>
                 </SelectContent>
