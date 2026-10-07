@@ -23,7 +23,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { quotePricingMode, isPricingLearningServiceType } from "@shared/quotePricingMode";
+import {
+  DESIGN_SERVICE_TYPES,
+  quotePricingMode,
+  isPricingLearningServiceType,
+} from "@shared/quotePricingMode";
 import {
   formatHourlyQuantityAdjustments,
   reconcileHourlyQuoteItems,
@@ -61,13 +65,6 @@ import {
   toggleQuoteTemplateSelection,
   type QuoteTemplateId,
 } from "@shared/quoteTemplates";
-
-// 設計類別（不需要拍攝日期和報價有效期）
-const DESIGN_SERVICE_TYPES = new Set([
-  "graphic_design",
-  "web_development",
-  "menu_design",
-]);
 
 const SERVICE_OPTIONS = [
   { value: "corporate_event", label: "企業活動攝影" },
