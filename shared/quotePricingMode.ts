@@ -2,13 +2,16 @@
  * Quote pricing fundamentals differ by service type:
  * - time_crew: hours + manpower (events, video, etc.)
  * - shot_count: delivered photo count 張數 (product / still-life)
- * - design: neither (graphic / web / menu)
+ * - design: neither hours nor shot count (graphic / web / menu / KOL·MI)
+ *
+ * Also used to hide shoot date + quote valid-until on the quote form.
  */
 
 export const DESIGN_SERVICE_TYPES = new Set([
   "graphic_design",
   "web_development",
   "menu_design",
+  "kol_mi",
 ]);
 
 /** Still-life / product-style quotes priced primarily by delivered shots. */
