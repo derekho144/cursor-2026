@@ -1,8 +1,9 @@
 /**
  * Conditional Quote 「SECTION B」 blocks by service type.
  *
- * Food  → 食物攝影與現場食物造型（全部為可選 Option，數量預設 0）
- * Event → 活動攝影與線上直播（B1 相片直播 $3500 / B2 快速交相 $800；數量預設 0）
+ * Food    → 食物攝影與現場食物造型（全部為可選 Option，數量預設 0）
+ * Event   → 活動攝影與線上直播（B1 相片直播 $3500 / B2 快速交相 $800；數量預設 0）
+ * Product → 產品攝影（B1 特快交相 $800；數量預設 0）
  *
  * Persistence: plain line items (no DB migration).
  * - Section header: description starts with "SECTION B · …"
@@ -19,12 +20,15 @@ import { resolveQuoteLineItemKind } from "./quoteLineItemKind";
 export const EVENT_LIVESTREAM_FEE_HKD = 3500;
 /** Default list price for event B2 快速交相. */
 export const EVENT_RUSH_FEE_HKD = 800;
+/** Default list price for product B1 特快交相. */
+export const PRODUCT_RUSH_FEE_HKD = 800;
 /** Customer-facing label for every Section B add-on line. */
 export const SECTION_B_OPTION_LABEL = "Option";
 
 export type QuoteSectionBService =
   | "food_beverage"
-  | "corporate_event";
+  | "corporate_event"
+  | "product";
 
 export type SectionBLineSeed = {
   /** Stable id used when rebuilding the block */
@@ -38,6 +42,7 @@ export type SectionBLineSeed = {
 
 const FOOD_SECTION_TITLE = "SECTION B · OPTIONAL · 食物攝影與現場食物造型";
 const EVENT_SECTION_TITLE = "SECTION B · OPTIONAL · 活動攝影與線上直播";
+const PRODUCT_SECTION_TITLE = "SECTION B · OPTIONAL · 產品攝影";
 
 export function isFoodPhotographyService(serviceType: string): boolean {
   return serviceType === "food_beverage";
@@ -47,8 +52,16 @@ export function isEventPhotographyService(serviceType: string): boolean {
   return serviceType === "corporate_event";
 }
 
+export function isProductPhotographyService(serviceType: string): boolean {
+  return serviceType === "product";
+}
+
 export function hasConditionalSectionB(serviceType: string): boolean {
-  return isFoodPhotographyService(serviceType) || isEventPhotographyService(serviceType);
+  return (
+    isFoodPhotographyService(serviceType) ||
+    isEventPhotographyService(serviceType) ||
+    isProductPhotographyService(serviceType)
+  );
 }
 
 /** Section header row (full-bleed bar in print/PDF). */
@@ -139,9 +152,13 @@ export function isQuoteWaivedPrice(
   return true;
 }
 
+/** Event B2 快速交相 / product B1 特快交相 — priced rush options that support waive. */
 export function isEventRushFeeItem(description: string | null | undefined): boolean {
-  const d = String(description ?? "");
-  return /^B2\b/i.test(d.trim()) && /快速交相|12\s*小時|rush|expedited/i.test(d);
+  const d = String(description ?? "").trim();
+  return (
+    /^(B1|B2)\b/i.test(d) &&
+    /特快交相|快速交相|12\s*小時|rush|expedited/i.test(d)
+  );
 }
 
 export function buildFoodSectionBLines(): SectionBLineSeed[] {
@@ -203,12 +220,37 @@ export function buildEventSectionBLines(opts?: {
   ];
 }
 
+export function buildProductSectionBLines(opts?: {
+  /** When true, rush fee shows strikethrough / 豁免 (amount 0). Default unselected. */
+  rushWaived?: boolean;
+}): SectionBLineSeed[] {
+  const waived = opts?.rushWaived === true;
+  return [
+    {
+      code: "HEADER",
+      description: PRODUCT_SECTION_TITLE,
+      quantity: 0,
+      unitPrice: 0,
+      amount: 0,
+    },
+    {
+      code: "B1",
+      description: "B1 特快交相（Option）",
+      // Default unselected (qty 0). Waived state keeps qty 1 so print shows strikethrough.
+      quantity: waived ? 1 : 0,
+      unitPrice: PRODUCT_RUSH_FEE_HKD,
+      amount: 0,
+    },
+  ];
+}
+
 export function sectionBLinesForService(
   serviceType: string,
   opts?: { rushWaived?: boolean }
 ): SectionBLineSeed[] {
   if (isFoodPhotographyService(serviceType)) return buildFoodSectionBLines();
   if (isEventPhotographyService(serviceType)) return buildEventSectionBLines(opts);
+  if (isProductPhotographyService(serviceType)) return buildProductSectionBLines(opts);
   return [];
 }
 
@@ -224,7 +266,7 @@ type ItemLike = {
 
 /**
  * Drop previous managed Section B rows, then append the block for the new service type.
- * Preserves any existing rush-waived state when staying on event.
+ * Preserves any existing rush-waived state when staying on event / product.
  */
 export function applySectionBForServiceType<T extends ItemLike>(
   items: T[],
