@@ -1137,7 +1137,7 @@ export async function getPlatformEfficiency(year: number) {
     { key: "facebook",   leadSource: "Facebook",        adKey: null,                   label: "Facebook",   hasAd: false, adType: "none" },
     { key: "88db",       leadSource: "88DB",            adKey: null,                   label: "88DB",       hasAd: false, adType: "none" },
     { key: "referral",   leadSource: "Referral",        adKey: null,                   label: "朋友介紹",   hasAd: false, adType: "none" },
-    { key: "website",    leadSource: "Website",         adKey: null,                   label: "自家網站",   hasAd: false, adType: "none" },
+    { key: "website",    leadSource: "Website",         adKey: null,                   label: "自然流量",   hasAd: false, adType: "none" },
     { key: "repeat",     leadSource: "Repeat",          adKey: null,                   label: "回頭客",     hasAd: false, adType: "none" },
     { key: "other",      leadSource: "Other",           adKey: null,                   label: "其他",       hasAd: false, adType: "none" },
   ];

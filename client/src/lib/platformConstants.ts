@@ -21,7 +21,7 @@ export const ALL_PLATFORMS = [
   { value: "facebook",   label: "Facebook",   color: "#1877F2", hasAd: false },
   { value: "88db",       label: "88DB",       color: "#f97316", hasAd: false },
   { value: "referral",   label: "朋友介紹",   color: "#34d399", hasAd: false },
-  { value: "website",    label: "自家網站",   color: "#60a5fa", hasAd: false },
+  { value: "website",    label: "自然流量",   color: "#60a5fa", hasAd: false },
   { value: "repeat",     label: "回頭客",     color: "#a78bfa", hasAd: false },
   { value: "other",      label: "其他",       color: "#9ca3af", hasAd: false },
 ] as const;
