@@ -1,4 +1,5 @@
 import { extractHoursFromText } from "./quoteHoursText";
+import { isManagedSectionBItem } from "./quoteSectionB";
 import { quotePricingMode } from "./quotePricingMode";
 
 export type QuoteItemQuantityLike = {
@@ -71,6 +72,9 @@ export function looksLikeFlatPackageLineItem(
 export function shouldReconcileHourlyQuantity(description: string): boolean {
   const d = description.trim();
   if (!d || SKIP_HOURLY_QTY_RE.test(d)) return false;
+  // Section B options keep explicit qty (often 0 = unselected); e.g. B2「12小時內」
+  // must not be rewritten to quantity 12 on save.
+  if (isManagedSectionBItem(d)) return false;
   return extractHoursFromText(d) != null;
 }
 

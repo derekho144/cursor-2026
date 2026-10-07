@@ -2,7 +2,7 @@
  * Conditional Quote 「SECTION B」 blocks by service type.
  *
  * Food  → 食物攝影與現場食物造型（全部為可選 Option，數量預設 0）
- * Event → 活動攝影與線上直播（含快速交相 $800 + 劃線豁免；全部為可選 Option，數量預設 0）
+ * Event → 活動攝影與線上直播（B1 相片直播 $3500 / B2 快速交相 $800；數量預設 0）
  *
  * Persistence: plain line items (no DB migration).
  * - Section header: description starts with "SECTION B · …"
@@ -10,10 +10,14 @@
  * - Waived rush fee: unitPrice > 0 && amount === 0 && quantity > 0 (print shows strikethrough)
  * - Customer-facing: never label Section B lines as "Included" — use "Option"
  * - Transportation Fee: never strikethrough-waive
+ * - Qty stays 0 until selected — hourly reconcile must not rewrite Section B qtys
  */
 
 import { resolveQuoteLineItemKind } from "./quoteLineItemKind";
 
+/** Default list price for event B1 QRCODE 相片直播. */
+export const EVENT_LIVESTREAM_FEE_HKD = 3500;
+/** Default list price for event B2 快速交相. */
 export const EVENT_RUSH_FEE_HKD = 800;
 /** Customer-facing label for every Section B add-on line. */
 export const SECTION_B_OPTION_LABEL = "Option";
@@ -185,7 +189,7 @@ export function buildEventSectionBLines(opts?: {
       code: "B1",
       description: "B1 QRCODE 相片直播（Option）",
       quantity: 0,
-      unitPrice: 0,
+      unitPrice: EVENT_LIVESTREAM_FEE_HKD,
       amount: 0,
     },
     {

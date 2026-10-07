@@ -39,9 +39,13 @@ describe("quoteSectionB", () => {
     expect(isQuoteTbdPrice(lines.find((l) => l.code === "B1.1")!.description, 0)).toBe(true);
   });
 
-  it("builds event Section B with $800 rush fee and Option labels", () => {
+  it("builds event Section B with livestream $3500 / rush $800 defaults at qty 0", () => {
     const charged = buildEventSectionBLines();
     expect(charged[0]?.description).toMatch(/^SECTION B · OPTIONAL · 活動攝影/);
+    const live = charged.find((l) => l.code === "B1")!;
+    expect(live.unitPrice).toBe(3500);
+    expect(live.quantity).toBe(0);
+    expect(live.amount).toBe(0);
     const rush = charged.find((l) => l.code === "B2")!;
     expect(rush.unitPrice).toBe(EVENT_RUSH_FEE_HKD);
     expect(rush.quantity).toBe(0);
@@ -68,13 +72,21 @@ describe("quoteSectionB", () => {
   it("renders Section B $0 lines as Option, not Included", () => {
     expect(
       resolveQuotePriceDisplay({
-        description: "B1 QRCODE 相片直播（Option）",
+        description: "B1 拍攝前期策劃（Option）",
         quantity: 0,
         unitPrice: 0,
         amount: 0,
         isIncluded: true, // even if legacy flag set
       })
     ).toBe("option");
+    expect(
+      resolveQuotePriceDisplay({
+        description: "B1 QRCODE 相片直播（Option）",
+        quantity: 0,
+        unitPrice: 3500,
+        amount: 0,
+      })
+    ).toBe("money"); // list price visible; qty 0 not waived
     expect(
       resolveQuotePriceDisplay({
         description: "B2 快速交相（12小時內）（Option）",

@@ -150,6 +150,33 @@ describe("reconcileHourlyQuoteItems", () => {
     expect(adjustments).toHaveLength(0);
     expect(items[0].quantity).toBe(0);
   });
+
+  it("keeps Section B option quantities at 0 (does not treat 12小時內 as shoot hours)", () => {
+    const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
+      {
+        description: "Event Photography (8 hours)",
+        quantity: 1,
+        unitPrice: 1000,
+        amount: 1000,
+      },
+      {
+        description: "B1 QRCODE 相片直播（Option）",
+        quantity: 0,
+        unitPrice: 3500,
+        amount: 0,
+      },
+      {
+        description: "B2 快速交相（12小時內）（Option）",
+        quantity: 0,
+        unitPrice: 800,
+        amount: 0,
+      },
+    ]);
+    expect(items[0].quantity).toBe(8);
+    expect(items[1]).toMatchObject({ quantity: 0, amount: 0, unitPrice: 3500 });
+    expect(items[2]).toMatchObject({ quantity: 0, amount: 0, unitPrice: 800 });
+    expect(adjustments.every((a) => !/^B[12]\b/i.test(a.description))).toBe(true);
+  });
 });
 
 describe("looksLikeFlatPackageLineItem", () => {
