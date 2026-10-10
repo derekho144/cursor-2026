@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -54,20 +54,48 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
   photo_video: "攝影加錄影",
 };
 
+/** Match Dashboard warm-dark palette (#111 / #1a1a1a / gold #d4a843 / cream #e8e0d0). */
+const C = {
+  panel: "#111111",
+  panelSoft: "#1a1a1a",
+  ink: "#e8e0d0",
+  muted: "#888888",
+  gold: "#d4a843",
+  goldSoft: "rgba(212,168,67,0.14)",
+  goldLine: "rgba(212,168,67,0.28)",
+  line: "rgba(255,255,255,0.08)",
+  lineSoft: "rgba(255,255,255,0.05)",
+  hover: "rgba(255,255,255,0.03)",
+  income: "#4caf50",
+  incomeSoft: "rgba(76,175,80,0.12)",
+  expense: "#FF6B6B",
+  expenseSoft: "rgba(255,107,107,0.12)",
+} as const;
+
+/** Category chips — muted neutrals on dark, no rainbow clash. */
 const CATEGORIES = [
-  { value: "transport", label: "車費", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-  { value: "equipment_rent", label: "租用器材", color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
-  { value: "equipment_buy", label: "購買器材", color: "bg-orange-500/20 text-orange-300 border-orange-500/30" },
-  { value: "staff", label: "員工薪酬", color: "bg-green-500/20 text-green-300 border-green-500/30" },
-  { value: "post_production", label: "後期製作", color: "bg-teal-500/20 text-teal-300 border-teal-500/30" },
-  { value: "software", label: "軟件/訂閱", color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" },
-  { value: "marketing", label: "市場推廣", color: "bg-pink-500/20 text-pink-300 border-pink-500/30" },
-  { value: "office", label: "辦公室/場地", color: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" },
-  { value: "other", label: "其他", color: "bg-gray-500/20 text-gray-300 border-gray-500/30" },
+  { value: "transport", label: "車費", fg: "#8ec5ff", bg: "rgba(96,165,250,0.12)", border: "rgba(96,165,250,0.28)" },
+  { value: "equipment_rent", label: "租用器材", fg: "#c4b5fd", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.28)" },
+  { value: "equipment_buy", label: "購買器材", fg: "#fdba74", bg: "rgba(251,146,60,0.12)", border: "rgba(251,146,60,0.28)" },
+  { value: "staff", label: "員工薪酬", fg: "#86efac", bg: "rgba(74,222,128,0.12)", border: "rgba(74,222,128,0.28)" },
+  { value: "post_production", label: "後期製作", fg: "#5eead4", bg: "rgba(45,212,191,0.12)", border: "rgba(45,212,191,0.28)" },
+  { value: "software", label: "軟件/訂閱", fg: "#67e8f9", bg: "rgba(34,211,238,0.12)", border: "rgba(34,211,238,0.28)" },
+  { value: "marketing", label: "市場推廣", fg: "#f9a8d4", bg: "rgba(244,114,182,0.12)", border: "rgba(244,114,182,0.28)" },
+  { value: "office", label: "辦公室/場地", fg: C.gold, bg: C.goldSoft, border: C.goldLine },
+  { value: "other", label: "其他", fg: "#b0b0b0", bg: "rgba(255,255,255,0.06)", border: "rgba(255,255,255,0.12)" },
 ];
 
 const getCategoryStyle = (cat: string) =>
   CATEGORIES.find((c) => c.value === cat) ?? CATEGORIES[CATEGORIES.length - 1]!;
+
+function categoryBadgeStyle(cat: string): CSSProperties {
+  const s = getCategoryStyle(cat);
+  return {
+    background: s.bg,
+    color: s.fg,
+    borderColor: s.border,
+  };
+}
 
 type ExpenseForm = {
   date: string;
@@ -352,26 +380,40 @@ export default function Expenses() {
     setMonth(now.getMonth() + 1);
   };
 
-  const panelStyle = {
-    background: "#1a1a1a",
-    border: "1px solid rgba(255,255,255,0.08)",
-  } as const;
+  const panelStyle: CSSProperties = {
+    background: C.panel,
+    border: `1px solid ${C.line}`,
+  };
+  const softPanelStyle: CSSProperties = {
+    background: C.panelSoft,
+    border: `1px solid ${C.line}`,
+  };
+  const controlStyle: CSSProperties = {
+    background: C.panelSoft,
+    border: `1px solid ${C.line}`,
+    color: C.ink,
+  };
+  const rowDivider = { borderColor: C.lineSoft } as const;
 
   return (
     <DashboardLayout>
-      <div className="space-y-5">
+      <div className="space-y-5" style={{ color: C.ink }}>
         {/* Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <BarChart3 className="w-6 h-6 text-amber-400" />
+            <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: C.ink }}>
+              <BarChart3 className="w-6 h-6" style={{ color: C.gold }} />
               收入及支出
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">
+            <p className="text-sm mt-1" style={{ color: C.muted }}>
               收入按已接受報價（拍攝月／無拍攝日則開單月）；支出手動記錄
             </p>
           </div>
-          <Button onClick={handleOpenCreate} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+          <Button
+            onClick={handleOpenCreate}
+            className="gap-2"
+            style={{ background: C.gold, color: "#111", border: "none" }}
+          >
             <Plus className="w-4 h-4" />
             新增支出
           </Button>
@@ -380,17 +422,24 @@ export default function Expenses() {
         {/* Month + search toolbar */}
         <div
           className="rounded-lg px-3 py-2.5 flex flex-wrap items-center gap-2"
-          style={panelStyle}
+          style={softPanelStyle}
         >
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth} aria-label="上月">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-white/5"
+              style={{ color: C.ink }}
+              onClick={prevMonth}
+              aria-label="上月"
+            >
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <Select
               value={String(year)}
               onValueChange={(v) => setYear(Number(v))}
             >
-              <SelectTrigger className="h-8 w-[88px] bg-transparent border-white/10">
+              <SelectTrigger className="h-8 w-[88px]" style={controlStyle}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -402,7 +451,7 @@ export default function Expenses() {
               </SelectContent>
             </Select>
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="h-8 w-[72px] bg-transparent border-white/10">
+              <SelectTrigger className="h-8 w-[72px]" style={controlStyle}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -413,76 +462,108 @@ export default function Expenses() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth} aria-label="下月">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-white/5"
+              style={{ color: C.ink }}
+              onClick={nextMonth}
+              aria-label="下月"
+            >
               <ChevronRight className="w-4 h-4" />
             </Button>
             {!isCurrentMonth && (
-              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={goThisMonth}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs hover:bg-white/5"
+                style={{ ...controlStyle, borderColor: C.goldLine, color: C.gold }}
+                onClick={goThisMonth}
+              >
                 本月
               </Button>
             )}
           </div>
 
           <div className="relative flex-1 min-w-[180px] max-w-sm ml-auto">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2"
+              style={{ color: C.muted }}
+            />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜尋客戶、單號、描述、收款方…"
-              className="h-8 pl-8 bg-transparent border-white/10"
+              className="h-8 pl-8"
+              style={controlStyle}
             />
           </div>
         </div>
 
         {/* KPI row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="rounded-lg p-4" style={panelStyle}>
+          <div className="rounded-lg p-4" style={softPanelStyle}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted-foreground">本月收入</span>
-              <TrendingUp className="w-4 h-4 text-green-400" />
+              <span className="text-xs" style={{ color: C.muted }}>本月收入</span>
+              <TrendingUp className="w-4 h-4" style={{ color: C.income }} />
             </div>
-            <p className="text-2xl font-bold text-green-400">{fmtHkd(totalIncome)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-2xl font-bold" style={{ color: C.income }}>{fmtHkd(totalIncome)}</p>
+            <p className="text-xs mt-1" style={{ color: C.muted }}>
               {incomeTotalCount} 張已接受
               {incomeTotalCount > incomeRecords.length ? `（顯示 ${incomeRecords.length}）` : ""}
             </p>
           </div>
-          <div className="rounded-lg p-4" style={panelStyle}>
+          <div className="rounded-lg p-4" style={softPanelStyle}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted-foreground">本月支出</span>
-              <TrendingDown className="w-4 h-4 text-red-400" />
+              <span className="text-xs" style={{ color: C.muted }}>本月支出</span>
+              <TrendingDown className="w-4 h-4" style={{ color: C.expense }} />
             </div>
-            <p className="text-2xl font-bold text-red-400">{fmtHkd(totalExpenses)}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-2xl font-bold" style={{ color: C.expense }}>{fmtHkd(totalExpenses)}</p>
+            <p className="text-xs mt-1" style={{ color: C.muted }}>
               {summary?.summary.reduce((n, s) => n + s.count, 0) ?? expenses.length} 筆支出
             </p>
           </div>
-          <div className="rounded-lg p-4" style={panelStyle}>
+          <div className="rounded-lg p-4" style={softPanelStyle}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted-foreground">本月淨額</span>
-              <Wallet className="w-4 h-4 text-amber-400" />
+              <span className="text-xs" style={{ color: C.muted }}>本月淨額</span>
+              <Wallet className="w-4 h-4" style={{ color: C.gold }} />
             </div>
             <p
               className="text-2xl font-bold"
-              style={{ color: net >= 0 ? "#4ade80" : "#f87171" }}
+              style={{ color: net >= 0 ? C.income : C.expense }}
             >
               {fmtHkd(net, { signed: true })}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">收入 − 支出（未扣廣告）</p>
+            <p className="text-xs mt-1" style={{ color: C.muted }}>收入 − 支出（未扣廣告）</p>
           </div>
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-muted/30">
-            <TabsTrigger value="overview" className="gap-1.5">
+          <TabsList
+            className="h-auto p-1"
+            style={{ background: C.panelSoft, border: `1px solid ${C.line}` }}
+          >
+            <TabsTrigger
+              value="overview"
+              className="gap-1.5 data-[state=active]:shadow-none"
+              style={{ color: tab === "overview" ? C.ink : C.muted, ...(tab === "overview" ? { background: C.goldSoft, color: C.gold } : {}) }}
+            >
               <Wallet className="w-3.5 h-3.5" />
               總覽 ({cashflowRows.length})
             </TabsTrigger>
-            <TabsTrigger value="income" className="gap-1.5">
+            <TabsTrigger
+              value="income"
+              className="gap-1.5 data-[state=active]:shadow-none"
+              style={{ color: tab === "income" ? C.ink : C.muted, ...(tab === "income" ? { background: C.goldSoft, color: C.gold } : {}) }}
+            >
               <TrendingUp className="w-3.5 h-3.5" />
               收入 ({filteredIncome.length})
             </TabsTrigger>
-            <TabsTrigger value="expenses" className="gap-1.5">
+            <TabsTrigger
+              value="expenses"
+              className="gap-1.5 data-[state=active]:shadow-none"
+              style={{ color: tab === "expenses" ? C.ink : C.muted, ...(tab === "expenses" ? { background: C.goldSoft, color: C.gold } : {}) }}
+            >
               <TrendingDown className="w-3.5 h-3.5" />
               支出 ({filteredExpenses.length})
             </TabsTrigger>
@@ -491,9 +572,9 @@ export default function Expenses() {
           {/* Overview — combined cashflow */}
           <TabsContent value="overview" className="mt-4 space-y-4">
             {summary && summary.summary.length > 0 && (
-              <Card style={panelStyle} className="border-0">
+              <Card style={panelStyle} className="border-0 shadow-none bg-transparent">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                  <CardTitle className="text-sm font-medium" style={{ color: C.muted }}>
                     支出分類佔比
                   </CardTitle>
                 </CardHeader>
@@ -505,19 +586,19 @@ export default function Expenses() {
                         const pct = totalExpenses > 0 ? (s.total / totalExpenses) * 100 : 0;
                         return (
                           <div key={s.category} className="flex items-center gap-3">
-                            <span className="text-sm text-muted-foreground w-24 shrink-0">
+                            <span className="text-sm w-24 shrink-0" style={{ color: C.muted }}>
                               {s.categoryLabel}
                             </span>
-                            <div className="flex-1 bg-muted/30 rounded-full h-2 overflow-hidden">
+                            <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                               <div
-                                className="h-full rounded-full bg-amber-500/70"
-                                style={{ width: `${pct}%` }}
+                                className="h-full rounded-full"
+                                style={{ background: C.gold, width: `${pct}%` }}
                               />
                             </div>
-                            <span className="text-sm font-medium text-foreground w-28 text-right shrink-0">
+                            <span className="text-sm font-medium w-28 text-right shrink-0" style={{ color: C.ink }}>
                               {fmtHkd(s.total)}
                             </span>
-                            <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
+                            <span className="text-xs w-10 text-right shrink-0" style={{ color: C.muted }}>
                               {pct.toFixed(0)}%
                             </span>
                           </div>
@@ -528,54 +609,54 @@ export default function Expenses() {
               </Card>
             )}
 
-            <Card style={panelStyle} className="border-0">
+            <Card style={panelStyle} className="border-0 shadow-none bg-transparent">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2" style={{ color: C.muted }}>
                   <BarChart3 className="w-4 h-4" />
                   本月收支流水
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {incomeLoading || expensesLoading ? (
-                  <div className="p-8 text-center text-muted-foreground">載入中...</div>
+                  <div className="p-8 text-center" style={{ color: C.muted }}>載入中...</div>
                 ) : cashflowRows.length === 0 ? (
                   <div className="p-12 text-center">
-                    <Wallet className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">本月暫無收支記錄</p>
+                    <Wallet className="w-12 h-12 mx-auto mb-3" style={{ color: "rgba(232,224,208,0.25)" }} />
+                    <p style={{ color: C.muted }}>本月暫無收支記錄</p>
                     <Button onClick={handleOpenCreate} variant="outline" size="sm" className="mt-3">
                       新增支出
                     </Button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
+                  <div className="divide-y" style={rowDivider}>
                     {cashflowRows.map((row) =>
                       row.kind === "income" ? (
                         <div
                           key={row.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
+                          className="flex items-center gap-3 px-4 py-3 transition-colors" style={{ color: C.ink }} onMouseEnter={(e) => { e.currentTarget.style.background = C.hover; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <div className="w-14 shrink-0 text-xs text-muted-foreground">{row.dateLabel}</div>
+                          <div className="w-14 shrink-0 text-xs" style={{ color: C.muted }}>{row.dateLabel}</div>
                           <Badge
                             variant="outline"
-                            className="text-[10px] shrink-0 bg-green-500/10 text-green-300 border-green-500/30"
+                            className="text-[10px] shrink-0" style={{ background: C.incomeSoft, color: C.income, borderColor: "rgba(76,175,80,0.35)" }}
                           >
                             收入
                           </Badge>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{row.title}</p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{row.title}</p>
+                            <p className="text-xs truncate" style={{ color: C.muted }}>
                               {row.meta}
                               {row.subtitle ? ` · ${row.subtitle}` : ""}
                             </p>
                           </div>
-                          <p className="text-sm font-semibold text-green-400 shrink-0">
+                          <p className="text-sm font-semibold shrink-0" style={{ color: C.income }}>
                             {fmtHkd(row.amount, { signed: true })}
                           </p>
                           <Link href={row.href}>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                              className="h-7 w-7 hover:bg-white/5 shrink-0" style={{ color: C.muted }}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </Button>
@@ -584,29 +665,29 @@ export default function Expenses() {
                       ) : (
                         <div
                           key={row.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
+                          className="flex items-center gap-3 px-4 py-3 transition-colors" style={{ color: C.ink }} onMouseEnter={(e) => { e.currentTarget.style.background = C.hover; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <div className="w-14 shrink-0 text-xs text-muted-foreground">{row.dateLabel}</div>
+                          <div className="w-14 shrink-0 text-xs" style={{ color: C.muted }}>{row.dateLabel}</div>
                           <Badge
                             variant="outline"
-                            className={`text-[10px] shrink-0 ${getCategoryStyle(row.category).color}`}
+                            className="text-[10px] shrink-0" style={categoryBadgeStyle(row.category)}
                           >
                             {row.categoryLabel}
                           </Badge>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{row.title}</p>
+                            <p className="text-sm font-medium truncate" style={{ color: C.ink }}>{row.title}</p>
                             {row.subtitle && (
-                              <p className="text-xs text-muted-foreground truncate">{row.subtitle}</p>
+                              <p className="text-xs truncate" style={{ color: C.muted }}>{row.subtitle}</p>
                             )}
                           </div>
-                          <p className="text-sm font-semibold text-red-400 shrink-0">
+                          <p className="text-sm font-semibold shrink-0" style={{ color: C.expense }}>
                             -{fmtHkd(row.amount)}
                           </p>
                           <div className="flex gap-0.5 shrink-0">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              className="h-7 w-7 hover:bg-white/5" style={{ color: C.muted }}
                               onClick={() => {
                                 const ex = expenses.find((e) => e.id === row.expenseId);
                                 if (ex) handleOpenEdit(ex);
@@ -617,7 +698,7 @@ export default function Expenses() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                              className="h-7 w-7 hover:bg-white/5" style={{ color: C.muted }}
                               onClick={() => setDeleteConfirmId(row.expenseId)}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -634,30 +715,30 @@ export default function Expenses() {
 
           {/* Income Tab */}
           <TabsContent value="income" className="mt-4 space-y-4">
-            <Card style={panelStyle} className="border-0">
+            <Card style={panelStyle} className="border-0 shadow-none bg-transparent">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2" style={{ color: C.muted }}>
                   <FileText className="w-4 h-4" />
                   已接受報價單（自動匯入）
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {incomeLoading ? (
-                  <div className="p-8 text-center text-muted-foreground">載入中...</div>
+                  <div className="p-8 text-center" style={{ color: C.muted }}>載入中...</div>
                 ) : filteredIncome.length === 0 ? (
                   <div className="p-12 text-center">
-                    <TrendingUp className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-3" style={{ color: "rgba(232,224,208,0.25)" }} />
+                    <p style={{ color: C.muted }}>
                       {q ? "沒有符合搜尋的收入記錄" : "本月暫無已接受報價單"}
                     </p>
                     {!q && (
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs mt-1" style={{ color: C.muted }}>
                         在報價單頁面將狀態改為「已接受」即可自動顯示於此
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
+                  <div className="divide-y" style={rowDivider}>
                     {filteredIncome.map((quote) => {
                       const shootDate = quote.shootingDate ? new Date(quote.shootingDate) : null;
                       const displayDate = shootDate ?? new Date(quote.createdAt);
@@ -665,20 +746,20 @@ export default function Expenses() {
                       return (
                         <div
                           key={quote.id}
-                          className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors"
+                          className="flex items-center gap-4 px-4 py-3 transition-colors" style={{ color: C.ink }} onMouseEnter={(e) => { e.currentTarget.style.background = C.hover; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                               <Badge
                                 variant="outline"
-                                className="text-xs bg-green-500/10 text-green-300 border-green-500/30"
+                                className="text-xs" style={{ background: C.incomeSoft, color: C.income, borderColor: "rgba(76,175,80,0.35)" }}
                               >
                                 已接受
                               </Badge>
-                              <span className="text-xs text-muted-foreground font-mono">
+                              <span className="text-xs font-mono" style={{ color: C.muted }}>
                                 {quote.quoteNumber}
                               </span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs" style={{ color: C.muted }}>
                                 {displayLabel}{" "}
                                 {displayDate.toLocaleDateString("zh-HK", {
                                   month: "short",
@@ -686,17 +767,17 @@ export default function Expenses() {
                                 })}
                               </span>
                             </div>
-                            <p className="text-sm text-foreground font-medium truncate">
+                            <p className="text-sm font-medium truncate" style={{ color: C.ink }}>
                               {quote.clientName}
                             </p>
                             {quote.serviceType && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
+                              <p className="text-xs mt-0.5" style={{ color: C.muted }}>
                                 {serviceLabel(quote.serviceType)}
                               </p>
                             )}
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-base font-semibold text-green-400">
+                            <p className="text-base font-semibold" style={{ color: C.income }}>
                               {fmtHkd(Number(quote.total ?? 0), { signed: true })}
                             </p>
                           </div>
@@ -704,7 +785,7 @@ export default function Expenses() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+                              className="h-7 w-7 hover:bg-white/5 shrink-0" style={{ color: C.muted }}
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </Button>
@@ -721,9 +802,9 @@ export default function Expenses() {
           {/* Expenses Tab */}
           <TabsContent value="expenses" className="mt-4 space-y-4">
             {summary && summary.summary.length > 0 && (
-              <Card style={panelStyle} className="border-0">
+              <Card style={panelStyle} className="border-0 shadow-none bg-transparent">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                  <CardTitle className="text-sm font-medium" style={{ color: C.muted }}>
                     支出分類明細
                   </CardTitle>
                 </CardHeader>
@@ -742,21 +823,21 @@ export default function Expenses() {
                                 prev === s.category ? "all" : s.category
                               )
                             }
-                            className="w-full flex items-center gap-3 rounded-md px-1 py-0.5 hover:bg-muted/20 transition-colors text-left"
+                            className="w-full flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors text-left" onMouseEnter={(e) => { e.currentTarget.style.background = C.hover; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
-                            <span className="text-sm text-muted-foreground w-24 shrink-0">
+                            <span className="text-sm w-24 shrink-0" style={{ color: C.muted }}>
                               {s.categoryLabel}
                             </span>
-                            <div className="flex-1 bg-muted/30 rounded-full h-2 overflow-hidden">
+                            <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
                               <div
-                                className="h-full rounded-full bg-amber-500/70"
-                                style={{ width: `${pct}%` }}
+                                className="h-full rounded-full"
+                                style={{ background: C.gold, width: `${pct}%` }}
                               />
                             </div>
-                            <span className="text-sm font-medium text-foreground w-28 text-right shrink-0">
+                            <span className="text-sm font-medium w-28 text-right shrink-0" style={{ color: C.ink }}>
                               {fmtHkd(s.total)}
                             </span>
-                            <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
+                            <span className="text-xs w-10 text-right shrink-0" style={{ color: C.muted }}>
                               {pct.toFixed(0)}%
                             </span>
                           </button>
@@ -769,7 +850,7 @@ export default function Expenses() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="h-8 w-[160px] bg-transparent border-white/10">
+                <SelectTrigger className="h-8 w-[160px]" style={controlStyle}>
                   <SelectValue placeholder="全部分類" />
                 </SelectTrigger>
                 <SelectContent>
@@ -785,7 +866,7 @@ export default function Expenses() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs hover:bg-white/5" style={{ color: C.muted }}
                   onClick={() => setFilterCategory("all")}
                 >
                   清除篩選
@@ -793,14 +874,14 @@ export default function Expenses() {
               )}
             </div>
 
-            <Card style={panelStyle} className="border-0">
+            <Card style={panelStyle} className="border-0 shadow-none bg-transparent">
               <CardContent className="p-0">
                 {expensesLoading ? (
-                  <div className="p-8 text-center text-muted-foreground">載入中...</div>
+                  <div className="p-8 text-center" style={{ color: C.muted }}>載入中...</div>
                 ) : filteredExpenses.length === 0 ? (
                   <div className="p-12 text-center">
-                    <Receipt className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">
+                    <Receipt className="w-12 h-12 mx-auto mb-3" style={{ color: "rgba(232,224,208,0.25)" }} />
+                    <p style={{ color: C.muted }}>
                       {q || filterCategory !== "all"
                         ? "沒有符合條件的支出記錄"
                         : "本月暫無支出記錄"}
@@ -812,48 +893,47 @@ export default function Expenses() {
                     )}
                   </div>
                 ) : (
-                  <div className="divide-y divide-border/50">
+                  <div className="divide-y" style={rowDivider}>
                     {filteredExpenses.map((expense) => {
-                      const catStyle = getCategoryStyle(expense.category);
                       return (
                         <div
                           key={expense.id}
-                          className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors"
+                          className="flex items-center gap-4 px-4 py-3 transition-colors" style={{ color: C.ink }} onMouseEnter={(e) => { e.currentTarget.style.background = C.hover; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <Badge variant="outline" className={`text-xs ${catStyle.color}`}>
+                              <Badge variant="outline" className="text-xs" style={categoryBadgeStyle(expense.category)}>
                                 {expense.categoryLabel}
                               </Badge>
                               {expense.isFromQuoteCost && (
                                 <Badge
                                   variant="outline"
-                                  className="text-xs text-emerald-600 border-emerald-600/40"
+                                  className="text-xs" style={{ color: C.income, borderColor: "rgba(76,175,80,0.4)", background: C.incomeSoft }}
                                 >
                                   報價成本
                                 </Badge>
                               )}
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs" style={{ color: C.muted }}>
                                 {new Date(expense.date).toLocaleDateString("zh-HK", {
                                   month: "short",
                                   day: "numeric",
                                 })}
                               </span>
                               {expense.payee && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs" style={{ color: C.muted }}>
                                   · {expense.payee}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-foreground truncate">{expense.description}</p>
+                            <p className="text-sm truncate" style={{ color: C.ink }}>{expense.description}</p>
                             {expense.notes && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              <p className="text-xs mt-0.5 truncate" style={{ color: C.muted }}>
                                 {expense.notes}
                               </p>
                             )}
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-base font-semibold text-red-400">
+                            <p className="text-base font-semibold" style={{ color: C.expense }}>
                               -{fmtHkd(expense.amount)}
                             </p>
                           </div>
@@ -861,7 +941,7 @@ export default function Expenses() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              className="h-7 w-7 hover:bg-white/5" style={{ color: C.muted }}
                               onClick={() => handleOpenEdit(expense)}
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -869,7 +949,7 @@ export default function Expenses() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                              className="h-7 w-7 hover:bg-white/5" style={{ color: C.muted }}
                               onClick={() => setDeleteConfirmId(expense.id)}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -967,7 +1047,7 @@ export default function Expenses() {
             <Button
               onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700"
+              style={{ background: C.gold, color: "#111" }}
             >
               {editingId ? "儲存更改" : "新增支出"}
             </Button>
@@ -981,7 +1061,7 @@ export default function Expenses() {
           <DialogHeader>
             <DialogTitle>確認刪除</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">此操作無法復原，確定要刪除這筆支出記錄嗎？</p>
+          <p className="text-sm" style={{ color: C.muted }}>此操作無法復原，確定要刪除這筆支出記錄嗎？</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
               取消
