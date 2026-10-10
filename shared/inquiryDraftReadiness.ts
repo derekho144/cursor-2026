@@ -3,6 +3,7 @@
  * Prefer accurate understanding over auto-creating shaky drafts.
  */
 import { quotePricingMode, type QuotePricingMode } from "./quotePricingMode";
+import { applyServiceNotes } from "./quoteServiceNotes";
 
 export type QuantitySource = "explicit" | "assumed" | "unknown";
 
@@ -172,6 +173,8 @@ export function formatInquiryDraftNotes(input: {
   aiNotes?: string | null;
   readiness?: InquiryDraftReadiness | null;
   autoDraft: boolean;
+  /** When product — append studio 收貨地址 for sample drop-off. */
+  serviceType?: string | null;
 }): string {
   const lines: string[] = [];
   if (input.aiNotes?.trim()) {
@@ -188,7 +191,7 @@ export function formatInquiryDraftNotes(input: {
     if (lines.length) lines.push("");
     lines.push(`【缺欄】${input.readiness.missingFields.join("、")}`);
   }
-  return lines.join("\n");
+  return applyServiceNotes(lines.join("\n"), input.serviceType ?? "");
 }
 
 /**

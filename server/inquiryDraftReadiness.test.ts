@@ -141,6 +141,18 @@ describe("formatInquiryDraftNotes", () => {
     expect(notes).not.toContain("寄件人:");
     expect(notes).not.toContain("主題:");
   });
+
+  it("appends product studio receiving address", () => {
+    const notes = formatInquiryDraftNotes({
+      fromEmail: "a@b.com",
+      subject: "Product",
+      aiNotes: "白底產品20張",
+      autoDraft: true,
+      serviceType: "product",
+    });
+    expect(notes).toContain("白底產品20張");
+    expect(notes).toContain("收貨地址：新蒲崗八達街安達工業中心5樓507C");
+  });
 });
 
 describe("sanitizeQuoteNotesForClientPdf", () => {
