@@ -308,29 +308,32 @@ async function adsActionSnapshot(thisWeekStart: string) {
       .orderBy(desc(adSyncLogs.syncedAt))
       .limit(200);
 
+    type LogPayload = { actionId?: string; state?: string; message?: string };
     for (const row of rows) {
-      let payload: { actionId?: string; state?: string; message?: string } | null = null;
+      let payload: LogPayload | null = null;
       try {
-        payload = row.message ? (JSON.parse(row.message) as typeof payload) : null;
+        payload = row.message ? (JSON.parse(row.message) as LogPayload) : null;
       } catch {
         continue;
       }
-      if (!payload?.actionId || !payload.state) continue;
+      const actionId = payload?.actionId;
+      const state = payload?.state;
+      if (!actionId || !state) continue;
 
-      if (payload.state === "executed") completedTrusted.add(payload.actionId);
+      if (state === "executed") completedTrusted.add(actionId);
 
       const syncedAt = row.syncedAt instanceof Date ? row.syncedAt : new Date(row.syncedAt);
       if (syncedAt >= since) {
-        if (payload.state === "executed") executed7d += 1;
-        else if (payload.state === "failed") failed7d += 1;
-        else if (payload.state === "blocked") blocked7d += 1;
+        if (state === "executed") executed7d += 1;
+        else if (state === "failed") failed7d += 1;
+        else if (state === "blocked") blocked7d += 1;
       }
 
       if (recentLogs.length < 8) {
         recentLogs.push({
-          actionId: payload.actionId,
-          state: payload.state,
-          message: payload.message ?? "",
+          actionId,
+          state,
+          message: payload?.message ?? "",
           syncedAt: syncedAt.toISOString(),
         });
       }
