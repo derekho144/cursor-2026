@@ -17,6 +17,7 @@ describe("shouldSpaFallback", () => {
   it("allows SPA HTML for app routes", () => {
     expect(shouldSpaFallback("/")).toBe(true);
     expect(shouldSpaFallback("/growth-priorities")).toBe(true);
+    expect(shouldSpaFallback("/growth-cockpit")).toBe(true);
     expect(shouldSpaFallback("/quotes/123?tab=1")).toBe(true);
   });
 });

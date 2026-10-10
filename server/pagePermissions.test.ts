@@ -59,6 +59,7 @@ describe("pagePermissions", () => {
     expect(resolvePageIdForPath("/quotes/12/edit")).toBe("quotes");
     expect(resolvePageIdForPath("/employees")).toBe("employees");
     expect(resolvePageIdForPath("/pricing-learning")).toBe("pricing-learning");
+    expect(resolvePageIdForPath("/growth-cockpit")).toBe("growth-cockpit");
     expect(resolvePageIdForPath("/delivery/abc")).toBe(null);
     expect(resolvePageIdForPath("/reports")).toBe("ad-expenses");
     expect(resolvePageIdForPath("/ad-expenses")).toBe("ad-expenses");

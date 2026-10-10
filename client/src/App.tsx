@@ -21,6 +21,7 @@ const MonthlyReport = lazyRetry(() => import("./pages/MonthlyReport"));
 const PlatformEfficiency = lazyRetry(() => import("./pages/PlatformEfficiency"));
 const GoogleAdsQuality = lazyRetry(() => import("./pages/GoogleAdsQuality"));
 const GrowthPriorities = lazyRetry(() => import("./pages/GrowthPriorities"));
+const GrowthCockpit = lazyRetry(() => import("./pages/GrowthCockpit"));
 const ClientsList = lazyRetry(() => import("./pages/ClientsList"));
 const ClientDetail = lazyRetry(() => import("./pages/ClientDetail"));
 const DeliveryList = lazyRetry(() => import("./pages/DeliveryList"));
@@ -66,6 +67,7 @@ function Router() {
         <Route path="/platform-efficiency" component={PlatformEfficiency} />
         <Route path="/google-ads-quality" component={GoogleAdsQuality} />
         <Route path="/growth-priorities" component={GrowthPriorities} />
+        <Route path="/growth-cockpit" component={GrowthCockpit} />
         <Route path="/clients" component={ClientsList} />
         <Route path="/clients/:id" component={ClientDetail} />
         <Route path="/deliveries" component={DeliveryList} />
