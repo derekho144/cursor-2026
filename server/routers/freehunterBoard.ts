@@ -181,6 +181,7 @@ export const freehunterBoardRouter = router({
           getPersistedFreehunterScrapeStatus,
         } = await import("../scheduler");
         const { getWatchdogStatus } = await import("../watchdog");
+        const { computeFhScrapeHealth } = await import("../fhScrapeHealth");
         const persisted = await getPersistedFreehunterScrapeStatus();
         const lastMem = lastFreehunterScrapeAt;
         const lastAt =
@@ -190,20 +191,63 @@ export const freehunterBoardRouter = router({
         const ageHours = lastAt ? (Date.now() - lastAt.getTime()) / (3600 * 1000) : null;
         const hktHour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
         const inActiveHours = hktHour >= 8 && hktHour < 21;
-        const scrapeStale = inActiveHours && (ageHours == null || ageHours > 2);
+
+        // Stale = no recent *successful* scrape that actually saw the board.
+        // Failed / blind (discovered=0) ticks must not reset the health clock.
+        const persistedIsRealSuccess =
+          persisted.ok === true &&
+          (persisted.discovered == null || persisted.discovered > 0);
+        const lastSuccessAt = persistedIsRealSuccess
+          ? persisted.at
+          : lastFreehunterScrapeResult &&
+              persisted.ok !== false &&
+              (lastFreehunterScrapeResult.discovered == null ||
+                lastFreehunterScrapeResult.discovered > 0)
+            ? lastMem
+            : null;
+        const successAgeHours = lastSuccessAt
+          ? (Date.now() - lastSuccessAt.getTime()) / (3600 * 1000)
+          : lastDb
+            ? (Date.now() - lastDb.getTime()) / (3600 * 1000)
+            : null;
+        const scrapeStale =
+          inActiveHours && (successAgeHours == null || successAgeHours > 2);
+
+        const discovered =
+          lastFreehunterScrapeResult?.discovered ?? persisted.discovered ?? null;
         const lastScrapeResult =
           lastFreehunterScrapeResult ??
           (persisted.ok === true && persisted.newJobs != null
-            ? { newJobs: persisted.newJobs, emailsFetched: persisted.emailsFetched ?? 0 }
+            ? {
+                newJobs: persisted.newJobs,
+                emailsFetched: persisted.emailsFetched ?? 0,
+                discovered: persisted.discovered,
+              }
             : null);
+
+        const view = computeFhScrapeHealth({
+          sessionConnected: sessionStatus.connected,
+          scrapeStale,
+          lastScrapeOk: persisted.ok,
+          newJobs: lastScrapeResult?.newJobs ?? persisted.newJobs,
+          emailsFetched: lastScrapeResult?.emailsFetched ?? persisted.emailsFetched,
+          discovered,
+          lastScrapedAt: lastAt,
+          lastScrapeRaw: persisted.raw,
+        });
+
         return {
           lastScrapedAt: lastAt?.toISOString() ?? null,
           lastScrapeResult,
-          lastScrapeOk: persisted.ok,
+          lastScrapeOk: view.tone === "bad" ? false : persisted.ok,
           lastScrapeRaw: persisted.raw,
+          discovered,
           ageHours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
           scrapeStale,
           sessionConnected: sessionStatus.connected,
+          level: view.level,
+          tone: view.tone,
+          title: view.title,
           watchdog: getWatchdogStatus(),
         };
       })(),
@@ -311,8 +355,15 @@ export const freehunterBoardRouter = router({
           ok: result.success,
           newJobs: result.newJobs,
           emailsFetched: result.emailsFetched,
+          discovered: result.discovered,
           error: result.error,
         });
+        if (!result.success) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: result.error || "爬取失敗（板面無發現工作）",
+          });
+        }
         return result;
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
