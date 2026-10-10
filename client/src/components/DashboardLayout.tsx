@@ -61,6 +61,7 @@ import {
   GraduationCap,
   Gauge,
   Sparkles,
+  Activity,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -85,6 +86,7 @@ const DEFAULT_MENU_ITEMS = [
   { id: "platform-efficiency", icon: PieChart, label: "平台效益分析", path: "/platform-efficiency" },
   { id: "google-ads-quality", icon: Gauge, label: "Google Ads QS", path: "/google-ads-quality" },
   { id: "growth-priorities", icon: Sparkles, label: "增長優先模型", path: "/growth-priorities" },
+  { id: "growth-cockpit", icon: Activity, label: "增長駕駛艙", path: "/growth-cockpit" },
   { id: "ad-sync", icon: RefreshCw, label: "平台同步", path: "/ad-sync" },
   { id: "freehunter-board", icon: Briefcase, label: "FH 工作板", path: "/freehunter-board" },
   { id: "expenses", icon: TrendingDown, label: "收入及支出", path: "/expenses" },

@@ -15,6 +15,7 @@ export type PageId =
   | "ad-sync"
   | "google-ads-quality"
   | "growth-priorities"
+  | "growth-cockpit"
   /** @deprecated merged into ad-expenses; kept for legacy allowedPages JSON */
   | "reports"
   | "freehunter-board"
@@ -46,6 +47,7 @@ export const PAGE_CATALOG: PageDef[] = [
   { id: "ad-sync", label: "平台同步", pathPrefixes: ["/ad-sync"] },
   { id: "google-ads-quality", label: "Google Ads QS", pathPrefixes: ["/google-ads-quality"] },
   { id: "growth-priorities", label: "增長優先模型", pathPrefixes: ["/growth-priorities"] },
+  { id: "growth-cockpit", label: "增長駕駛艙", pathPrefixes: ["/growth-cockpit"] },
   { id: "freehunter-board", label: "FH 工作板", pathPrefixes: ["/freehunter-board"] },
   { id: "expenses", label: "收入及支出", pathPrefixes: ["/expenses"] },
   { id: "follow-up", label: "報價跟進", pathPrefixes: ["/follow-up"] },
