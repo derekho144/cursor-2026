@@ -59,6 +59,10 @@ import {
   toggleQuoteItemWaived,
 } from "@shared/quoteSectionB";
 import {
+  applyServiceNotes,
+  isProductReceivingAddressNote,
+} from "@shared/quoteServiceNotes";
+import {
   QUOTE_TEMPLATES,
   extrasFromSelectedTemplates,
   mergeQuoteTemplateItems,
@@ -575,6 +579,16 @@ export default function QuoteForm() {
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only seed once for new forms
   }, [isEdit]);
+
+  // Product quotes: ensure studio 收貨地址 is in notes (new + when switching to product)
+  useEffect(() => {
+    if (form.serviceType !== "product") return;
+    if (form.notes.split("\n").some((l) => isProductReceivingAddressNote(l))) return;
+    setForm((p) => ({
+      ...p,
+      notes: applyServiceNotes(p.notes, p.serviceType),
+    }));
+  }, [form.serviceType, form.notes]);
   const [hasDraft, setHasDraft] = useState(() => !isEdit && !!safeLSGet('quote_draft_new'));
   // Multi-select quick templates (攝影 + 攝影加錄影 can both stay on)
   const [selectedTemplates, setSelectedTemplates] = useState<QuoteTemplateId[]>([]);
@@ -1064,6 +1078,7 @@ export default function QuoteForm() {
       return {
         ...prev,
         serviceType: value,
+        notes: applyServiceNotes(prev.notes, value),
         items:
           nextItems.length > 0
             ? nextItems
