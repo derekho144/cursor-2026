@@ -1,19 +1,24 @@
 import { and, desc, eq, gte, lte, sql, isNotNull, isNull, asc } from "drizzle-orm";
-import { getDb, getFollowUpSettings } from "./db";
-import { adSyncLogs, emailInquiries, quoteFollowUps, quotes } from "../drizzle/schema";
+import { getDb, getFollowUpSettings, getAllPlatformCredentials } from "./db";
+import { adSyncLogs, emailInquiries, freehunterJobs, quoteFollowUps, quotes } from "../drizzle/schema";
 import { buildTrustedServiceNegativeQueue } from "@shared/adsActionQueue";
 import {
   adsActionLight,
   adsDataLight,
   adsEfficiencyLight,
+  adsReachLight,
   completionRate,
+  fhBoardLight,
   followUpLight,
+  gscSeoLight,
   inquiriesLight,
   metricDelta,
   pickPrimaryAction,
+  platformSyncLight,
   pricingLearningLight,
   quotesLight,
   rollingWeekWindows,
+  toneHealthPct,
   weeklyLoopScore,
   type CockpitLight,
   type MetricDelta,
@@ -22,6 +27,8 @@ import {
   type WeeklyLoop,
 } from "@shared/growthCockpit";
 import { runGoogleAdsGaql } from "./googleAds";
+import { DEFAULT_GSC_SITE_URL, queryGscSearchAnalytics, testGscConnection } from "./googleSearchConsole";
+import { lastFreehunterScrapeAt } from "./scheduler";
 
 export type AdsWeekMetrics = {
   spendHKD: number;
@@ -102,8 +109,45 @@ export type GrowthCockpitPayload = {
   };
   inquiries: { pending: number };
   pricingLearning: { accepted7d: number };
+  /** Nervous-system slice: ops sync + SEO/GEO + FH */
+  nervousSystem: {
+    sync: {
+      hellotobyConfigured: boolean;
+      hellotobyCookieAgeDays: number | null;
+      hellotobyLastStatus: "success" | "error" | "none";
+      pro360Configured: boolean;
+      pro360LastStatus: "success" | "error" | "none";
+    };
+    seoGeo: {
+      gscAvailable: boolean;
+      gscError: string | null;
+      siteUrl: string | null;
+      clicks: MetricDelta;
+      impressions: MetricDelta;
+    };
+    fh: {
+      ageHours: number | null;
+      scrapeStale: boolean;
+      lastScrapedAt: string | null;
+    };
+  };
   modules: Array<{ id: string; label: string; href: string; blurb: string }>;
 };
+
+const GSC_CACHE_TTL_MS = 15 * 60 * 1000;
+let gscWindowsCache: {
+  at: number;
+  key: string;
+  value: {
+    available: boolean;
+    error: string | null;
+    siteUrl: string | null;
+    thisClicks: number;
+    lastClicks: number;
+    thisImpressions: number;
+    lastImpressions: number;
+  };
+} | null = null;
 
 function emptyAdsMetrics(): AdsWeekMetrics {
   return {
@@ -422,16 +466,149 @@ async function adsActionSnapshot(thisWeekStart: string) {
   };
 }
 
+async function latestSyncStatus(platform: "hellotoby" | "360pro"): Promise<"success" | "error" | "none"> {
+  const db = await getDb();
+  if (!db) return "none";
+  const rows = await db
+    .select({ status: adSyncLogs.status })
+    .from(adSyncLogs)
+    .where(eq(adSyncLogs.platform, platform))
+    .orderBy(desc(adSyncLogs.syncedAt))
+    .limit(1);
+  const status = rows[0]?.status;
+  if (status === "success" || status === "error") return status;
+  return "none";
+}
+
+async function platformSyncSnapshot(): Promise<GrowthCockpitPayload["nervousSystem"]["sync"]> {
+  const creds = await getAllPlatformCredentials();
+  const ht = creds.find((c) => c.platform === "hellotoby");
+  const p360 = creds.find((c) => c.platform === "360pro");
+  let hellotobyCookieAgeDays: number | null = null;
+  if (ht?.updatedAt) {
+    hellotobyCookieAgeDays = Math.floor(
+      (Date.now() - new Date(ht.updatedAt).getTime()) / (24 * 3600 * 1000)
+    );
+  }
+  const [hellotobyLastStatus, pro360LastStatus] = await Promise.all([
+    latestSyncStatus("hellotoby"),
+    latestSyncStatus("360pro"),
+  ]);
+  return {
+    hellotobyConfigured: Boolean(ht?.hasPassword),
+    hellotobyCookieAgeDays,
+    hellotobyLastStatus,
+    pro360Configured: Boolean(p360?.hasPassword),
+    pro360LastStatus,
+  };
+}
+
+async function gscWindowsSnapshot(thisWeek: WeekWindow, lastWeek: WeekWindow) {
+  const cacheKey = `${lastWeek.startDate}:${thisWeek.endDate}`;
+  try {
+    const conn = await testGscConnection();
+    if (!conn.success) {
+      return {
+        available: false,
+        error: conn.error ?? "GSC 連線失敗",
+        siteUrl: null as string | null,
+        thisClicks: 0,
+        lastClicks: 0,
+        thisImpressions: 0,
+        lastImpressions: 0,
+      };
+    }
+    const siteUrl =
+      conn.sites?.find(
+        (s) => s.siteUrl.includes("jdstudiohk.com") || s.siteUrl === "sc-domain:jdstudiohk.com"
+      )?.siteUrl ??
+      conn.sites?.[0]?.siteUrl ??
+      DEFAULT_GSC_SITE_URL;
+
+    const [thisRows, lastRows] = await Promise.all([
+      queryGscSearchAnalytics({
+        siteUrl,
+        startDate: thisWeek.startDate,
+        endDate: thisWeek.endDate,
+        rowLimit: 1,
+      }),
+      queryGscSearchAnalytics({
+        siteUrl,
+        startDate: lastWeek.startDate,
+        endDate: lastWeek.endDate,
+        rowLimit: 1,
+      }),
+    ]);
+    const value = {
+      available: true,
+      error: null as string | null,
+      siteUrl,
+      thisClicks: Number(thisRows[0]?.clicks ?? 0),
+      lastClicks: Number(lastRows[0]?.clicks ?? 0),
+      thisImpressions: Number(thisRows[0]?.impressions ?? 0),
+      lastImpressions: Number(lastRows[0]?.impressions ?? 0),
+    };
+    gscWindowsCache = { at: Date.now(), key: cacheKey, value };
+    return value;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      gscWindowsCache &&
+      gscWindowsCache.key === cacheKey &&
+      Date.now() - gscWindowsCache.at < GSC_CACHE_TTL_MS &&
+      gscWindowsCache.value.available
+    ) {
+      return { ...gscWindowsCache.value, error: message };
+    }
+    return {
+      available: false,
+      error: message,
+      siteUrl: null as string | null,
+      thisClicks: 0,
+      lastClicks: 0,
+      thisImpressions: 0,
+      lastImpressions: 0,
+    };
+  }
+}
+
+async function fhBoardSnapshot(): Promise<GrowthCockpitPayload["nervousSystem"]["fh"]> {
+  const db = await getDb();
+  let lastDb: Date | null = null;
+  if (db) {
+    const rows = await db
+      .select({ lastScrapedAt: sql<Date | null>`MAX(${freehunterJobs.scrapedAt})` })
+      .from(freehunterJobs);
+    lastDb = rows[0]?.lastScrapedAt ? new Date(rows[0].lastScrapedAt) : null;
+  }
+  const lastMem = lastFreehunterScrapeAt;
+  const lastAt =
+    [lastDb, lastMem].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] ?? null;
+  const ageHours = lastAt ? Math.round(((Date.now() - lastAt.getTime()) / (3600 * 1000)) * 10) / 10 : null;
+  const hktHour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
+  const inActiveHours = hktHour >= 8 && hktHour < 21;
+  const scrapeStale = inActiveHours && (ageHours == null || ageHours > 2);
+  return {
+    ageHours,
+    scrapeStale,
+    lastScrapedAt: lastAt?.toISOString() ?? null,
+  };
+}
+
 export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
   const windows = rollingWeekWindows();
-  const [thisQuotes, lastQuotes, ads, followUp, adsActions, inquiriesPending] = await Promise.all([
-    quoteWindowStats(windows.thisWeek.startDate, windows.thisWeek.endDate),
-    quoteWindowStats(windows.lastWeek.startDate, windows.lastWeek.endDate),
-    fetchAdsWindows(windows.thisWeek, windows.lastWeek),
-    followUpSnapshot(windows.thisWeek.startDate),
-    adsActionSnapshot(windows.thisWeek.startDate),
-    pendingInquiriesCount(),
-  ]);
+  const [thisQuotes, lastQuotes, ads, followUp, adsActions, inquiriesPending, sync, gsc, fh] =
+    await Promise.all([
+      quoteWindowStats(windows.thisWeek.startDate, windows.thisWeek.endDate),
+      quoteWindowStats(windows.lastWeek.startDate, windows.lastWeek.endDate),
+      fetchAdsWindows(windows.thisWeek, windows.lastWeek),
+      followUpSnapshot(windows.thisWeek.startDate),
+      adsActionSnapshot(windows.thisWeek.startDate),
+      pendingInquiriesCount(),
+      platformSyncSnapshot(),
+      gscWindowsSnapshot(windows.thisWeek, windows.lastWeek),
+      fhBoardSnapshot(),
+    ]);
 
   const quotesWow = {
     created: metricDelta(thisQuotes.created, lastQuotes.created),
@@ -457,13 +634,29 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     lastWeek: ads.lastWeek,
   };
 
+  const gscClicks = metricDelta(gsc.thisClicks, gsc.lastClicks);
+  const gscImpressions = metricDelta(gsc.thisImpressions, gsc.lastImpressions);
+
   const efficiency = adsEfficiencyLight({
     available: ads.available,
     cpa: adsWow.cpa,
     conversions: adsWow.conversions,
   });
+  const reach = adsReachLight({
+    available: ads.available,
+    isDelta: adsWow.searchImpressionShare,
+  });
+  const syncLight = platformSyncLight(sync);
+  const seoLight = gscSeoLight({
+    available: gsc.available,
+    error: gsc.error,
+    clicksDelta: gsc.available ? gscClicks : null,
+  });
+  const fhLight = fhBoardLight({ ageHours: fh.ageHours, scrapeStale: fh.scrapeStale });
 
   const lights: CockpitLight[] = [
+    syncLight,
+    seoLight,
     quotesLight({
       createdDelta: quotesWow.created,
       acceptedDelta: quotesWow.accepted,
@@ -473,6 +666,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     }),
     adsDataLight({ available: ads.available, error: ads.error, stale: ads.stale }),
     ...(efficiency ? [efficiency] : []),
+    ...(reach ? [reach] : []),
     adsActionLight({
       pendingTrusted: adsActions.pendingTrusted,
       executed7d: adsActions.executed7d,
@@ -484,6 +678,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
       oldestPendingDays: followUp.oldestPendingDays,
     }),
     inquiriesLight({ pending: inquiriesPending }),
+    fhLight,
     pricingLearningLight({ accepted7d: thisQuotes.accepted }),
   ];
 
@@ -491,11 +686,23 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
   const followUpDone = followUp.sent7d + followUp.replied7d;
   const followUpCompletionPct = completionRate(followUpDone, followUpTouched);
 
+  const seoGeoPct = toneHealthPct(seoLight.tone);
+  const opsHealthPct = Math.round(
+    (toneHealthPct(syncLight.tone) + toneHealthPct(fhLight.tone)) / 2
+  );
+
   const weeklyLoop = weeklyLoopScore({
     adsActionCompletionPct: adsActions.completionPct,
     followUpCompletionPct,
     acceptedDelta: quotesWow.accepted,
+    seoGeoPct,
+    opsHealthPct,
   });
+
+  const platformSyncBroken =
+    syncLight.tone === "red" ||
+    sync.hellotobyLastStatus === "error" ||
+    ((sync.hellotobyCookieAgeDays ?? 0) >= 30 && sync.hellotobyConfigured);
 
   const primaryAction = pickPrimaryAction({
     lights,
@@ -511,6 +718,11 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     created: quotesWow.created,
     adsCtr: adsWow.ctr,
     adsIs: adsWow.searchImpressionShare,
+    platformSyncBroken,
+    gscBroken: !gsc.available,
+    gscClicksDropSevere:
+      gsc.available && gscClicks.direction === "down" && (gscClicks.pct ?? 0) <= -15,
+    fhStale: fh.scrapeStale,
   });
 
   return {
@@ -528,12 +740,29 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     adsActions,
     inquiries: { pending: inquiriesPending },
     pricingLearning: { accepted7d: thisQuotes.accepted },
+    nervousSystem: {
+      sync,
+      seoGeo: {
+        gscAvailable: gsc.available,
+        gscError: gsc.error,
+        siteUrl: gsc.siteUrl,
+        clicks: gscClicks,
+        impressions: gscImpressions,
+      },
+      fh,
+    },
     modules: [
       {
         id: "growth-priorities",
         label: "增長優先模型",
         href: "/growth-priorities",
-        blurb: "Ads Action Queue、SEO→Ads pipeline、backlog",
+        blurb: "Ads Action Queue、SEO→Ads、AEO／GEO backlog",
+      },
+      {
+        id: "ad-sync",
+        label: "平台同步",
+        href: "/ad-sync",
+        blurb: "HelloToby／PRO360／GSC Session",
       },
       {
         id: "follow-up",
@@ -552,6 +781,12 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
         label: "詢價郵件",
         href: "/email-inquiries",
         blurb: "待處理 inbox（非 FH）",
+      },
+      {
+        id: "freehunter-board",
+        label: "FH 工作板",
+        href: "/freehunter-board",
+        blurb: "Freehunter scrape 與跟進",
       },
       {
         id: "ad-expenses",

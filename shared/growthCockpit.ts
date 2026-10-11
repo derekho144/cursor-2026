@@ -40,6 +40,10 @@ export type WeeklyLoop = {
     adsActions: number | null;
     followUp: number | null;
     acceptedTrend: number | null;
+    /** SEO/GEO health 0–100 when GSC（及相關）可評估 */
+    seoGeo?: number | null;
+    /** 運維管道健康 0–100（同步／FH 等） */
+    opsHealth?: number | null;
   };
 };
 
@@ -351,6 +355,175 @@ export function pricingLearningLight(opts: { accepted7d: number }): CockpitLight
   };
 }
 
+/** HelloToby / PRO360 session + last sync health. */
+export function platformSyncLight(opts: {
+  hellotobyConfigured: boolean;
+  hellotobyCookieAgeDays: number | null;
+  hellotobyLastStatus: "success" | "error" | "none";
+  pro360Configured: boolean;
+  pro360LastStatus: "success" | "error" | "none";
+}): CockpitLight {
+  if (!opts.hellotobyConfigured && !opts.pro360Configured) {
+    return {
+      id: "platform-sync",
+      label: "平台同步",
+      tone: "amber",
+      detail: "尚未設定 HelloToby／PRO360 Session",
+      href: "/ad-sync",
+    };
+  }
+  if (opts.hellotobyLastStatus === "error" || opts.pro360LastStatus === "error") {
+    const which =
+      opts.hellotobyLastStatus === "error" && opts.pro360LastStatus === "error"
+        ? "HelloToby 與 PRO360"
+        : opts.hellotobyLastStatus === "error"
+          ? "HelloToby"
+          : "PRO360";
+    return {
+      id: "platform-sync",
+      label: "平台同步",
+      tone: "red",
+      detail: `${which} 最近同步失敗 — 檢查 Session Cookies`,
+      href: "/ad-sync",
+    };
+  }
+  if (opts.hellotobyConfigured && (opts.hellotobyCookieAgeDays ?? 0) >= 30) {
+    return {
+      id: "platform-sync",
+      label: "平台同步",
+      tone: "red",
+      detail: `HelloToby Cookies 已 ${opts.hellotobyCookieAgeDays} 日未更新，多半已過期`,
+      href: "/ad-sync",
+    };
+  }
+  if (opts.hellotobyConfigured && (opts.hellotobyCookieAgeDays ?? 0) >= 14) {
+    return {
+      id: "platform-sync",
+      label: "平台同步",
+      tone: "amber",
+      detail: `HelloToby Cookies ${opts.hellotobyCookieAgeDays} 日未更新，建議盡快續期`,
+      href: "/ad-sync",
+    };
+  }
+  return {
+    id: "platform-sync",
+    label: "平台同步",
+    tone: "green",
+    detail: "HelloToby／PRO360 Session 正常",
+    href: "/ad-sync",
+  };
+}
+
+/** GSC / SEO·GEO signal — connection + organic clicks WoW. */
+export function gscSeoLight(opts: {
+  available: boolean;
+  error?: string | null;
+  clicksDelta?: MetricDelta | null;
+}): CockpitLight {
+  if (!opts.available) {
+    return {
+      id: "gsc-seo",
+      label: "SEO · GSC",
+      tone: "red",
+      detail: opts.error ? `GSC 連線失敗：${opts.error.slice(0, 60)}` : "GSC 未授權或連線失敗",
+      href: "/growth-priorities",
+    };
+  }
+  if (opts.clicksDelta?.direction === "down" && (opts.clicksDelta.pct ?? 0) <= -15) {
+    return {
+      id: "gsc-seo",
+      label: "SEO · GSC",
+      tone: "amber",
+      detail: `自然搜尋點擊較前 7 日跌 ${Math.abs(opts.clicksDelta.pct ?? 0)}% — 查 Growth Priorities／AEO`,
+      href: "/growth-priorities",
+    };
+  }
+  if (opts.clicksDelta?.direction === "up") {
+    return {
+      id: "gsc-seo",
+      label: "SEO · GSC",
+      tone: "green",
+      detail: `自然搜尋點擊↑ ${opts.clicksDelta.pct ?? 0}%`,
+      href: "/growth-priorities",
+    };
+  }
+  return {
+    id: "gsc-seo",
+    label: "SEO · GSC",
+    tone: "green",
+    detail: "GSC 連線正常；到增長優先模型做 AEO／GEO backlog",
+    href: "/growth-priorities",
+  };
+}
+
+/** Search impression share pressure (rank / budget). */
+export function adsReachLight(opts: {
+  available: boolean;
+  isDelta: MetricDelta;
+}): CockpitLight | null {
+  if (!opts.available) return null;
+  if (opts.isDelta.direction === "down" && (opts.isDelta.pct ?? 0) <= -10) {
+    return {
+      id: "ads-reach",
+      label: "Ads 觸達",
+      tone: "amber",
+      detail: `Search IS 較前 7 日跌 ${Math.abs(opts.isDelta.pct ?? 0)}% — 查出價／預算／QS`,
+      href: "/google-ads-quality",
+    };
+  }
+  if (opts.isDelta.direction === "up") {
+    return {
+      id: "ads-reach",
+      label: "Ads 觸達",
+      tone: "green",
+      detail: `Search IS↑ ${opts.isDelta.pct ?? 0}%`,
+      href: "/google-ads-quality",
+    };
+  }
+  return {
+    id: "ads-reach",
+    label: "Ads 觸達",
+    tone: "green",
+    detail: "Impression Share 穩定",
+    href: "/google-ads-quality",
+  };
+}
+
+/** Freehunter board scrape freshness. */
+export function fhBoardLight(opts: {
+  ageHours: number | null;
+  scrapeStale: boolean;
+}): CockpitLight {
+  if (opts.scrapeStale) {
+    return {
+      id: "fh-board",
+      label: "FH 工作板",
+      tone: "amber",
+      detail:
+        opts.ageHours == null
+          ? "活躍時段內無 scrape 紀錄"
+          : `上次 scrape 已 ${opts.ageHours} 小時 — 可能卡住`,
+      href: "/freehunter-board",
+    };
+  }
+  if (opts.ageHours != null) {
+    return {
+      id: "fh-board",
+      label: "FH 工作板",
+      tone: "green",
+      detail: `上次 scrape ${opts.ageHours} 小時前`,
+      href: "/freehunter-board",
+    };
+  }
+  return {
+    id: "fh-board",
+    label: "FH 工作板",
+    tone: "muted",
+    detail: "尚無 scrape 數據",
+    href: "/freehunter-board",
+  };
+}
+
 export function completionRate(done: number, total: number): number | null {
   if (total <= 0) return null;
   return Math.round((done / total) * 1000) / 10;
@@ -378,6 +551,14 @@ export function pickPrimaryAction(opts: {
   created: MetricDelta;
   adsCtr: MetricDelta;
   adsIs: MetricDelta;
+  /** Platform cookie / last sync broken */
+  platformSyncBroken?: boolean;
+  /** GSC OAuth / query broken */
+  gscBroken?: boolean;
+  /** Organic clicks dropped hard WoW */
+  gscClicksDropSevere?: boolean;
+  /** FH scrape stale in active hours */
+  fhStale?: boolean;
 }): PrimaryAction {
   if (!opts.followUpEnabled) {
     return {
@@ -388,12 +569,30 @@ export function pickPrimaryAction(opts: {
       tone: "red",
     };
   }
+  if (opts.platformSyncBroken) {
+    return {
+      id: "fix-platform-sync",
+      title: "修復平台同步 Session",
+      reason: "HelloToby／PRO360 Cookies 過期或最近同步失敗",
+      href: "/ad-sync",
+      tone: "red",
+    };
+  }
   if (!opts.adsAvailable) {
     return {
       id: "fix-ads-data",
       title: "修復 Google Ads 連線",
       reason: "WoW 與效益燈號依賴 Ads 數據",
       href: "/google-ads-quality",
+      tone: "red",
+    };
+  }
+  if (opts.gscBroken) {
+    return {
+      id: "fix-gsc",
+      title: "修復 Google Search Console 連線",
+      reason: "SEO／GEO／AEO 優先模型需要 GSC 數據",
+      href: "/ad-sync",
       tone: "red",
     };
   }
@@ -424,6 +623,24 @@ export function pickPrimaryAction(opts: {
       tone: "red",
     };
   }
+  if (opts.adsIs.direction === "down" && (opts.adsIs.pct ?? 0) <= -10) {
+    return {
+      id: "ads-is-drop",
+      title: "檢查 Ads Impression Share 下滑",
+      reason: `Search IS 較前 7 日跌 ${Math.abs(opts.adsIs.pct ?? 0)}%`,
+      href: "/google-ads-quality",
+      tone: "amber",
+    };
+  }
+  if (opts.gscClicksDropSevere) {
+    return {
+      id: "seo-clicks-drop",
+      title: "檢查自然搜尋下滑（SEO／GEO）",
+      reason: "GSC 點擊較前 7 日明顯下跌 — 複盤 AEO／內容／Ads 分流",
+      href: "/growth-priorities",
+      tone: "amber",
+    };
+  }
   if (
     (opts.adsCtr.direction === "up" || opts.adsIs.direction === "up") &&
     opts.created.direction === "down"
@@ -433,6 +650,15 @@ export function pickPrimaryAction(opts: {
       title: "檢查流量質素與詢價",
       reason: "Ads 曝光／CTR 改善但開單下降",
       href: "/email-inquiries",
+      tone: "amber",
+    };
+  }
+  if (opts.fhStale) {
+    return {
+      id: "fix-fh-scrape",
+      title: "檢查 Freehunter scrape",
+      reason: "活躍時段內工作板數據過舊",
+      href: "/freehunter-board",
       tone: "amber",
     };
   }
@@ -477,8 +703,8 @@ export function pickPrimaryAction(opts: {
 
   return {
     id: "weekly-review",
-    title: "本週穩定 — 可複盤增長優先模型",
-    reason: "燈號正常；適合做 SEO→Ads backlog 複盤",
+    title: "本週穩定 — 可複盤 SEO／GEO／Ads",
+    reason: "燈號正常；適合做增長優先模型與 AEO backlog",
     href: "/growth-priorities",
     tone: "green",
   };
@@ -488,6 +714,8 @@ export function weeklyLoopScore(opts: {
   adsActionCompletionPct: number | null;
   followUpCompletionPct: number | null;
   acceptedDelta: MetricDelta;
+  seoGeoPct?: number | null;
+  opsHealthPct?: number | null;
 }): WeeklyLoop {
   const acceptedTrend =
     opts.acceptedDelta.direction === "up" ? 100 : opts.acceptedDelta.direction === "down" ? 35 : 70;
@@ -496,6 +724,8 @@ export function weeklyLoopScore(opts: {
     opts.adsActionCompletionPct,
     opts.followUpCompletionPct,
     acceptedTrend,
+    opts.seoGeoPct ?? null,
+    opts.opsHealthPct ?? null,
   ].filter((v): v is number => v != null);
 
   if (parts.length === 0) {
@@ -507,6 +737,8 @@ export function weeklyLoopScore(opts: {
         adsActions: opts.adsActionCompletionPct,
         followUp: opts.followUpCompletionPct,
         acceptedTrend,
+        seoGeo: opts.seoGeoPct ?? null,
+        opsHealth: opts.opsHealthPct ?? null,
       },
     };
   }
@@ -526,6 +758,8 @@ export function weeklyLoopScore(opts: {
         ? "成交↓"
         : "成交→"
   );
+  if (opts.seoGeoPct != null) bits.push(`SEO/GEO ${opts.seoGeoPct}%`);
+  if (opts.opsHealthPct != null) bits.push(`運維 ${opts.opsHealthPct}%`);
 
   return {
     score,
@@ -535,6 +769,16 @@ export function weeklyLoopScore(opts: {
       adsActions: opts.adsActionCompletionPct,
       followUp: opts.followUpCompletionPct,
       acceptedTrend,
+      seoGeo: opts.seoGeoPct ?? null,
+      opsHealth: opts.opsHealthPct ?? null,
     },
   };
+}
+
+/** Map light tones to a 0–100 ops/seo health contribution. */
+export function toneHealthPct(tone: LightTone): number {
+  if (tone === "green") return 100;
+  if (tone === "amber") return 45;
+  if (tone === "red") return 10;
+  return 60;
 }

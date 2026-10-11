@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   adsActionLight,
   adsEfficiencyLight,
+  adsReachLight,
   completionRate,
   followUpLight,
+  gscSeoLight,
   metricDelta,
   pctChange,
   pickPrimaryAction,
+  platformSyncLight,
   quotesLight,
   rollingWeekWindows,
   weeklyLoopScore,
@@ -92,6 +95,67 @@ describe("growthCockpit helpers", () => {
     });
     expect(loop.score).toBe(83.3);
     expect(loop.label).toMatch(/良好/);
+  });
+
+  it("includes seo/ops parts in weekly loop when provided", () => {
+    const loop = weeklyLoopScore({
+      adsActionCompletionPct: 100,
+      followUpCompletionPct: 100,
+      acceptedDelta: metricDelta(3, 2),
+      seoGeoPct: 100,
+      opsHealthPct: 100,
+    });
+    expect(loop.score).toBe(100);
+    expect(loop.detail).toMatch(/SEO\/GEO/);
+    expect(loop.parts.seoGeo).toBe(100);
+  });
+
+  it("flags platform sync and GSC failures", () => {
+    expect(
+      platformSyncLight({
+        hellotobyConfigured: true,
+        hellotobyCookieAgeDays: 40,
+        hellotobyLastStatus: "none",
+        pro360Configured: true,
+        pro360LastStatus: "success",
+      }).tone
+    ).toBe("red");
+    expect(gscSeoLight({ available: false, error: "token expired" }).tone).toBe("red");
+    expect(
+      gscSeoLight({
+        available: true,
+        clicksDelta: metricDelta(70, 100),
+      }).tone
+    ).toBe("amber");
+  });
+
+  it("flags Ads IS drop as reach pressure", () => {
+    const light = adsReachLight({
+      available: true,
+      isDelta: metricDelta(30, 40),
+    });
+    expect(light?.tone).toBe("amber");
+  });
+
+  it("prioritises platform sync repair in primary action", () => {
+    const flat = metricDelta(1, 1);
+    const action = pickPrimaryAction({
+      lights: [],
+      followUpEnabled: true,
+      followUpPending: 0,
+      oldestPendingDays: null,
+      adsActionPending: 0,
+      adsActionFailed7d: 0,
+      inquiriesPending: 0,
+      adsAvailable: true,
+      cpa: flat,
+      conversions: flat,
+      created: flat,
+      adsCtr: flat,
+      adsIs: flat,
+      platformSyncBroken: true,
+    });
+    expect(action.id).toBe("fix-platform-sync");
   });
 
   it("computes completion rate", () => {
