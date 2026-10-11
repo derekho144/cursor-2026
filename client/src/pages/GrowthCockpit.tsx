@@ -119,13 +119,13 @@ export default function GrowthCockpit() {
           <div>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               <Target className="h-3.5 w-3.5" style={{ color: gold }} />
-              增長監控 · 聚合視圖
+              神經系統 · 運維 × Ads × SEO／GEO
             </div>
             <h1 className="mt-1 text-2xl font-semibold" style={{ color: "#e8e0d0" }}>
               監控台
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              匯總 Ads Action Queue、報價跟進、Ads／報價 WoW；點進既有模組執行，唔重複建立流程。
+              一眼睇晒同步健康、報價漏斗、Google Ads 觸達／效益、GSC 自然搜尋；今日唯一行動優先修斷點，再優化增長。
             </p>
           </div>
           <Button
@@ -209,6 +209,97 @@ export default function GrowthCockpit() {
                     background: gold,
                   }}
                 />
+              </div>
+            </Panel>
+
+            <Panel
+              title="神經系統"
+              action={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px]"
+                  style={{ color: gold }}
+                  onClick={() => setLocation("/growth-priorities")}
+                >
+                  SEO／GEO 詳情 <ArrowRight className="h-3 w-3" />
+                </button>
+              }
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded bg-white/[0.03] px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">運維同步</div>
+                  <div className="mt-1 text-sm" style={{ color: "#e8e0d0" }}>
+                    HT{" "}
+                    {data.nervousSystem.sync.hellotobyConfigured
+                      ? data.nervousSystem.sync.hellotobyLastStatus === "error"
+                        ? "同步失敗"
+                        : data.nervousSystem.sync.hellotobyCookieAgeDays != null &&
+                            data.nervousSystem.sync.hellotobyCookieAgeDays >= 14
+                          ? `Cookies ${data.nervousSystem.sync.hellotobyCookieAgeDays} 日`
+                          : "正常"
+                      : "未設定"}
+                    {" · "}
+                    360{" "}
+                    {data.nervousSystem.sync.pro360Configured
+                      ? data.nervousSystem.sync.pro360LastStatus === "error"
+                        ? "失敗"
+                        : "正常"
+                      : "未設定"}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-1 text-[11px]"
+                    style={{ color: gold }}
+                    onClick={() => setLocation("/ad-sync")}
+                  >
+                    平台同步 →
+                  </button>
+                </div>
+                <div className="rounded bg-white/[0.03] px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">SEO · GEO · GSC</div>
+                  {!data.nervousSystem.seoGeo.gscAvailable ? (
+                    <div className="mt-1 text-sm" style={{ color: "#f87171" }}>
+                      GSC 未連線
+                      {data.nervousSystem.seoGeo.gscError
+                        ? `：${data.nervousSystem.seoGeo.gscError.slice(0, 48)}`
+                        : ""}
+                    </div>
+                  ) : (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <MetricCell
+                        label="自然點擊"
+                        value={data.nervousSystem.seoGeo.clicks.current.toLocaleString("en-HK")}
+                        delta={data.nervousSystem.seoGeo.clicks}
+                      />
+                      <MetricCell
+                        label="自然曝光"
+                        value={data.nervousSystem.seoGeo.impressions.current.toLocaleString("en-HK")}
+                        delta={data.nervousSystem.seoGeo.impressions}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="rounded bg-white/[0.03] px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">FH 工作板</div>
+                  <div
+                    className="mt-1 text-sm"
+                    style={{ color: data.nervousSystem.fh.scrapeStale ? "#fbbf24" : "#e8e0d0" }}
+                  >
+                    {data.nervousSystem.fh.ageHours == null
+                      ? "尚無 scrape"
+                      : data.nervousSystem.fh.scrapeStale
+                        ? `過舊 · ${data.nervousSystem.fh.ageHours}h`
+                        : `${data.nervousSystem.fh.ageHours}h 前`}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-1 text-[11px]"
+                    style={{ color: gold }}
+                    onClick={() => setLocation("/freehunter-board")}
+                  >
+                    FH 工作板 →
+                  </button>
+                </div>
               </div>
             </Panel>
 
