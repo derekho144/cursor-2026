@@ -206,8 +206,12 @@ describe("adExpenses router", () => {
       { name: "nftoken", value: "abc123", domain: "www.hellotoby.com" },
       { name: "nfsession", value: "xyz789", domain: "www.hellotoby.com" },
     ]);
-    const result = await caller.adExpenses.saveHelloTobyCookies({ cookiesJson: validCookies });
-    expect(result).toEqual({ success: true });
+    const result = await caller.adExpenses.saveHelloTobyCookies({
+      cookiesJson: validCookies,
+      accountEmail: "derekho1155@gmail.com",
+      skipProbe: true,
+    });
+    expect(result).toEqual({ success: true, accountEmail: "derekho1155@gmail.com" });
   });
 
   it("saveHelloTobyCookies rejects invalid cookies without nftoken or nfsession", async () => {
@@ -216,7 +220,28 @@ describe("adExpenses router", () => {
     const invalidCookies = JSON.stringify([
       { name: "some_other_cookie", value: "value", domain: "www.hellotoby.com" },
     ]);
-    await expect(caller.adExpenses.saveHelloTobyCookies({ cookiesJson: invalidCookies })).rejects.toThrow();
+    await expect(
+      caller.adExpenses.saveHelloTobyCookies({
+        cookiesJson: invalidCookies,
+        accountEmail: "derekho1155@gmail.com",
+        skipProbe: true,
+      })
+    ).rejects.toThrow();
+  });
+
+  it("saveHelloTobyCookies requires account email", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    const validCookies = JSON.stringify([
+      { name: "nftoken", value: "abc123", domain: "www.hellotoby.com" },
+    ]);
+    await expect(
+      caller.adExpenses.saveHelloTobyCookies({
+        cookiesJson: validCookies,
+        accountEmail: "not-an-email" as any,
+        skipProbe: true,
+      })
+    ).rejects.toThrow();
   });
 
   it("getSchedulerStatus returns hellotoby field", async () => {

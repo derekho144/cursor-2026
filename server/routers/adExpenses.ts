@@ -31,7 +31,7 @@ import {
   getAiAnalysisHistory,
   getLatestAiAnalysis,
 } from "../db";
-import { scrapeHellotobyExpenses, scrapePro360Expenses, scrapePro360WithCookies, scrapeHelloTobyWithCookies, scrapeHelloTobyViaAPI } from "../scrapers/hellotoby";
+import { scrapeHellotobyExpenses, scrapePro360Expenses, scrapePro360WithCookies, scrapeHelloTobyWithCookies, scrapeHelloTobyViaAPI, probeHelloTobySession } from "../scrapers/hellotoby";
 import { getSchedulerStatus } from "../scheduler";
 import { fetchGoogleAdsCosts, testGoogleAdsConnection } from "../googleAds";
 
@@ -187,11 +187,52 @@ export const adExpensesRouter = router({
     }),
 
   // ─── HelloToby Cookie Session (replaces Google OAuth) ─────────────────────────────────
+  /** Probe cookies without saving — used to confirm the correct Pro account is logged in. */
+  verifyHelloTobyCookies: protectedProcedure
+    .input(z.object({ cookiesJson: z.string().min(10, "請貼上有效的 Cookies JSON") }))
+    .mutation(async ({ input }) => {
+      try {
+        const parsed = JSON.parse(input.cookiesJson);
+        if (!Array.isArray(parsed)) throw new Error("Cookies 必須是陣列格式");
+        const hasNftoken = parsed.some((c: { name: string }) => c.name === "nftoken");
+        const hasNfsession = parsed.some((c: { name: string }) => c.name === "nfsession");
+        if (!hasNftoken && !hasNfsession) throw new Error("缺少 nftoken 或 nfsession，請確認已複製完整的 Cookies");
+      } catch (e) {
+        throw new Error(e instanceof Error ? e.message : "Cookies JSON 格式錯誤");
+      }
+      return probeHelloTobySession(input.cookiesJson);
+    }),
+
+  /** Probe currently stored HelloToby session (no cookie values returned). */
+  probeStoredHelloTobySession: protectedProcedure.mutation(async () => {
+    const cookiesJson = await getHelloTobyCookies();
+    if (!cookiesJson) {
+      return {
+        ok: false as const,
+        error: "尚未儲存 HelloToby Cookies，請先貼上 Session",
+        remainCredit: null as number | null,
+        apiMessage: null as string | null,
+      };
+    }
+    const probe = await probeHelloTobySession(cookiesJson);
+    return {
+      ok: probe.ok,
+      error: probe.error,
+      remainCredit: probe.remainCredit,
+      apiMessage: probe.apiMessage,
+      creditHttp: probe.creditHttp,
+      transHttp: probe.transHttp,
+    };
+  }),
+
   saveHelloTobyCookies: protectedProcedure
     .input(
       z.object({
         cookiesJson: z.string().min(10, "請貼上有效的 Cookies JSON"),
-        accountEmail: z.string().optional(),
+        /** Google / HelloToby account email used to obtain these cookies */
+        accountEmail: z.string().trim().email("請輸入正確帳號電郵（用於標記此 Session）"),
+        /** Skip live probe only for internal tests */
+        skipProbe: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -206,8 +247,14 @@ export const adExpensesRouter = router({
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : "Cookies JSON 格式錯誤");
       }
+      if (!input.skipProbe) {
+        const probe = await probeHelloTobySession(input.cookiesJson);
+        if (!probe.ok) {
+          throw new Error(probe.error || "HelloToby session 驗證失敗");
+        }
+      }
       await saveHelloTobyCookies(input.cookiesJson, input.accountEmail);
-      return { success: true };
+      return { success: true, accountEmail: input.accountEmail };
     }),
 
   // ─── Auto Sync with Puppeteer ─────────────────────────────────────
