@@ -20,11 +20,11 @@ const PLATFORMS = [
     label: "HelloToby",
     color: "#FFB800",
     description: "香港本地服務媒合平台，提供攝影師接案機會",
-    website: "https://www.hellotoby.com",
+    website: "https://www.hellotoby.com/zh-hk",
     hasApi: false,
     autoSync: true,
-    loginUrl: "https://www.hellotoby.com/en/pro/login",
-    billingNote: "登入 HelloToby Pro → 帳戶 → 購買記錄，查看每月 Credits 消費",
+    loginUrl: "https://www.hellotoby.com/zh-hk/pro/login",
+    billingNote: "登入 HelloToby Pro（zh-hk）→ 金幣記錄，查看每月 Credits 消費",
   },
   {
     value: "360pro" as const,
@@ -99,6 +99,22 @@ export default function AdSync() {
     },
     onError: (e) => toast.error("儲存失敗：" + e.message),
   });
+
+  const probeStoredHtMutation = trpc.adExpenses.probeStoredHelloTobySession.useMutation({
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success(
+          `HelloToby 連線正常${r.remainCredit != null ? `（餘額約 ${r.remainCredit}）` : ""}`
+        );
+      } else {
+        toast.error(r.apiMessage || r.error || "HelloToby 連線失敗，請更新 Cookies");
+      }
+    },
+    onError: (e) => toast.error("連線測試失敗：" + e.message),
+  });
+
+  const HT_COOKIE_SNIPPET =
+    "(()=>{const a=document.cookie.split(';').map(c=>c.trim().split('=')).filter(p=>p[0]).map(([k,...v])=>({name:k,value:v.join('='),domain:'.hellotoby.com'}));if(!a.some(c=>c.name==='nftoken')&&!a.some(c=>c.name==='nfsession')){alert('搵唔到 nftoken/nfsession。請確認已登入 Pro（網址含 /pro/），或改用 DevTools → Application → Cookies 手動複製。');return}copy(JSON.stringify(a));alert('已複製 '+a.length+' 個 cookies，請返回 jdsys 貼上');})()";
 
   const savePro360CookiesMutation = trpc.adExpenses.savePro360Cookies.useMutation({
     onSuccess: () => {
@@ -845,13 +861,26 @@ export default function AdSync() {
                   }
 
                   // HelloToby: Cookie-based auth (same as PRO360)
+                  const htLastLog = syncLogs?.find((l) => l.platform === "hellotoby");
+                  const htLastFail =
+                    htLastLog && htLastLog.status !== "success" ? htLastLog : undefined;
+                  const htCookiesStale =
+                    !!cred?.updatedAt &&
+                    Date.now() - new Date(cred.updatedAt).getTime() > 30 * 24 * 3600 * 1000;
+                  const htLikelyDisconnected = !!htLastFail || htCookiesStale;
+
                   return (
                     <div className="px-5 pb-5" style={{ borderTop: `1px solid ${platform.color}25` }}>
                       <div className="mt-4">
                         <div className="flex items-center gap-2 mb-3">
                           <KeyRound className="h-3.5 w-3.5" style={{ color: platform.color }} />
                           <span className="text-xs font-medium" style={{ color: platform.color }}>Session Cookies 認證</span>
-                          {cred && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "#4caf50", fontSize: "0.6rem", letterSpacing: "0.08em" }}>已設定</span>}
+                          {cred && !htLikelyDisconnected && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "#4caf50", fontSize: "0.6rem", letterSpacing: "0.08em" }}>已設定</span>
+                          )}
+                          {cred && htLikelyDisconnected && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171", fontSize: "0.6rem", letterSpacing: "0.08em" }}>連線失效</span>
+                          )}
                         </div>
 
                         {/* Explanation */}
@@ -860,37 +889,78 @@ export default function AdSync() {
                           <div className="text-xs" style={{ color: "#c8b88a" }}>
                             <p className="mb-1">HelloToby 使用 Google OAuth 登入，無法直接儲存密碼。請改用 <strong style={{ color: platform.color }}>Session Cookies</strong> 方式認證：</p>
                             <ol className="list-decimal list-inside space-y-0.5 text-muted-foreground">
-                              <li>在瀏覽器登入 <a href="https://www.hellotoby.com/pro/credit-history" target="_blank" rel="noopener noreferrer" style={{ color: platform.color }}>HelloToby 金幣記錄頁面</a></li>
-                              <li>按 F12 開啟 DevTools → Console 標籤</li>
-                              <li>貼上以下指令並按 Enter：</li>
+                              <li>
+                                先開{" "}
+                                <a href="https://www.hellotoby.com/zh-hk/pro/login" target="_blank" rel="noopener noreferrer" style={{ color: platform.color }}>Pro 登入頁（zh-hk）</a>
+                                {" "}或備用{" "}
+                                <a href="https://pro.hellotoby.com/login" target="_blank" rel="noopener noreferrer" style={{ color: platform.color }}>pro.hellotoby.com</a>
+                                ，用 Google 登入
+                              </li>
+                              <li>
+                                登入後再開{" "}
+                                <a href="https://www.hellotoby.com/zh-hk/pro/credit-history" target="_blank" rel="noopener noreferrer" style={{ color: platform.color }}>金幣記錄頁</a>
+                                （網址應含 <code style={{ color: platform.color }}>/pro/</code>）
+                              </li>
+                              <li>按 F12 → Console，貼上以下指令並 Enter：</li>
                             </ol>
                             <div className="mt-2 p-2 rounded font-mono text-xs" style={{ background: "rgba(0,0,0,0.4)", border: `1px solid ${platform.color}35`, color: platform.color, wordBreak: "break-all" }}>
-                              {`copy(JSON.stringify(document.cookie.split(';').map(c=>c.trim().split('=')).map(([k,...v])=>({name:k,value:v.join('='),domain:'www.hellotoby.com'}))))`}
+                              {HT_COOKIE_SNIPPET}
                             </div>
-                            <p className="mt-1.5 text-muted-foreground">4. 將複製的內容貼入下方框內</p>
+                            <p className="mt-1.5 text-muted-foreground">4. 將複製的內容貼入下方框內並「驗證並儲存」</p>
+                            <p className="mt-1.5" style={{ color: "#f87171" }}>
+                              若瀏覽器顯示「無法連上這個網站」，屬 HelloToby／網絡問題——請試備用連結或稍後再開；網站開唔到就無法更新 Cookies。
+                            </p>
                           </div>
                         </div>
 
                         {cred && (
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center gap-2 text-xs">
-                              <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#4caf50" }} />
-                              <span className="text-muted-foreground">已儲存 Session Cookies（標記帳號：<span style={{ color: "#4caf50" }}>{cred.loginEmail || "HelloToby Pro"}</span>）</span>
+                              {htLikelyDisconnected ? (
+                                <WifiOff className="h-3.5 w-3.5" style={{ color: "#f87171" }} />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#4caf50" }} />
+                              )}
+                              <span className="text-muted-foreground">
+                                已儲存 Session Cookies（標記帳號：
+                                <span style={{ color: htLikelyDisconnected ? "#f87171" : "#4caf50" }}>
+                                  {cred.loginEmail || "HelloToby Pro"}
+                                </span>
+                                ）
+                              </span>
                             </div>
                             {cred.updatedAt && (
                               <div className="text-xs text-muted-foreground">
                                 Cookies 更新於 {new Date(cred.updatedAt).toLocaleString("zh-HK")}
-                                {Date.now() - new Date(cred.updatedAt).getTime() > 30 * 24 * 3600 * 1000 && (
-                                  <span style={{ color: "#f87171" }}> — 超過 30 日未更新，很可能已過期／帳號不符，請用正確 Pro 帳號重新貼上</span>
+                                {htCookiesStale && (
+                                  <span style={{ color: "#f87171" }}> — 超過 30 日未更新，Session 多半已過期，請重新登入後貼 Cookies</span>
                                 )}
+                              </div>
+                            )}
+                            {htLastFail?.message && (
+                              <div className="flex items-start gap-2 p-2.5 rounded text-xs" style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.35)" }}>
+                                <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" style={{ color: "#f87171" }} />
+                                <span style={{ color: "#fca5a5" }}>
+                                  最近同步失敗：{htLastFail.message}
+                                  {htLastFail.syncedAt ? `（${new Date(htLastFail.syncedAt).toLocaleString("zh-HK")}）` : ""}
+                                </span>
                               </div>
                             )}
                             <div className="flex items-center gap-2 p-2.5 rounded text-xs" style={{ background: `${platform.color}0d`, border: `1px solid ${platform.color}35` }}>
                               <RefreshCw className="h-3 w-3 shrink-0" style={{ color: platform.color }} />
                               <span style={{ color: "#c8b88a" }}>
-                                <strong style={{ color: platform.color }}>自動續期已啟用</strong>——同步成功後會保留帳號標記並更新 Cookies。若同步報「API 返回失敗」，代表 Session／帳號不正確，需重新貼 Cookies。
+                                <strong style={{ color: platform.color }}>自動續期</strong>——只有同步成功先會更新 Cookies。若 API 回「請登錄后再執行」，代表 Session 已過期，必須重新貼。
                               </span>
                             </div>
+                            <button
+                              onClick={() => probeStoredHtMutation.mutate()}
+                              disabled={probeStoredHtMutation.isPending}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-all hover:opacity-80 disabled:opacity-50"
+                              style={{ border: `1px solid ${platform.color}50`, color: platform.color }}
+                            >
+                              {probeStoredHtMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wifi className="h-3 w-3" />}
+                              測試連線
+                            </button>
                           </div>
                         )}
 
@@ -924,7 +994,7 @@ export default function AdSync() {
                             <textarea
                               value={htCookieJson}
                               onChange={(e) => setHtCookieJson(e.target.value)}
-                              placeholder='[{"name":"nftoken","value":"...","domain":"www.hellotoby.com"}]'
+                              placeholder='[{"name":"nftoken","value":"...","domain":".hellotoby.com"}]'
                               rows={4}
                               className="w-full text-xs font-mono rounded p-2 resize-none"
                               style={{ background: "#0a0a0a", border: `1px solid ${platform.color}50`, color: "#e8e0d0", outline: "none" }}

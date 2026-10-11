@@ -2,6 +2,7 @@ import puppeteer from "puppeteer";
 import puppeteerExtra from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import * as fsLib from "fs";
+import { hellotobyApiErrorDetail, type HelloTobyApiEnvelope } from "../../shared/hellotobyApi";
 
 // Apply stealth plugin to bypass Cloudflare bot detection
 puppeteerExtra.use(StealthPlugin());
@@ -270,8 +271,8 @@ export async function scrapeHelloTobyWithCookies(
     await page.setCookie(...cookiesWithDomain);
     console.log("[HelloToby] Cookies injected:", cookiesWithDomain.map((c) => c.name).join(", "));
 
-    // Navigate to credit history page
-    await page.goto("https://www.hellotoby.com/pro/credit-history", {
+    // Navigate to credit history page (zh-hk Pro portal)
+    await page.goto("https://www.hellotoby.com/zh-hk/pro/credit-history", {
       waitUntil: "networkidle2",
       timeout: 30000,
     });
@@ -567,7 +568,7 @@ export async function probeHelloTobySession(cookiesJson: string): Promise<HelloT
       Accept: "application/json",
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-      Referer: "https://www.hellotoby.com/pro/credit-history",
+      Referer: "https://www.hellotoby.com/zh-hk/pro/credit-history",
     };
 
     const creditRes = await fetch("https://api.hellotoby.com/api/account/remaincreditamount/v2", {
@@ -575,14 +576,20 @@ export async function probeHelloTobySession(cookiesJson: string): Promise<HelloT
     });
     let remainCredit: number | null = null;
     let creditOk = creditRes.ok;
+    let creditMessage: string | null = null;
     if (creditRes.ok) {
       try {
-        const body = (await creditRes.json()) as { success?: boolean; data?: number | { amount?: number } };
+        const body = (await creditRes.json()) as HelloTobyApiEnvelope & {
+          data?: number | { amount?: number };
+        };
         if (typeof body.data === "number") remainCredit = body.data;
         else if (body.data && typeof body.data === "object" && typeof body.data.amount === "number") {
           remainCredit = body.data.amount;
         }
-        if (body.success === false) creditOk = false;
+        if (body.success === false) {
+          creditOk = false;
+          creditMessage = hellotobyApiErrorDetail(body);
+        }
       } catch {
         /* ignore body parse — HTTP ok is still useful */
       }
@@ -595,18 +602,13 @@ export async function probeHelloTobySession(cookiesJson: string): Promise<HelloT
       { headers }
     );
     let transOk = transRes.ok;
-    let apiMessage: string | null = null;
+    let apiMessage: string | null = creditMessage;
     if (transRes.ok) {
       try {
-        const body = (await transRes.json()) as {
-          success?: boolean;
-          message?: string;
-          error?: string;
-          msg?: string;
-        };
+        const body = (await transRes.json()) as HelloTobyApiEnvelope;
         if (body.success === false) {
           transOk = false;
-          apiMessage = String(body.message || body.error || body.msg || "success=false");
+          apiMessage = hellotobyApiErrorDetail(body);
         }
       } catch {
         transOk = false;
@@ -615,7 +617,7 @@ export async function probeHelloTobySession(cookiesJson: string): Promise<HelloT
     } else if (transRes.status === 401 || transRes.status === 403) {
       apiMessage = "Session 已過期或帳號無權限";
     } else {
-      apiMessage = `HTTP ${transRes.status}`;
+      apiMessage = apiMessage || `HTTP ${transRes.status}`;
     }
 
     const ok = creditOk && transOk;
@@ -687,7 +689,7 @@ export async function scrapeHelloTobyViaAPI(
           'Cookie': cookieHeader,
           'Accept': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://www.hellotoby.com/pro/credit-history',
+          'Referer': 'https://www.hellotoby.com/zh-hk/pro/credit-history',
         },
       });
       if (!res.ok) {
@@ -696,18 +698,14 @@ export async function scrapeHelloTobyViaAPI(
         }
         throw new Error(`API 請求失敗: HTTP ${res.status}`);
       }
-      const data = await res.json() as {
-        success: boolean;
+      const data = await res.json() as HelloTobyApiEnvelope & {
         data: TransRecord[];
         totalCount: number;
-        message?: string;
-        error?: string;
-        msg?: string;
       };
       if (!data.success) {
-        const detail = String(data.message || data.error || data.msg || "success=false");
+        const detail = hellotobyApiErrorDetail(data);
         throw new Error(
-          `HelloToby API 返回失敗狀態：${detail}。請確認 Cookies 來自正確 Pro 帳號且尚未過期。`
+          `HelloToby API 返回失敗狀態：${detail}。請用瀏覽器重新登入 HelloToby Pro 後更新 Cookies。`
         );
       }
       return data.data || [];

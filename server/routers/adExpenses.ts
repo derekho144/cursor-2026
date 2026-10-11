@@ -203,6 +203,28 @@ export const adExpensesRouter = router({
       return probeHelloTobySession(input.cookiesJson);
     }),
 
+  /** Probe currently stored HelloToby session (no cookie values returned). */
+  probeStoredHelloTobySession: protectedProcedure.mutation(async () => {
+    const cookiesJson = await getHelloTobyCookies();
+    if (!cookiesJson) {
+      return {
+        ok: false as const,
+        error: "尚未儲存 HelloToby Cookies，請先貼上 Session",
+        remainCredit: null as number | null,
+        apiMessage: null as string | null,
+      };
+    }
+    const probe = await probeHelloTobySession(cookiesJson);
+    return {
+      ok: probe.ok,
+      error: probe.error,
+      remainCredit: probe.remainCredit,
+      apiMessage: probe.apiMessage,
+      creditHttp: probe.creditHttp,
+      transHttp: probe.transHttp,
+    };
+  }),
+
   saveHelloTobyCookies: protectedProcedure
     .input(
       z.object({
