@@ -119,10 +119,10 @@ export default function GrowthCockpit() {
           <div>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
               <Target className="h-3.5 w-3.5" style={{ color: gold }} />
-              Neural loop · 聚合視圖
+              增長監控 · 聚合視圖
             </div>
             <h1 className="mt-1 text-2xl font-semibold" style={{ color: "#e8e0d0" }}>
-              增長駕駛艙
+              監控台
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               匯總 Ads Action Queue、報價跟進、Ads／報價 WoW；點進既有模組執行，唔重複建立流程。
@@ -149,7 +149,7 @@ export default function GrowthCockpit() {
             className="rounded-lg px-4 py-3 text-sm"
             style={{ border: "1px solid rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)", color: "#f87171" }}
           >
-            無法載入駕駛艙：{error.message}
+            無法載入監控台：{error.message}
           </div>
         )}
 

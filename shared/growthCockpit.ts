@@ -1,4 +1,4 @@
-/** Shared types + pure helpers for the Growth Cockpit (增長駕駛艙). */
+/** Shared types + pure helpers for the Growth Cockpit UI（監控台）. */
 
 export type LightTone = "green" | "amber" | "red" | "muted";
 
