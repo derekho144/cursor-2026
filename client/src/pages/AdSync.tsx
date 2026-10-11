@@ -87,11 +87,12 @@ export default function AdSync() {
 
   // HelloToby Cookie state
   const [htCookieJson, setHtCookieJson] = useState("");
+  const [htAccountEmail, setHtAccountEmail] = useState("derekho1155@gmail.com");
   const [showHtCookieForm, setShowHtCookieForm] = useState(false);
 
   const saveHelloTobyCookiesMutation = trpc.adExpenses.saveHelloTobyCookies.useMutation({
-    onSuccess: () => {
-      toast.success("HelloToby Session Cookies 已儲存！現在可以點擊「自動同步」");
+    onSuccess: (r) => {
+      toast.success(`HelloToby Cookies 已儲存（帳號：${r.accountEmail}）。請再按「自動同步」確認。`);
       refetchCreds();
       setHtCookieJson("");
       setShowHtCookieForm(false);
@@ -874,12 +875,20 @@ export default function AdSync() {
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center gap-2 text-xs">
                               <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#4caf50" }} />
-                              <span className="text-muted-foreground">已儲存 Session Cookies（帳號：<span style={{ color: "#4caf50" }}>{cred.loginEmail || "HelloToby Pro"}</span>）</span>
+                              <span className="text-muted-foreground">已儲存 Session Cookies（標記帳號：<span style={{ color: "#4caf50" }}>{cred.loginEmail || "HelloToby Pro"}</span>）</span>
                             </div>
+                            {cred.updatedAt && (
+                              <div className="text-xs text-muted-foreground">
+                                Cookies 更新於 {new Date(cred.updatedAt).toLocaleString("zh-HK")}
+                                {Date.now() - new Date(cred.updatedAt).getTime() > 30 * 24 * 3600 * 1000 && (
+                                  <span style={{ color: "#f87171" }}> — 超過 30 日未更新，很可能已過期／帳號不符，請用正確 Pro 帳號重新貼上</span>
+                                )}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 p-2.5 rounded text-xs" style={{ background: `${platform.color}0d`, border: `1px solid ${platform.color}35` }}>
                               <RefreshCw className="h-3 w-3 shrink-0" style={{ color: platform.color }} />
                               <span style={{ color: "#c8b88a" }}>
-                                <strong style={{ color: platform.color }}>自動續期已啟用</strong>——系統每次同步成功後會自動更新 Cookies，無需手動操作。每 7 天同步一次，確保 Session 永遠不會過期。
+                                <strong style={{ color: platform.color }}>自動續期已啟用</strong>——同步成功後會保留帳號標記並更新 Cookies。若同步報「API 返回失敗」，代表 Session／帳號不正確，需重新貼 Cookies。
                               </span>
                             </div>
                           </div>
@@ -888,15 +897,29 @@ export default function AdSync() {
                         {/* Cookie input toggle */}
                         {!showHtCookieForm ? (
                           <button
-                            onClick={() => setShowHtCookieForm(true)}
+                            onClick={() => {
+                              if (cred?.loginEmail && cred.loginEmail.includes("@")) {
+                                setHtAccountEmail(cred.loginEmail);
+                              }
+                              setShowHtCookieForm(true);
+                            }}
                             className="flex items-center gap-1.5 px-4 py-1.5 text-xs rounded transition-all hover:opacity-80"
                             style={{ background: `${platform.color}25`, border: `1px solid ${platform.color}60`, color: platform.color }}
                           >
                             <KeyRound className="h-3 w-3" />
-                            {cred ? "更新 Cookies" : "設定 Cookies"}
+                            {cred ? "更新 Cookies（更換／修正帳號）" : "設定 Cookies"}
                           </button>
                         ) : (
                           <div className="space-y-2">
+                            <label className="text-xs text-muted-foreground block">HelloToby／Google 帳號電郵（必填，用於標記此 Session）</label>
+                            <input
+                              type="email"
+                              value={htAccountEmail}
+                              onChange={(e) => setHtAccountEmail(e.target.value)}
+                              placeholder="derekho1155@gmail.com"
+                              className="w-full text-xs rounded px-2 py-1.5"
+                              style={{ background: "#0a0a0a", border: `1px solid ${platform.color}50`, color: "#e8e0d0", outline: "none" }}
+                            />
                             <label className="text-xs text-muted-foreground block">貼上 Cookies JSON</label>
                             <textarea
                               value={htCookieJson}
@@ -906,18 +929,26 @@ export default function AdSync() {
                               className="w-full text-xs font-mono rounded p-2 resize-none"
                               style={{ background: "#0a0a0a", border: `1px solid ${platform.color}50`, color: "#e8e0d0", outline: "none" }}
                             />
+                            <p className="text-[11px] text-muted-foreground">儲存前會即時驗證 HelloToby API；驗證失敗唔會寫入（避免存錯帳號）。</p>
                             <div className="flex gap-2">
                               <button
                                 onClick={() => {
                                   if (!htCookieJson.trim()) { toast.error("請貼上 Cookies JSON"); return; }
-                                  saveHelloTobyCookiesMutation.mutate({ cookiesJson: htCookieJson.trim() });
+                                  if (!htAccountEmail.trim() || !htAccountEmail.includes("@")) {
+                                    toast.error("請輸入正確帳號電郵");
+                                    return;
+                                  }
+                                  saveHelloTobyCookiesMutation.mutate({
+                                    cookiesJson: htCookieJson.trim(),
+                                    accountEmail: htAccountEmail.trim(),
+                                  });
                                 }}
                                 disabled={saveHelloTobyCookiesMutation.isPending}
                                 className="flex items-center gap-1.5 px-4 py-1.5 text-xs rounded transition-all hover:opacity-80 disabled:opacity-50"
                                 style={{ background: `${platform.color}30`, border: `1px solid ${platform.color}70`, color: platform.color }}
                               >
                                 {saveHelloTobyCookiesMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
-                                儲存 Cookies
+                                驗證並儲存
                               </button>
                               <button
                                 onClick={() => { setShowHtCookieForm(false); setHtCookieJson(""); }}

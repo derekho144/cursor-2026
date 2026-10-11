@@ -1021,8 +1021,14 @@ export async function savePro360Cookies(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  const { resolveSessionAccountEmail } = await import("@shared/platformSessionAccount");
+  const existing = await db
+    .select({ loginEmail: platformCredentials.loginEmail })
+    .from(platformCredentials)
+    .where(eq(platformCredentials.platform, "360pro"))
+    .limit(1);
   const encryptedCookies = encrypt(cookiesJson);
-  const email = accountEmail || "pro360@session";
+  const email = resolveSessionAccountEmail(accountEmail, existing[0]?.loginEmail, "pro360@session");
   await db
     .insert(platformCredentials)
     .values({ platform: "360pro", loginEmail: email, loginPassword: encryptedCookies, isActive: 1 })
@@ -1056,8 +1062,15 @@ export async function saveHelloTobyCookies(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  const { resolveSessionAccountEmail } = await import("@shared/platformSessionAccount");
+  const existing = await db
+    .select({ loginEmail: platformCredentials.loginEmail })
+    .from(platformCredentials)
+    .where(eq(platformCredentials.platform, "hellotoby"))
+    .limit(1);
   const encryptedCookies = encrypt(cookiesJson);
-  const email = accountEmail || "hellotoby@session";
+  // Preserve previously labelled account when auto-renewing cookies without an email.
+  const email = resolveSessionAccountEmail(accountEmail, existing[0]?.loginEmail, "hellotoby@session");
   await db
     .insert(platformCredentials)
     .values({ platform: "hellotoby", loginEmail: email, loginPassword: encryptedCookies, isActive: 1 })
