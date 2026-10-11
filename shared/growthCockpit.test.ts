@@ -44,6 +44,9 @@ describe("growthCockpit helpers", () => {
     expect(adsActionLight({ pendingTrusted: 2, executed7d: 0, failed7d: 0 }).tone).toBe("amber");
     expect(adsActionLight({ pendingTrusted: 0, executed7d: 3, failed7d: 0 }).tone).toBe("green");
     expect(adsActionLight({ pendingTrusted: 0, executed7d: 0, failed7d: 1 }).tone).toBe("amber");
+    expect(
+      adsActionLight({ pendingTrusted: 1, executed7d: 0, failed7d: 0, autoRunFailed: true }).detail
+    ).toMatch(/自動執行失敗/);
   });
 
   it("flags traffic-quality when Ads engagement rises but quotes fall", () => {

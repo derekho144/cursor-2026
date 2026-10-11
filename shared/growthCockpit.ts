@@ -138,7 +138,18 @@ export function adsActionLight(opts: {
   pendingTrusted: number;
   executed7d: number;
   failed7d: number;
+  /** Last trusted-negative auto-run failed / fail-stopped */
+  autoRunFailed?: boolean;
 }): CockpitLight {
+  if (opts.autoRunFailed) {
+    return {
+      id: "ads-actions",
+      label: "Ads Action Queue",
+      tone: "amber",
+      detail: `Trusted negatives 自動執行失敗／已停 — 待執行 ${opts.pendingTrusted}`,
+      href: "/growth-priorities",
+    };
+  }
   if (opts.failed7d > 0) {
     return {
       id: "ads-actions",

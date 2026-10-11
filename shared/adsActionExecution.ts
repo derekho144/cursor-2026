@@ -33,8 +33,15 @@ export type AdsExecutionLog = {
 
 export type AdsExecutionResult = AdsExecutionLog & { guardrails: typeof ADS_GUARDRAILS };
 
+/** Only fixed trusted-negative:* campaign PHRASE plans may auto-exec. */
 export function canAutoExecuteAdsAction(item: AdsActionItem): boolean {
-  return item.actionType === "keyword_review" && Boolean(item.executionPlan?.kind === "campaign_negative");
+  return (
+    ADS_GUARDRAILS.autoExecuteApprovedActions &&
+    item.id.startsWith("trusted-negative:") &&
+    item.actionType === "keyword_review" &&
+    item.executionPlan?.kind === "campaign_negative" &&
+    isTrustedNegativePlan(item.executionPlan)
+  );
 }
 
 export function isTrustedNegativePlan(value: unknown): value is TrustedNegativePlan {

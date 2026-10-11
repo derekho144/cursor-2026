@@ -98,6 +98,14 @@ export const growthPrioritiesRouter = router({
       .limit(20);
   }),
 
+  /** Manual trigger for trusted-negative daily auto path (still fail-closed + cap). */
+  triggerTrustedNegativeAuto: protectedProcedure
+    .input(z.object({ force: z.boolean().optional() }).optional())
+    .mutation(async ({ input }) => {
+      const { runTrustedNegativeAutoExec } = await import("../trustedNegativeAutoExec");
+      return runTrustedNegativeAutoExec({ force: input?.force ?? true });
+    }),
+
   dailyExecutionReport: protectedProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];

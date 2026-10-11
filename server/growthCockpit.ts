@@ -29,6 +29,8 @@ import {
 import { runGoogleAdsGaql } from "./googleAds";
 import { DEFAULT_GSC_SITE_URL, queryGscSearchAnalytics, testGscConnection } from "./googleSearchConsole";
 import { lastFreehunterScrapeAt } from "./scheduler";
+import { getLastTrustedNegativeAutoRun } from "./trustedNegativeAutoExec";
+import { parseTrustedNegativeAutoSummary } from "@shared/trustedNegativeAuto";
 
 export type AdsWeekMetrics = {
   spendHKD: number;
@@ -106,6 +108,17 @@ export type GrowthCockpitPayload = {
       message: string;
       syncedAt: string;
     }>;
+    /** Last scheduled trusted-negative auto-run (null if never). */
+    lastAutoRun: {
+      at: string;
+      hktDate: string;
+      attempted: number;
+      succeeded: number;
+      failed: number;
+      skippedAlreadyDone: number;
+      stoppedOn: string | null;
+      message: string;
+    } | null;
   };
   inquiries: { pending: number };
   pricingLearning: { accepted7d: number };
@@ -405,6 +418,7 @@ async function adsActionSnapshot(thisWeekStart: string) {
   let blocked7d = 0;
   const completedTrusted = new Set<string>();
   const recentLogs: GrowthCockpitPayload["adsActions"]["recentLogs"] = [];
+  let lastAutoRun: GrowthCockpitPayload["adsActions"]["lastAutoRun"] = null;
 
   if (db) {
     const since = new Date(`${thisWeekStart}T00:00:00+08:00`);
@@ -419,7 +433,7 @@ async function adsActionSnapshot(thisWeekStart: string) {
       .orderBy(desc(adSyncLogs.syncedAt))
       .limit(200);
 
-    type LogPayload = { actionId?: string; state?: string; message?: string };
+    type LogPayload = { actionId?: string; state?: string; message?: string; kind?: string };
     for (const row of rows) {
       let payload: LogPayload | null = null;
       try {
@@ -427,8 +441,26 @@ async function adsActionSnapshot(thisWeekStart: string) {
       } catch {
         continue;
       }
-      const actionId = payload?.actionId;
-      const state = payload?.state;
+      if (!payload) continue;
+
+      if (!lastAutoRun) {
+        const auto = parseTrustedNegativeAutoSummary(payload);
+        if (auto) {
+          lastAutoRun = {
+            at: auto.at,
+            hktDate: auto.hktDate,
+            attempted: auto.attempted.length,
+            succeeded: auto.succeeded,
+            failed: auto.failed,
+            skippedAlreadyDone: auto.skippedAlreadyDone,
+            stoppedOn: auto.stoppedOn,
+            message: auto.message,
+          };
+        }
+      }
+
+      const actionId = payload.actionId;
+      const state = payload.state;
       if (!actionId || !state) continue;
 
       if (state === "executed") completedTrusted.add(actionId);
@@ -444,10 +476,26 @@ async function adsActionSnapshot(thisWeekStart: string) {
         recentLogs.push({
           actionId,
           state,
-          message: payload?.message ?? "",
+          message: payload.message ?? "",
           syncedAt: syncedAt.toISOString(),
         });
       }
+    }
+  }
+
+  if (!lastAutoRun) {
+    const fallback = await getLastTrustedNegativeAutoRun();
+    if (fallback) {
+      lastAutoRun = {
+        at: fallback.at,
+        hktDate: fallback.hktDate,
+        attempted: fallback.attempted.length,
+        succeeded: fallback.succeeded,
+        failed: fallback.failed,
+        skippedAlreadyDone: fallback.skippedAlreadyDone,
+        stoppedOn: fallback.stoppedOn,
+        message: fallback.message,
+      };
     }
   }
 
@@ -463,6 +511,7 @@ async function adsActionSnapshot(thisWeekStart: string) {
     blocked7d,
     completionPct: completionRate(doneTrusted, trustedTotal),
     recentLogs,
+    lastAutoRun,
   };
 }
 
@@ -671,6 +720,10 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
       pendingTrusted: adsActions.pendingTrusted,
       executed7d: adsActions.executed7d,
       failed7d: adsActions.failed7d + adsActions.blocked7d,
+      autoRunFailed: Boolean(
+        adsActions.lastAutoRun &&
+          (adsActions.lastAutoRun.failed > 0 || adsActions.lastAutoRun.stoppedOn)
+      ),
     }),
     followUpLight({
       enabled: followUp.enabled,

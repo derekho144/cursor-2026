@@ -1103,7 +1103,7 @@ export async function runScheduledContentFactoryJob(): Promise<void> {
 export function startScheduler(): void {
   if (schedulerTimer) return; // already running
 
-  console.log("[Scheduler] Background scheduler started. PRO360 sync every 3 days, HelloToby/Google Ads sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT), Pitch Outreach daily (10:00 HKT), Loyalty remarketing hourly (seasonal + winback).");
+  console.log("[Scheduler] Background scheduler started. PRO360 sync every 3 days, HelloToby/Google Ads sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT), Pitch Outreach daily (10:00 HKT), Trusted negatives auto daily (10:00-21:00 HKT), Loyalty remarketing hourly (seasonal + winback).");
 
   // On startup: reset any SENTINEL (1970-01-01) values left over from a previous server crash
   // This prevents follow-up emails from being permanently stuck if the server was killed mid-operation
@@ -1140,6 +1140,9 @@ export function startScheduler(): void {
     runScheduledPitchOutreach().catch(console.error); // check pitch outreach on startup
     runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback
     runScheduledContentFactoryJob().catch(console.error); // LinkedIn content factory
+    import("./trustedNegativeAutoExec")
+      .then(({ runScheduledTrustedNegatives }) => runScheduledTrustedNegatives().catch(console.error))
+      .catch(console.error);
   }, 30_000);
 
   // Ad platform sync + FH follow-up check + review invites + FH high-confidence backfill + watchdog + loyalty: every hour
@@ -1152,6 +1155,9 @@ export function startScheduler(): void {
     runWatchdog().catch(console.error); // system health watchdog every hour
     runScheduledLoyaltyRemarketing().catch(console.error); // seasonal + winback (windowed; lock + dedupe)
     runScheduledContentFactoryJob().catch(console.error);
+    import("./trustedNegativeAutoExec")
+      .then(({ runScheduledTrustedNegatives }) => runScheduledTrustedNegatives().catch(console.error))
+      .catch(console.error);
   }, CHECK_INTERVAL_MS);
 
   // Gmail scan: every 30 minutes (with time-of-day guard inside)

@@ -433,8 +433,39 @@ export default function GrowthCockpit() {
                     value={data.adsActions.completionPct != null ? `${data.adsActions.completionPct}%` : "—"}
                   />
                 </div>
+                <div
+                  className="mb-3 rounded px-2.5 py-2 text-xs"
+                  style={{
+                    border: "1px solid rgba(212,168,67,0.22)",
+                    background: "rgba(212,168,67,0.06)",
+                    color: "#c8b88a",
+                  }}
+                >
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                    Trusted negatives 自動執行
+                  </div>
+                  {data.adsActions.lastAutoRun ? (
+                    <>
+                      <div className="mt-1" style={{ color: "#e8e0d0" }}>
+                        {data.adsActions.lastAutoRun.message}
+                      </div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        HKT {data.adsActions.lastAutoRun.hktDate}
+                        {" · "}
+                        {new Date(data.adsActions.lastAutoRun.at).toLocaleString("zh-HK")}
+                        {data.adsActions.lastAutoRun.stoppedOn
+                          ? ` · 已 fail-stop：${data.adsActions.lastAutoRun.stoppedOn}`
+                          : ""}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-1 text-muted-foreground">
+                      每日 10:00–21:00 HKT 自動跑固定 PHRASE negatives（上限 3；失敗即停）。尚未有自動執行紀錄。
+                    </div>
+                  )}
+                </div>
                 {data.adsActions.recentLogs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">暫無執行紀錄 — 到增長優先模型審批／執行。</p>
+                  <p className="text-xs text-muted-foreground">暫無執行紀錄 — 自動排程或到增長優先模型手動執行。</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {data.adsActions.recentLogs.map((log, idx) => (
