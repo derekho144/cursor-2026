@@ -163,8 +163,57 @@ export default function GrowthCockpit() {
               產生於 {new Date(data.generatedAt).toLocaleString("zh-HK")}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setLocation(data.primaryAction.href)}
+              className="flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition hover:bg-white/[0.04]"
+              style={{
+                background: panel,
+                border: `1px solid ${
+                  data.primaryAction.tone === "red"
+                    ? "rgba(248,113,113,0.45)"
+                    : data.primaryAction.tone === "amber"
+                      ? "rgba(251,191,36,0.45)"
+                      : "rgba(212,168,67,0.35)"
+                }`,
+              }}
+            >
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">今日唯一行動</div>
+                <div className="mt-1 flex items-center gap-2 text-base font-medium" style={{ color: "#e8e0d0" }}>
+                  <LightDot tone={data.primaryAction.tone} />
+                  {data.primaryAction.title}
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{data.primaryAction.reason}</div>
+              </div>
+              <ArrowRight className="h-4 w-4 shrink-0" style={{ color: gold }} />
+            </button>
+
+            <Panel title="本週閉環">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <div className="text-sm" style={{ color: "#e8e0d0" }}>
+                    {data.weeklyLoop.label}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{data.weeklyLoop.detail}</div>
+                </div>
+                <div className="text-2xl font-semibold tabular-nums" style={{ color: gold }}>
+                  {data.weeklyLoop.score != null ? `${data.weeklyLoop.score}%` : "—"}
+                </div>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, data.weeklyLoop.score ?? 0))}%`,
+                    background: gold,
+                  }}
+                />
+              </div>
+            </Panel>
+
             <Panel title="系統燈號">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {data.lights.map((light) => (
                   <button
                     key={light.id}
@@ -228,37 +277,45 @@ export default function GrowthCockpit() {
                     Ads 指標暫不可用{data.adsWow.error ? `：${data.adsWow.error}` : ""}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    <MetricCell label="花費" value={currency(data.adsWow.spendHKD.current)} delta={data.adsWow.spendHKD} invertGood />
-                    <MetricCell label="點擊" value={data.adsWow.clicks.current.toLocaleString("en-HK")} delta={data.adsWow.clicks} />
-                    <MetricCell label="轉換" value={data.adsWow.conversions.current} delta={data.adsWow.conversions} />
-                    <MetricCell
-                      label="CTR"
-                      value={data.adsWow.thisWeek.ctr != null ? `${data.adsWow.thisWeek.ctr}%` : "—"}
-                      delta={data.adsWow.ctr}
-                    />
-                    <MetricCell
-                      label="CPC"
-                      value={data.adsWow.thisWeek.cpc != null ? currency(data.adsWow.thisWeek.cpc) : "—"}
-                      delta={data.adsWow.cpc}
-                      invertGood
-                    />
-                    <MetricCell
-                      label="CPA"
-                      value={data.adsWow.thisWeek.cpa != null ? currency(data.adsWow.thisWeek.cpa) : "—"}
-                      delta={data.adsWow.cpa}
-                      invertGood
-                    />
-                    <MetricCell
-                      label="Search IS"
-                      value={
-                        data.adsWow.thisWeek.searchImpressionShare != null
-                          ? `${data.adsWow.thisWeek.searchImpressionShare}%`
-                          : "—"
-                      }
-                      delta={data.adsWow.searchImpressionShare}
-                    />
-                  </div>
+                  <>
+                    {data.adsWow.stale && (
+                      <div className="mb-2 text-xs" style={{ color: "#fbbf24" }}>
+                        顯示上次成功快取（即時連線失敗）
+                        {data.adsWow.error ? `：${data.adsWow.error.slice(0, 100)}` : ""}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <MetricCell label="花費" value={currency(data.adsWow.spendHKD.current)} delta={data.adsWow.spendHKD} invertGood />
+                      <MetricCell label="點擊" value={data.adsWow.clicks.current.toLocaleString("en-HK")} delta={data.adsWow.clicks} />
+                      <MetricCell label="轉換" value={data.adsWow.conversions.current} delta={data.adsWow.conversions} />
+                      <MetricCell
+                        label="CTR"
+                        value={data.adsWow.thisWeek.ctr != null ? `${data.adsWow.thisWeek.ctr}%` : "—"}
+                        delta={data.adsWow.ctr}
+                      />
+                      <MetricCell
+                        label="CPC"
+                        value={data.adsWow.thisWeek.cpc != null ? currency(data.adsWow.thisWeek.cpc) : "—"}
+                        delta={data.adsWow.cpc}
+                        invertGood
+                      />
+                      <MetricCell
+                        label="CPA"
+                        value={data.adsWow.thisWeek.cpa != null ? currency(data.adsWow.thisWeek.cpa) : "—"}
+                        delta={data.adsWow.cpa}
+                        invertGood
+                      />
+                      <MetricCell
+                        label="Search IS"
+                        value={
+                          data.adsWow.thisWeek.searchImpressionShare != null
+                            ? `${data.adsWow.thisWeek.searchImpressionShare}%`
+                            : "—"
+                        }
+                        delta={data.adsWow.searchImpressionShare}
+                      />
+                    </div>
+                  </>
                 )}
               </Panel>
             </div>
