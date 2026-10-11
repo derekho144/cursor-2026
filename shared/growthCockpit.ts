@@ -44,6 +44,8 @@ export type WeeklyLoop = {
     seoGeo?: number | null;
     /** 運維管道健康 0–100（同步／FH 等） */
     opsHealth?: number | null;
+    /** Trusted-negatives auto lane 0–100 */
+    autoLane?: number | null;
   };
 };
 
@@ -140,8 +142,20 @@ export function adsActionLight(opts: {
   failed7d: number;
   /** Last trusted-negative auto-run failed / fail-stopped */
   autoRunFailed?: boolean;
+  /** Consecutive failed auto-runs (newest first) */
+  autoFailStreak?: number;
 }): CockpitLight {
-  if (opts.autoRunFailed) {
+  const streak = opts.autoFailStreak ?? 0;
+  if (streak >= 2) {
+    return {
+      id: "ads-actions",
+      label: "Ads Action Queue",
+      tone: "red",
+      detail: `Trusted negatives 連續 ${streak} 次自動失敗 — 需人手檢查 Ads 權限／API`,
+      href: "/growth-priorities",
+    };
+  }
+  if (opts.autoRunFailed || streak === 1) {
     return {
       id: "ads-actions",
       label: "Ads Action Queue",
@@ -570,6 +584,8 @@ export function pickPrimaryAction(opts: {
   gscClicksDropSevere?: boolean;
   /** FH scrape stale in active hours */
   fhStale?: boolean;
+  /** Consecutive trusted-negative auto-run failures */
+  autoFailStreak?: number;
 }): PrimaryAction {
   if (!opts.followUpEnabled) {
     return {
@@ -577,6 +593,15 @@ export function pickPrimaryAction(opts: {
       title: "重新啟用報價跟進",
       reason: "自動跟進已關閉，成交漏斗會斷",
       href: "/follow-up",
+      tone: "red",
+    };
+  }
+  if ((opts.autoFailStreak ?? 0) >= 2) {
+    return {
+      id: "fix-trusted-negative-auto",
+      title: "檢查 Trusted negatives 自動執行",
+      reason: `連續 ${opts.autoFailStreak} 次自動失敗／fail-stop — 先修 Ads API 或手動 dry-run`,
+      href: "/growth-priorities",
       tone: "red",
     };
   }
@@ -727,6 +752,7 @@ export function weeklyLoopScore(opts: {
   acceptedDelta: MetricDelta;
   seoGeoPct?: number | null;
   opsHealthPct?: number | null;
+  autoLanePct?: number | null;
 }): WeeklyLoop {
   const acceptedTrend =
     opts.acceptedDelta.direction === "up" ? 100 : opts.acceptedDelta.direction === "down" ? 35 : 70;
@@ -737,6 +763,7 @@ export function weeklyLoopScore(opts: {
     acceptedTrend,
     opts.seoGeoPct ?? null,
     opts.opsHealthPct ?? null,
+    opts.autoLanePct ?? null,
   ].filter((v): v is number => v != null);
 
   if (parts.length === 0) {
@@ -750,6 +777,7 @@ export function weeklyLoopScore(opts: {
         acceptedTrend,
         seoGeo: opts.seoGeoPct ?? null,
         opsHealth: opts.opsHealthPct ?? null,
+        autoLane: opts.autoLanePct ?? null,
       },
     };
   }
@@ -771,6 +799,7 @@ export function weeklyLoopScore(opts: {
   );
   if (opts.seoGeoPct != null) bits.push(`SEO/GEO ${opts.seoGeoPct}%`);
   if (opts.opsHealthPct != null) bits.push(`運維 ${opts.opsHealthPct}%`);
+  if (opts.autoLanePct != null) bits.push(`自動線 ${opts.autoLanePct}%`);
 
   return {
     score,
@@ -782,6 +811,7 @@ export function weeklyLoopScore(opts: {
       acceptedTrend,
       seoGeo: opts.seoGeoPct ?? null,
       opsHealth: opts.opsHealthPct ?? null,
+      autoLane: opts.autoLanePct ?? null,
     },
   };
 }

@@ -29,8 +29,14 @@ import {
 import { runGoogleAdsGaql } from "./googleAds";
 import { DEFAULT_GSC_SITE_URL, queryGscSearchAnalytics, testGscConnection } from "./googleSearchConsole";
 import { lastFreehunterScrapeAt } from "./scheduler";
-import { getLastTrustedNegativeAutoRun } from "./trustedNegativeAutoExec";
-import { parseTrustedNegativeAutoSummary } from "@shared/trustedNegativeAuto";
+import { getTrustedNegativeAutoLaneStatus } from "./trustedNegativeAutoExec";
+import {
+  autoLaneHealthPct,
+  countConsecutiveAutoFailStreak,
+  nextTrustedNegativeAutoWindowHint,
+  parseTrustedNegativeAutoSummary,
+  type TrustedNegativeAutoRunSummary,
+} from "@shared/trustedNegativeAuto";
 
 export type AdsWeekMetrics = {
   spendHKD: number;
@@ -118,6 +124,9 @@ export type GrowthCockpitPayload = {
       skippedAlreadyDone: number;
       stoppedOn: string | null;
       message: string;
+      failStreak: number;
+      nextWindowHint: string;
+      autoLanePct: number | null;
     } | null;
   };
   inquiries: { pending: number };
@@ -418,7 +427,7 @@ async function adsActionSnapshot(thisWeekStart: string) {
   let blocked7d = 0;
   const completedTrusted = new Set<string>();
   const recentLogs: GrowthCockpitPayload["adsActions"]["recentLogs"] = [];
-  let lastAutoRun: GrowthCockpitPayload["adsActions"]["lastAutoRun"] = null;
+  const autoSummaries: TrustedNegativeAutoRunSummary[] = [];
 
   if (db) {
     const since = new Date(`${thisWeekStart}T00:00:00+08:00`);
@@ -443,21 +452,8 @@ async function adsActionSnapshot(thisWeekStart: string) {
       }
       if (!payload) continue;
 
-      if (!lastAutoRun) {
-        const auto = parseTrustedNegativeAutoSummary(payload);
-        if (auto) {
-          lastAutoRun = {
-            at: auto.at,
-            hktDate: auto.hktDate,
-            attempted: auto.attempted.length,
-            succeeded: auto.succeeded,
-            failed: auto.failed,
-            skippedAlreadyDone: auto.skippedAlreadyDone,
-            stoppedOn: auto.stoppedOn,
-            message: auto.message,
-          };
-        }
-      }
+      const auto = parseTrustedNegativeAutoSummary(payload);
+      if (auto && autoSummaries.length < 8) autoSummaries.push(auto);
 
       const actionId = payload.actionId;
       const state = payload.state;
@@ -483,21 +479,40 @@ async function adsActionSnapshot(thisWeekStart: string) {
     }
   }
 
-  if (!lastAutoRun) {
-    const fallback = await getLastTrustedNegativeAutoRun();
-    if (fallback) {
-      lastAutoRun = {
-        at: fallback.at,
-        hktDate: fallback.hktDate,
-        attempted: fallback.attempted.length,
-        succeeded: fallback.succeeded,
-        failed: fallback.failed,
-        skippedAlreadyDone: fallback.skippedAlreadyDone,
-        stoppedOn: fallback.stoppedOn,
-        message: fallback.message,
-      };
-    }
+  const failStreakFromLogs = countConsecutiveAutoFailStreak(autoSummaries);
+  let lane: {
+    lastRun: TrustedNegativeAutoRunSummary | null;
+    failStreak: number;
+    autoLanePct: number | null;
+    nextWindowHint: string;
+  } = {
+    lastRun: autoSummaries[0] ?? null,
+    failStreak: failStreakFromLogs,
+    autoLanePct: autoLaneHealthPct({
+      failStreak: failStreakFromLogs,
+      lastRun: autoSummaries[0] ?? null,
+    }),
+    nextWindowHint: nextTrustedNegativeAutoWindowHint(),
+  };
+  if (!lane.lastRun) {
+    lane = await getTrustedNegativeAutoLaneStatus();
   }
+
+  const lastAutoRun: GrowthCockpitPayload["adsActions"]["lastAutoRun"] = lane.lastRun
+    ? {
+        at: lane.lastRun.at,
+        hktDate: lane.lastRun.hktDate,
+        attempted: lane.lastRun.attempted.length,
+        succeeded: lane.lastRun.succeeded,
+        failed: lane.lastRun.failed,
+        skippedAlreadyDone: lane.lastRun.skippedAlreadyDone,
+        stoppedOn: lane.lastRun.stoppedOn,
+        message: lane.lastRun.message,
+        failStreak: lane.failStreak,
+        nextWindowHint: lane.nextWindowHint,
+        autoLanePct: lane.autoLanePct,
+      }
+    : null;
 
   const pendingTrusted = trusted.filter((item) => !completedTrusted.has(item.id)).length;
   const trustedTotal = trusted.length;
@@ -724,6 +739,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
         adsActions.lastAutoRun &&
           (adsActions.lastAutoRun.failed > 0 || adsActions.lastAutoRun.stoppedOn)
       ),
+      autoFailStreak: adsActions.lastAutoRun?.failStreak ?? 0,
     }),
     followUpLight({
       enabled: followUp.enabled,
@@ -743,6 +759,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
   const opsHealthPct = Math.round(
     (toneHealthPct(syncLight.tone) + toneHealthPct(fhLight.tone)) / 2
   );
+  const autoLanePct = adsActions.lastAutoRun?.autoLanePct ?? null;
 
   const weeklyLoop = weeklyLoopScore({
     adsActionCompletionPct: adsActions.completionPct,
@@ -750,6 +767,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     acceptedDelta: quotesWow.accepted,
     seoGeoPct,
     opsHealthPct,
+    autoLanePct,
   });
 
   const platformSyncBroken =
@@ -776,6 +794,7 @@ export async function getGrowthCockpit(): Promise<GrowthCockpitPayload> {
     gscClicksDropSevere:
       gsc.available && gscClicks.direction === "down" && (gscClicks.pct ?? 0) <= -15,
     fhStale: fh.scrapeStale,
+    autoFailStreak: adsActions.lastAutoRun?.failStreak ?? 0,
   });
 
   return {

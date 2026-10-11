@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   TRUSTED_NEGATIVE_AUTO_KIND,
+  autoLaneHealthPct,
   buildTrustedNegativeAutoSummary,
+  countConsecutiveAutoFailStreak,
   hktDateStringFromMs,
   isTrustedNegativeAutoEnabled,
   isTrustedNegativeAutoWindow,
+  nextTrustedNegativeAutoWindowHint,
   parseTrustedNegativeAutoSummary,
   shouldRunTrustedNegativeAuto,
 } from "./trustedNegativeAuto";
@@ -72,5 +75,19 @@ describe("trustedNegativeAuto helpers", () => {
     expect(summary.hktDate).toBe("2026-10-11");
     expect(parseTrustedNegativeAutoSummary(summary)?.message).toMatch(/成功 1/);
     expect(parseTrustedNegativeAutoSummary({ kind: "other" })).toBeNull();
+  });
+
+  it("counts consecutive fail streak and auto-lane health", () => {
+    const fail = { failed: 1, stoppedOn: "trusted-negative:1", succeeded: 0, attempted: ["trusted-negative:1"] };
+    const ok = { failed: 0, stoppedOn: null, succeeded: 1, attempted: ["trusted-negative:1"] };
+    expect(countConsecutiveAutoFailStreak([fail, fail, ok])).toBe(2);
+    expect(countConsecutiveAutoFailStreak([ok, fail])).toBe(0);
+    expect(autoLaneHealthPct({ failStreak: 2, lastRun: fail })).toBe(10);
+    expect(autoLaneHealthPct({ failStreak: 0, lastRun: ok })).toBe(100);
+  });
+
+  it("hints next auto window in HKT", () => {
+    expect(nextTrustedNegativeAutoWindowHint(Date.parse("2026-10-11T01:00:00.000Z"))).toMatch(/10:00/);
+    expect(nextTrustedNegativeAutoWindowHint(Date.parse("2026-10-11T03:00:00.000Z"))).toMatch(/窗口內/);
   });
 });

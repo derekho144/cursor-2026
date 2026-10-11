@@ -436,8 +436,17 @@ export default function GrowthCockpit() {
                 <div
                   className="mb-3 rounded px-2.5 py-2 text-xs"
                   style={{
-                    border: "1px solid rgba(212,168,67,0.22)",
-                    background: "rgba(212,168,67,0.06)",
+                    border: `1px solid ${
+                      (data.adsActions.lastAutoRun?.failStreak ?? 0) >= 2
+                        ? "rgba(248,113,113,0.45)"
+                        : (data.adsActions.lastAutoRun?.failStreak ?? 0) === 1
+                          ? "rgba(251,191,36,0.4)"
+                          : "rgba(212,168,67,0.22)"
+                    }`,
+                    background:
+                      (data.adsActions.lastAutoRun?.failStreak ?? 0) >= 2
+                        ? "rgba(248,113,113,0.08)"
+                        : "rgba(212,168,67,0.06)",
                     color: "#c8b88a",
                   }}
                 >
@@ -453,14 +462,23 @@ export default function GrowthCockpit() {
                         HKT {data.adsActions.lastAutoRun.hktDate}
                         {" · "}
                         {new Date(data.adsActions.lastAutoRun.at).toLocaleString("zh-HK")}
-                        {data.adsActions.lastAutoRun.stoppedOn
-                          ? ` · 已 fail-stop：${data.adsActions.lastAutoRun.stoppedOn}`
+                        {data.adsActions.lastAutoRun.autoLanePct != null
+                          ? ` · 自動線健康 ${data.adsActions.lastAutoRun.autoLanePct}%`
                           : ""}
+                        {data.adsActions.lastAutoRun.failStreak > 0
+                          ? ` · 連續失敗 ×${data.adsActions.lastAutoRun.failStreak}`
+                          : ""}
+                        {data.adsActions.lastAutoRun.stoppedOn
+                          ? ` · fail-stop：${data.adsActions.lastAutoRun.stoppedOn}`
+                          : ""}
+                      </div>
+                      <div className="mt-0.5 text-muted-foreground">
+                        下次窗口：{data.adsActions.lastAutoRun.nextWindowHint}
                       </div>
                     </>
                   ) : (
                     <div className="mt-1 text-muted-foreground">
-                      每日 10:00–21:00 HKT 自動跑固定 PHRASE negatives（上限 3；失敗即停）。尚未有自動執行紀錄。
+                      每日 10:00–21:00 HKT 自動跑固定 PHRASE negatives（上限 3；失敗即停；連續 2 次失敗會告警）。尚未有自動執行紀錄。
                     </div>
                   )}
                 </div>

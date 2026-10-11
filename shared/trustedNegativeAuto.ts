@@ -112,3 +112,53 @@ export function buildTrustedNegativeAutoSummary(input: {
     message: bits.join(" · "),
   };
 }
+
+/** A run counts as failed when it fail-stopped or had failed/blocked rows. */
+export function isTrustedNegativeAutoRunFailed(
+  summary: Pick<TrustedNegativeAutoRunSummary, "failed" | "stoppedOn">
+): boolean {
+  return Boolean(summary.stoppedOn) || summary.failed > 0;
+}
+
+/**
+ * Count consecutive failed auto-runs from newest → oldest.
+ * Success (or empty no-op with no failures) breaks the streak.
+ */
+export function countConsecutiveAutoFailStreak(
+  summariesNewestFirst: Array<Pick<TrustedNegativeAutoRunSummary, "failed" | "stoppedOn" | "succeeded" | "attempted">>
+): number {
+  let streak = 0;
+  for (const row of summariesNewestFirst) {
+    if (isTrustedNegativeAutoRunFailed(row)) streak += 1;
+    else break;
+  }
+  return streak;
+}
+
+/** 0–100 health for weekly loop: green when recent auto lane is healthy. */
+export function autoLaneHealthPct(opts: {
+  failStreak: number;
+  lastRun: Pick<TrustedNegativeAutoRunSummary, "failed" | "stoppedOn" | "succeeded" | "attempted"> | null;
+}): number | null {
+  if (!opts.lastRun) return null;
+  if (opts.failStreak >= 2) return 10;
+  if (opts.failStreak === 1 || isTrustedNegativeAutoRunFailed(opts.lastRun)) return 35;
+  if (opts.lastRun.succeeded > 0 || opts.lastRun.attempted.length === 0) return 100;
+  return 70;
+}
+
+/** Human-readable next auto window hint (HKT). */
+export function nextTrustedNegativeAutoWindowHint(nowMs = Date.now()): string {
+  const hkt = new Date(nowMs + 8 * 60 * 60 * 1000);
+  const hour = hkt.getUTCHours();
+  const today = hkt.toISOString().slice(0, 10);
+  if (hour < 10) return `今日 HKT 10:00 起可跑（${today}）`;
+  if (hour < 21) return `而家窗口內（HKT 10:00–21:00，${today}）`;
+  // next day 10:00
+  const next = new Date(hkt.getTime() + 24 * 60 * 60 * 1000);
+  const nextDate = next.toISOString().slice(0, 10);
+  return `明日 HKT 10:00（${nextDate}）`;
+}
+
+/** Escalate after this many consecutive failed auto-runs. */
+export const TRUSTED_NEGATIVE_AUTO_ALERT_STREAK = 2;
