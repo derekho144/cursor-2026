@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   adsActionLight,
+  adsEfficiencyLight,
   completionRate,
   followUpLight,
   metricDelta,
   pctChange,
+  pickPrimaryAction,
+  quotesLight,
   rollingWeekWindows,
+  weeklyLoopScore,
 } from "./growthCockpit";
 
 describe("growthCockpit helpers", () => {
@@ -26,16 +30,68 @@ describe("growthCockpit helpers", () => {
     expect(windows.lastWeek.startDate).toBe("2026-09-27");
   });
 
-  it("maps follow-up light tones", () => {
+  it("maps follow-up light tones including stale pending", () => {
     expect(followUpLight({ enabled: false, pending: 0 }).tone).toBe("red");
     expect(followUpLight({ enabled: true, pending: 20 }).tone).toBe("amber");
     expect(followUpLight({ enabled: true, pending: 3 }).tone).toBe("green");
+    expect(followUpLight({ enabled: true, pending: 2, oldestPendingDays: 6 }).tone).toBe("red");
   });
 
   it("maps ads action light tones", () => {
     expect(adsActionLight({ pendingTrusted: 2, executed7d: 0, failed7d: 0 }).tone).toBe("amber");
     expect(adsActionLight({ pendingTrusted: 0, executed7d: 3, failed7d: 0 }).tone).toBe("green");
     expect(adsActionLight({ pendingTrusted: 0, executed7d: 0, failed7d: 1 }).tone).toBe("amber");
+  });
+
+  it("flags traffic-quality when Ads engagement rises but quotes fall", () => {
+    const light = quotesLight({
+      createdDelta: metricDelta(5, 10),
+      acceptedDelta: metricDelta(2, 2),
+      adsAvailable: true,
+      adsCtrDelta: metricDelta(3, 2),
+      adsIsDelta: metricDelta(40, 30),
+    });
+    expect(light.tone).toBe("amber");
+    expect(light.detail).toMatch(/流量質素/);
+  });
+
+  it("flags CPA spike with conversion drop", () => {
+    const light = adsEfficiencyLight({
+      available: true,
+      cpa: metricDelta(120, 80),
+      conversions: metricDelta(2, 5),
+    });
+    expect(light?.tone).toBe("red");
+  });
+
+  it("picks primary action by severity", () => {
+    const flat = metricDelta(1, 1);
+    const action = pickPrimaryAction({
+      lights: [],
+      followUpEnabled: true,
+      followUpPending: 2,
+      oldestPendingDays: null,
+      adsActionPending: 3,
+      adsActionFailed7d: 0,
+      inquiriesPending: 0,
+      adsAvailable: true,
+      cpa: flat,
+      conversions: flat,
+      created: flat,
+      adsCtr: flat,
+      adsIs: flat,
+    });
+    expect(action.id).toBe("run-ads-actions");
+  });
+
+  it("computes weekly loop score", () => {
+    const loop = weeklyLoopScore({
+      adsActionCompletionPct: 100,
+      followUpCompletionPct: 50,
+      acceptedDelta: metricDelta(3, 2),
+    });
+    expect(loop.score).toBe(83.3);
+    expect(loop.label).toMatch(/良好/);
   });
 
   it("computes completion rate", () => {
