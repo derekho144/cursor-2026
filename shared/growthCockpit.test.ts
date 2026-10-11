@@ -47,6 +47,41 @@ describe("growthCockpit helpers", () => {
     expect(
       adsActionLight({ pendingTrusted: 1, executed7d: 0, failed7d: 0, autoRunFailed: true }).detail
     ).toMatch(/自動執行失敗/);
+    expect(
+      adsActionLight({ pendingTrusted: 1, executed7d: 0, failed7d: 0, autoFailStreak: 2 }).tone
+    ).toBe("red");
+  });
+
+  it("prioritises consecutive auto-fail streak in primary action", () => {
+    const flat = metricDelta(1, 1);
+    const action = pickPrimaryAction({
+      lights: [],
+      followUpEnabled: true,
+      followUpPending: 0,
+      oldestPendingDays: null,
+      adsActionPending: 0,
+      adsActionFailed7d: 0,
+      inquiriesPending: 0,
+      adsAvailable: true,
+      cpa: flat,
+      conversions: flat,
+      created: flat,
+      adsCtr: flat,
+      adsIs: flat,
+      autoFailStreak: 2,
+    });
+    expect(action.id).toBe("fix-trusted-negative-auto");
+  });
+
+  it("includes autoLane in weekly loop", () => {
+    const loop = weeklyLoopScore({
+      adsActionCompletionPct: 100,
+      followUpCompletionPct: 100,
+      acceptedDelta: metricDelta(3, 2),
+      autoLanePct: 10,
+    });
+    expect(loop.detail).toMatch(/自動線/);
+    expect(loop.parts.autoLane).toBe(10);
   });
 
   it("flags traffic-quality when Ads engagement rises but quotes fall", () => {
