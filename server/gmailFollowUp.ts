@@ -4,7 +4,8 @@
  * 掃描邏輯（方案 X — Gmail 標籤觸發）：
  * 1. 掃描 Gmail 中帶有 "jd-followup" 標籤的郵件（可在任何資料夾）
  * 2. 對每個客人，在 Sent Box 中找出你最新發給他的郵件作為追蹤起點
- * 3. 檢查該客人在你最後一封郵件之後是否有回覆（from 必須是客人，不是自己）
+ * 3. 檢查該客人在「我們第一封非跟進外發」之後是否有回覆（from 必須是客人）
+ *    — 若客人已回覆過（即使之後我們又發了 ack／報價 PDF），一律停止，不發冷跟進
  * 4. 無回覆達指定天數則自動在原 thread 內發送一封非催促式跟進郵件
  *
  * 使用方法：
@@ -22,6 +23,7 @@ import {
   resetQuoteFollowUpSentinel,
   getSentFollowUpMessageIds,
 } from "./db";
+import { clientHasRepliedAfterFirstSend } from "./followUpReplyPolicy";
 import { sendViaGmail } from "./resendEmail";
 import { withSchedulerLock } from "./schedulerLock";
 
@@ -82,12 +84,13 @@ export async function scanSentBoxForFollowUps(): Promise<{
 
   type TrackEntry = {
     labeledMessageId: string;  // 貼了標籤的那封郵件 Message-ID（用於 In-Reply-To 發送跟進）
-    latestSentMessageId: string; // 我們最新發給客人的郵件 Message-ID
+    latestSentMessageId: string; // 我們最新發給客人的郵件 Message-ID（跟進信 thread 用）
     labeledSentAt: Date;       // 貼了標籤的那封郵件發送時間
     toEmail: string;
     toName: string;
     subject: string;
-    sentAt: Date;              // 我們最新發給客人的時間（回覆偵測起點）
+    sentAt: Date;              // 我們最新非跟進外發時間（跟進天數計算）
+    firstSentAt: Date;         // 我們第一封非跟進外發（回覆偵測起點）
     hasReply: boolean;
   };
 
@@ -153,7 +156,8 @@ export async function scanSentBoxForFollowUps(): Promise<{
                 toEmail: clientEmail,
                 toName: clientName,
                 subject: cleanSubject,
-                sentAt: new Date(0),      // 稍後填入
+                sentAt: new Date(0),      // 稍後填入（最新非跟進）
+                firstSentAt: new Date(0), // 稍後填入（最早非跟進）
                 hasReply: false,
               });
             } catch (e) {
@@ -220,11 +224,14 @@ export async function scanSentBoxForFollowUps(): Promise<{
           continue;
         }
 
-        // 按 UID 從大到小排序，找最新的「非跟進郵件」
+        // 按 UID 從大到小排序；記錄最新（thread）與最早（回覆偵測）非跟進郵件
         const sortedUids = [...sentToClientUids].sort((a, b) => b - a);
-        let foundNonFollowUp = false;
+        const maxScan = 40;
+        let scanned = 0;
         for (const uid of sortedUids) {
+          if (scanned >= maxScan) break;
           for await (const msg of client.fetch([uid], { source: true })) {
+            scanned++;
             try {
               const parsed: any = await simpleParser(msg.source as any);
               const msgId: string = parsed.messageId ?? `uid-${uid}`;
@@ -233,20 +240,30 @@ export async function scanSentBoxForFollowUps(): Promise<{
                 console.log(`[FollowUp] Skipping follow-up email in Sent for ${entry.toEmail}: ${msgId.substring(0, 30)}`);
                 continue;
               }
-              // 找到最新的非跟進郵件
-              entry.latestSentMessageId = msgId;
-              entry.sentAt = parsed.date ?? new Date();
-              const sentSubject = (parsed.subject ?? "").replace(/^(Re:|Fwd:|回覆:|轉寄:)\s*/gi, "").trim();
-              if (sentSubject) entry.subject = sentSubject;
-              foundNonFollowUp = true;
+              const msgDate: Date = parsed.date ?? new Date();
+              // 第一個掃到的非跟進 = 最新（UID 由大到小）
+              if (!entry.latestSentMessageId) {
+                entry.latestSentMessageId = msgId;
+                entry.sentAt = msgDate;
+                const sentSubject = (parsed.subject ?? "").replace(/^(Re:|Fwd:|回覆:|轉寄:)\s*/gi, "").trim();
+                if (sentSubject) entry.subject = sentSubject;
+              }
+              // 持續更新最早非跟進外發時間
+              if (
+                entry.firstSentAt.getTime() === 0 ||
+                msgDate.getTime() < entry.firstSentAt.getTime()
+              ) {
+                entry.firstSentAt = msgDate;
+              }
             } catch (e) {
               // ignore
             }
           }
-          if (foundNonFollowUp) break;
         }
-        if (!foundNonFollowUp) {
+        if (!entry.latestSentMessageId) {
           console.log(`[FollowUp] No non-follow-up sent email found for ${entry.toEmail}, skipping.`);
+        } else if (entry.firstSentAt.getTime() === 0) {
+          entry.firstSentAt = entry.sentAt;
         }
       }
     } finally {
@@ -254,60 +271,61 @@ export async function scanSentBoxForFollowUps(): Promise<{
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // Step 3: 檢查 INBOX 中客人在 Derek 最後一封郵件之後是否有回覆
+    // Step 3: 檢查 INBOX — 客人是否在「第一封非跟進外發」之後回覆過
     //
-    // 邏輯（已修正）：
-    // - anchorDate = Derek 最後一封已發郵件的時間
-    // - 只搜尋 INBOX 中 after:anchorDate 的客人郵件
-    // - 有回覆 → replied
-    // - 無回覆 → pending（無論之前有沒有來回，一律跟進）
+    // 冷跟進信只適用於完全未回覆的客人。若客人已回覆（例如索取報價），
+    // 即使之後我們又發了 ack／報價 PDF，也不可再發 "wanted to follow up…"。
     //
-    // 正確結果：
-    // - rachel：Derek 最後發 5月7日 18:16，之後 Rachel 無回覆 → pending ✅
-    // - kliu：Derek 最後回覆 5月5日，之後 Kaylie 無回覆 → pending ✅
-    // - hlyau：Derek 最後發後，客人有回覆 → replied ✅
+    // anchorDate = 我們第一封非跟進外發（firstSentAt），不是最新一封。
     // ══════════════════════════════════════════════════════════════════════
     const inboxCheckLock = await client.getMailboxLock("INBOX");
     try {
       for (const entry of toTrack) {
         // 跳過沒有找到已發郵件的記錄
         if (!entry.latestSentMessageId || entry.sentAt.getTime() === 0) continue;
+        if (entry.firstSentAt.getTime() === 0) entry.firstSentAt = entry.sentAt;
 
-        const anchorDate = entry.sentAt; // Derek 最後一封已發郵件的時間
-        // 只搜索 anchorDate 之後的郵件（精確到秒）
-        const anchorDatePlusOne = new Date(anchorDate.getTime() + 1000);
-
-        const clientInboxUidsAfterAnchor = await client.search({
+        const anchorDate = entry.firstSentAt;
+        // IMAP since 以日為粒度；精確比較用 msgDate > anchorDate
+        const clientInboxUids = await client.search({
           from: entry.toEmail,
-          since: anchorDatePlusOne,
+          since: anchorDate,
         });
 
-        let hasReplyAfterAnchor = false;
+        const clientDates: Date[] = [];
 
-        if (Array.isArray(clientInboxUidsAfterAnchor) && clientInboxUidsAfterAnchor.length > 0) {
-          for await (const msg of client.fetch(clientInboxUidsAfterAnchor, { envelope: true })) {
+        if (Array.isArray(clientInboxUids) && clientInboxUids.length > 0) {
+          for await (const msg of client.fetch(clientInboxUids, { envelope: true })) {
             try {
               const fromAddresses = msg.envelope?.from ?? [];
               const fromAddr = (fromAddresses[0]?.address ?? "").toLowerCase();
               // 確認是客人發的，不是我們自己，也不是 Mailsuite 等通知服務
               if (!fromAddr || fromAddr === (gmailUser ?? "").toLowerCase()) continue;
-              if (isBlacklistedSender(fromAddr)) continue; // 過濾 Mailsuite 等通知郵件
+              if (isBlacklistedSender(fromAddr)) continue;
               const msgDate = msg.envelope?.date;
               if (!msgDate) continue;
-              // 雙重確認：郵件時間確實在 anchorDate 之後
-              if (msgDate.getTime() > anchorDate.getTime()) {
-                hasReplyAfterAnchor = true;
-                break; // 找到一封就夠了
-              }
+              clientDates.push(msgDate);
             } catch (e) {
               // ignore
             }
           }
         }
 
+        const hasReplyAfterAnchor = clientHasRepliedAfterFirstSend(
+          anchorDate,
+          clientDates
+        );
+
         entry.hasReply = hasReplyAfterAnchor;
 
         const finalStatus: "replied" | "pending" = hasReplyAfterAnchor ? "replied" : "pending";
+
+        if (hasReplyAfterAnchor) {
+          console.log(
+            `[FollowUp] Client ${entry.toEmail} already replied after first send ` +
+              `${anchorDate.toISOString()} — skip cold follow-up`
+          );
+        }
 
         // 插入或更新追蹤記錄
         // gmailMessageId: 最新已發郵件的 Message-ID（用於發送跟進時的 In-Reply-To）

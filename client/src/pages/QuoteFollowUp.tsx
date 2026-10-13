@@ -189,7 +189,7 @@ export default function QuoteFollowUpPage() {
           <Info className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "#d4a843" }} />
           <div className="text-muted-foreground leading-relaxed">
             <strong className="text-foreground">運作方式：</strong>
-            系統每小時自動掃描 Gmail 中帶有 <strong>jd-followup</strong> 標籤的郵件，找出需要跟進的客人，並在原有 email thread 內發送跟進郵件。若客人已回覆，系統自動停止跟進。
+            系統每小時自動掃描 Gmail 中帶有 <strong>jd-followup</strong> 標籤的郵件，找出需要跟進的客人，並在原有 email thread 內發送跟進郵件。若客人已回覆過（即使之後我們又再發信），系統自動停止，不會再發冷跟進郵件。
             <br />
             <strong className="text-foreground mt-1 block">使用方法：</strong>
             在 Gmail 建立標籤 <strong>jd-followup</strong>，然後對需要跟進的客人郵件（INBOX 或 Sent Box 皆可）貼上此標籤，系統即會自動追蹤。
