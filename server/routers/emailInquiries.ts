@@ -30,6 +30,10 @@ import { resolveQuoteLeadSource } from "../_core/leadSource";
 import { appBaseUrl, buildWaTrackUrl, waTrackAnchor } from "../_core/waTracking";
 import { CREW_BILLING_RULES, detectCrewHighValue } from "../inquiryCrewHighValue";
 import {
+  isLikelySupplierOrOutboundReply,
+  resolveInquiryClientName,
+} from "../inquiryOutboundGuard";
+import {
   evaluateInquiryDraftReadiness,
   formatInquiryDraftNotes,
 } from "../../shared/inquiryDraftReadiness";
@@ -1037,7 +1041,7 @@ ${pricingContext}
 ${BILLING_RULES}
 
 Extract and return a JSON object with these fields:
-- clientName: string (name of the person/company sending inquiry, or empty string)
+- clientName: string (name of the PERSON/COMPANY WHO SENT this email — the inquirer. NEVER use "Derek", "JD STUDIO", or "JD STUDIO HK" — those are us/the recipient. If unsure, use empty string)
 - clientEmail: string (reply-to email if mentioned, or empty string)
 - clientPhone: string (phone number if mentioned, or empty string)
 - clientCompany: string (company name if mentioned, or empty string)
@@ -1068,7 +1072,7 @@ Extract and return a JSON object with these fields:
   - Transportation Fee MUST always be HKD 320 (fixed rate) - never $0, never other amounts
   - unitPrice CAN be 0 ONLY if the service is genuinely bundled/complimentary
 - confidence: "high" | "medium" | "low" (how confident you are this is a genuine photography inquiry AND you understood the core need)
-- isInquiry: boolean (true if this is genuinely a photography/design service inquiry)`;
+- isInquiry: boolean (true ONLY if an external customer is asking JD STUDIO HK to provide photography/design services. false if this is a supplier/vendor reply to OUR outbound RFQ, a thank-you for our reaching out, or we are the buyer asking them for their fees)`;
 
 
   try {
@@ -1606,6 +1610,15 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
       skipped++; continue; 
     }
 
+    // Supplier / vendor reply to OUR outbound RFQ — not a customer inquiry
+    if (isLikelySupplierOrOutboundReply(subject, bodyText)) {
+      console.log(
+        `[EmailInquiry] Skip(outbound/supplier-reply): from=${fromEmail} subj="${subject?.slice(0, 40)}"`
+      );
+      skipped++;
+      continue;
+    }
+
     // Keyword + body check (also consider PDF text so attachment-only briefs still match)
     const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
     if (!containsTriggerKeyword(combinedText)) { 
@@ -1673,7 +1686,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     // Generate meeting email draft for high-value inquiries using LLM
     let meetingEmailDraft: string | undefined;
     if (isHighValue) {
-      const clientNameHV = aiResult?.clientName || fromName || "Sir/Madam";
+      const clientNameHV = resolveInquiryClientName(aiResult?.clientName, fromName);
       try {
         meetingEmailDraft = await generateAIMeetingDraft({
           clientName: clientNameHV,
@@ -1880,6 +1893,15 @@ export const emailInquiriesRouter = router({
         // Check excluded senders
         if (isExcludedSender(fromEmail)) { skipped++; continue; }
 
+        // Supplier / vendor reply to OUR outbound RFQ — not a customer inquiry
+        if (isLikelySupplierOrOutboundReply(subject, bodyText)) {
+          console.log(
+            `[EmailInquiry] scanGmail Skip(outbound/supplier-reply): from=${fromEmail} subj="${subject?.slice(0, 40)}"`
+          );
+          skipped++;
+          continue;
+        }
+
         // Check trigger keywords (include PDF text)
         const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
         if (!containsTriggerKeyword(combinedText)) { skipped++; continue; }
@@ -1943,7 +1965,7 @@ export const emailInquiriesRouter = router({
             : "pending";
         let meetingEmailDraftScan: string | undefined;
         if (isHighValueScan) {
-          const clientNameScan = aiResult?.clientName || fromName || "Sir/Madam";
+          const clientNameScan = resolveInquiryClientName(aiResult?.clientName, fromName);
           try {
             meetingEmailDraftScan = await generateAIMeetingDraft({
               clientName: clientNameScan,
