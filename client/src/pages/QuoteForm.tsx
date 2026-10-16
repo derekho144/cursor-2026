@@ -5,6 +5,7 @@ import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { Plus, Trash2, ArrowLeft, Save, Loader2, Search, UserPlus, X, Check, GripVertical, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DndContext,
@@ -387,7 +388,7 @@ function SortableQuoteItem({
         </div>
       )}
       {/* Desktop layout */}
-      <div className="hidden md:grid gap-2 items-center" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 100px 36px" }}>
+      <div className="hidden md:grid gap-2 items-center" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 44px 100px 36px" }}>
         <div {...attributes} {...listeners} className="flex items-center justify-center cursor-grab active:cursor-grabbing" style={{ color: "rgba(212,168,67,0.4)", touchAction: "none" }}>
           <GripVertical className="h-4 w-4" />
         </div>
@@ -397,22 +398,6 @@ function SortableQuoteItem({
             <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
               客戶可見：Option（可選項目，唔係套餐內含）
             </div>
-          )}
-          {canWaive && onToggleWaive && (
-            <button
-              type="button"
-              onClick={onToggleWaive}
-              className="text-[11px] px-2 py-1 rounded transition-colors"
-              style={{
-                border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
-                color: isWaived ? "#86efac" : "#d4a843",
-                background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
-              }}
-            >
-              {isWaived
-                ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
-                : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
-            </button>
           )}
         </div>
         <Select
@@ -444,6 +429,22 @@ function SortableQuoteItem({
             </div>
           )}
         </div>
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={isWaived}
+            disabled={!canWaive || !onToggleWaive || isSection}
+            onCheckedChange={() => onToggleWaive?.()}
+            aria-label={isWaived ? `取消豁免（恢復 $${waiveLabelAmount}）` : `豁免此項目（$${waiveLabelAmount}）`}
+            title={
+              !canWaive
+                ? "有單價嘅項目先可以豁免"
+                : isWaived
+                  ? `已豁免 · 取消後恢復 $${waiveLabelAmount}`
+                  : `剔選豁免（客戶見到劃線 $${waiveLabelAmount}）`
+            }
+            className="size-4 border-[rgba(212,168,67,0.55)] data-[state=checked]:bg-[#d4a843] data-[state=checked]:border-[#d4a843] data-[state=checked]:text-[#1a1a1a]"
+          />
+        </div>
         <div className="text-sm font-medium text-right pr-2" style={{ color: isWaived ? "#86efac" : "#d4a843" }}>
           {isWaived ? "0（豁免）" : item.amount.toLocaleString()}
         </div>
@@ -465,22 +466,6 @@ function SortableQuoteItem({
               <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
                 客戶可見：Option（可選項目，唔係套餐內含）
               </div>
-            )}
-            {canWaive && onToggleWaive && (
-              <button
-                type="button"
-                onClick={onToggleWaive}
-                className="mt-2 text-[11px] px-2 py-1 rounded"
-                style={{
-                  border: isWaived ? "1px solid rgba(74,222,128,0.45)" : "1px solid rgba(212,168,67,0.45)",
-                  color: isWaived ? "#86efac" : "#d4a843",
-                  background: isWaived ? "rgba(74,222,128,0.08)" : "rgba(212,168,67,0.08)",
-                }}
-              >
-                {isWaived
-                  ? `已劃線豁免 · 取消（恢復 $${waiveLabelAmount}）`
-                  : `劃線豁免（客戶見到 ~~$${waiveLabelAmount}~~）`}
-              </button>
             )}
           </div>
           <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20 flex-shrink-0">
@@ -520,7 +505,20 @@ function SortableQuoteItem({
             <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
           </div>
         </div>
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          <label
+            className={`flex items-center gap-2 text-xs ${canWaive && onToggleWaive && !isSection ? "cursor-pointer" : "opacity-40"}`}
+            style={{ color: isWaived ? "#86efac" : "#d4a843" }}
+          >
+            <Checkbox
+              checked={isWaived}
+              disabled={!canWaive || !onToggleWaive || isSection}
+              onCheckedChange={() => onToggleWaive?.()}
+              aria-label={isWaived ? `取消豁免（恢復 $${waiveLabelAmount}）` : `豁免此項目（$${waiveLabelAmount}）`}
+              className="size-4 border-[rgba(212,168,67,0.55)] data-[state=checked]:bg-[#d4a843] data-[state=checked]:border-[#d4a843] data-[state=checked]:text-[#1a1a1a]"
+            />
+            豁免費用
+          </label>
           <div className="text-sm font-medium" style={{ color: isWaived ? "#86efac" : "#d4a843" }}>
             金額：HKD {isWaived ? "0（豁免）" : item.amount.toLocaleString()}
           </div>
@@ -1921,9 +1919,13 @@ export default function QuoteForm() {
 
           <div className="space-y-3">
             {/* Header - desktop only */}
-            <div className="hidden md:grid gap-2" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 100px 36px" }}>
-              {["", "服務項目說明", "類別", "數量", "單價 (HKD)", "金額 (HKD)", ""].map((h, i) => (
-                <div key={i} style={{ fontSize: "0.6rem", letterSpacing: "0.12em", color: "#d4a843", textTransform: "uppercase" }}>
+            <div className="hidden md:grid gap-2" style={{ gridTemplateColumns: "20px 1fr 118px 70px 100px 44px 100px 36px" }}>
+              {["", "服務項目說明", "類別", "數量", "單價 (HKD)", "豁免", "金額 (HKD)", ""].map((h, i) => (
+                <div
+                  key={i}
+                  className={h === "豁免" ? "text-center" : undefined}
+                  style={{ fontSize: "0.6rem", letterSpacing: "0.12em", color: "#d4a843", textTransform: "uppercase" }}
+                >
                   {h}
                 </div>
               ))}

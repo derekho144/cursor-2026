@@ -134,25 +134,25 @@ describe("quoteSectionB", () => {
     expect(SECTION_B_OPTION_LABEL).toBe("Option");
   });
 
-  it("only allows strikethrough waive on priced Section B options", () => {
+  it("allows strikethrough waive on any priced non-header line", () => {
     expect(
       canToggleQuoteWaive({
         description: "Transportation Fee",
         unitPrice: 320,
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canToggleQuoteWaive({
         description: "寵物攝影",
         unitPrice: 1000,
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canToggleQuoteWaive({
         description: "extra hour",
         unitPrice: 1000,
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canToggleQuoteWaive({
         description: "B1 QRCODE 相片直播（Option）",
@@ -165,6 +165,12 @@ describe("quoteSectionB", () => {
         unitPrice: 800,
       })
     ).toBe(true);
+    expect(
+      canToggleQuoteWaive({
+        description: "SECTION B · OPTIONAL · 活動攝影與線上直播",
+        unitPrice: 800,
+      })
+    ).toBe(false);
   });
 
   it("applies Section B on service change and preserves rush waive", () => {
@@ -218,7 +224,7 @@ describe("quoteSectionB", () => {
     expect(productRush2.quantity).toBe(1);
   });
 
-  it("ignores waive toggle on regular lines; only Section B B2 waives", () => {
+  it("toggles waive on regular lines and Section B rush; ignores headers", () => {
     const items = [
       { id: "1", description: "寵物攝影", quantity: 1, unitPrice: 1000, amount: 1000 },
       {
@@ -235,16 +241,23 @@ describe("quoteSectionB", () => {
         unitPrice: 0,
         amount: 0,
       },
-      { id: "4", description: "extra hour", quantity: 1, unitPrice: 1000, amount: 1000 },
+      { id: "4", description: "Transportation Fee", quantity: 1, unitPrice: 320, amount: 320 },
     ];
-    expect(canToggleQuoteWaive(items[0]!)).toBe(false);
+    expect(canToggleQuoteWaive(items[0]!)).toBe(true);
     expect(canToggleQuoteWaive(items[1]!)).toBe(true);
     expect(canToggleQuoteWaive(items[2]!)).toBe(false);
-    expect(canToggleQuoteWaive(items[3]!)).toBe(false);
+    expect(canToggleQuoteWaive(items[3]!)).toBe(true);
 
-    // Regular line: no-op
-    const ignored = toggleQuoteItemWaived(items, 0);
-    expect(ignored[0]!.amount).toBe(1000);
+    const waivedMain = toggleQuoteItemWaived(items, 0);
+    expect(
+      isQuoteWaivedPrice(
+        waivedMain[0]!.unitPrice,
+        waivedMain[0]!.amount,
+        waivedMain[0]!.quantity
+      )
+    ).toBe(true);
+    expect(waivedMain[0]!.unitPrice).toBe(1000);
+    expect(waivedMain[0]!.amount).toBe(0);
 
     const waivedRush = toggleQuoteItemWaived(items, 1);
     expect(
@@ -254,5 +267,12 @@ describe("quoteSectionB", () => {
         waivedRush[1]!.quantity
       )
     ).toBe(true);
+
+    const ignoredHeader = toggleQuoteItemWaived(items, 2);
+    expect(ignoredHeader[2]!.amount).toBe(0);
+
+    const waivedTransport = toggleQuoteItemWaived(items, 3);
+    expect(waivedTransport[3]!.amount).toBe(0);
+    expect(waivedTransport[3]!.unitPrice).toBe(320);
   });
 });
