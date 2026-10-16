@@ -8,13 +8,11 @@
  * Persistence: plain line items (no DB migration).
  * - Section header: description starts with "SECTION B · …"
  * - Managed lines: description starts with B1 / B1.1 / B2
- * - Waived rush fee: unitPrice > 0 && amount === 0 && quantity > 0 (print shows strikethrough)
+ * - Waived fee: unitPrice > 0 && amount === 0 && quantity > 0 (print shows strikethrough)
  * - Customer-facing: never label Section B lines as "Included" — use "Option"
- * - Transportation Fee: never strikethrough-waive
+ * - Any priced non-header line can strikethrough-waive (incl. transport)
  * - Qty stays 0 until selected — hourly reconcile must not rewrite Section B qtys
  */
-
-import { resolveQuoteLineItemKind } from "./quoteLineItemKind";
 
 /** Default list price for event B1 QRCODE 相片直播. */
 export const EVENT_LIVESTREAM_FEE_HKD = 3500;
@@ -309,8 +307,8 @@ export function applySectionBForServiceType<T extends ItemLike>(
 }
 
 /**
- * Strikethrough waive is only for priced Section B options (e.g. B2 快速交相).
- * Regular lines (寵物攝影 / extra hour / transport / …) never show 劃線豁免.
+ * Any priced non-header line can strikethrough-waive (keep unitPrice, amount → 0).
+ * Section headers and $0 / TBD lines cannot.
  */
 export function canToggleQuoteWaive(item: {
   description?: string | null;
@@ -318,15 +316,6 @@ export function canToggleQuoteWaive(item: {
   category?: string | null;
 }): boolean {
   if (isQuoteSectionHeader(item.description)) return false;
-  if (!isQuoteSectionBOptionItem(item.description)) return false;
-  if (
-    resolveQuoteLineItemKind({
-      description: item.description,
-      category: item.category,
-    }) === "transport"
-  ) {
-    return false;
-  }
   return Number(item.unitPrice) > 0;
 }
 
