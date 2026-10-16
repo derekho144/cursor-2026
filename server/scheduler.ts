@@ -38,25 +38,34 @@ let pitchOutreachTimer: ReturnType<typeof setInterval> | null = null;
 
 // Track last Freehunter scrape time (in-memory; also persisted — see recordFreehunterScrapeResult)
 export let lastFreehunterScrapeAt: Date | null = null;
-export let lastFreehunterScrapeResult: { newJobs: number; emailsFetched: number } | null = null;
+export let lastFreehunterScrapeResult: {
+  newJobs: number;
+  emailsFetched: number;
+  discovered: number | null;
+} | null = null;
 
 const FH_SCRAPE_STATUS_KEY = "fh-scrape-status";
 
-/** Persist last scrape attempt so health survives cold starts / restarts. */
+/** Persist last scrape attempt so health survives cold starts / restarts.
+ *  Format: `ok:{newJobs}/{emailsFetched}/{discovered}` or `fail:{error}`
+ *  Legacy `ok:{new}/{emails}` (no discovered) is still parsed.
+ */
 export async function recordFreehunterScrapeResult(opts: {
   ok: boolean;
   newJobs?: number;
   emailsFetched?: number;
+  discovered?: number;
   error?: string;
 }): Promise<void> {
   const newJobs = opts.newJobs ?? 0;
   const emailsFetched = opts.emailsFetched ?? 0;
+  const discovered = opts.discovered ?? null;
   lastFreehunterScrapeAt = new Date();
-  lastFreehunterScrapeResult = { newJobs, emailsFetched };
+  lastFreehunterScrapeResult = { newJobs, emailsFetched, discovered };
 
   const by = (
     opts.ok
-      ? `ok:${newJobs}/${emailsFetched}`
+      ? `ok:${newJobs}/${emailsFetched}/${discovered ?? 0}`
       : `fail:${(opts.error || "error").replace(/\s+/g, " ").slice(0, 55)}`
   ).slice(0, 64);
 
@@ -76,17 +85,37 @@ export async function recordFreehunterScrapeResult(opts: {
   }
 }
 
+/** Parse persisted locked_by token from scheduler_locks. Exported for tests. */
+export function parsePersistedFhScrapeRaw(raw: string): {
+  ok: boolean;
+  newJobs: number | null;
+  emailsFetched: number | null;
+  discovered: number | null;
+} {
+  if (raw.startsWith("ok:")) {
+    const parts = raw.slice(3).split("/");
+    const newJobs = Number(parts[0]) || 0;
+    const emailsFetched = Number(parts[1]) || 0;
+    const discovered = parts.length >= 3 ? Number(parts[2]) || 0 : null;
+    return { ok: true, newJobs, emailsFetched, discovered };
+  }
+  return { ok: false, newJobs: null, emailsFetched: null, discovered: null };
+}
+
 /** Read persisted scrape status (for health UI after process restart). */
 export async function getPersistedFreehunterScrapeStatus(): Promise<{
   at: Date | null;
   ok: boolean | null;
   newJobs: number | null;
   emailsFetched: number | null;
+  discovered: number | null;
   raw: string | null;
 }> {
   try {
     const db = await getDb();
-    if (!db) return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+    if (!db) {
+      return { at: null, ok: null, newJobs: null, emailsFetched: null, discovered: null, raw: null };
+    }
     const { schedulerLocks } = await import("../drizzle/schema");
     const { eq } = await import("drizzle-orm");
     const [row] = await db
@@ -97,23 +126,19 @@ export async function getPersistedFreehunterScrapeStatus(): Promise<{
       .from(schedulerLocks)
       .where(eq(schedulerLocks.lockKey, FH_SCRAPE_STATUS_KEY))
       .limit(1);
-    if (!row) return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+    if (!row) {
+      return { at: null, ok: null, newJobs: null, emailsFetched: null, discovered: null, raw: null };
+    }
     const at = row.at ? new Date(row.at) : null;
     const raw = String(row.raw ?? "");
     if (raw.startsWith("ok:")) {
-      const [a, b] = raw.slice(3).split("/");
-      return {
-        at,
-        ok: true,
-        newJobs: Number(a) || 0,
-        emailsFetched: Number(b) || 0,
-        raw,
-      };
+      const parsed = parsePersistedFhScrapeRaw(raw);
+      return { at, ...parsed, raw };
     }
-    return { at, ok: false, newJobs: null, emailsFetched: null, raw };
+    return { at, ok: false, newJobs: null, emailsFetched: null, discovered: null, raw };
   } catch (e) {
     console.warn("[Scheduler] Failed to read FH scrape status:", e);
-    return { at: null, ok: null, newJobs: null, emailsFetched: null, raw: null };
+    return { at: null, ok: null, newJobs: null, emailsFetched: null, discovered: null, raw: null };
   }
 }
 
@@ -270,13 +295,29 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
         )
       ),
     ]);
+    if (!result.success) {
+      await recordFreehunterScrapeResult({
+        ok: false,
+        newJobs: result.newJobs,
+        emailsFetched: result.emailsFetched,
+        discovered: result.discovered,
+        error: result.error || "scrape returned success=false",
+      });
+      console.error(
+        `[Scheduler] Freehunter scrape reported failure: ${result.error || "unknown"} (discovered=${result.discovered})`
+      );
+      return;
+    }
     await recordFreehunterScrapeResult({
       ok: true,
       newJobs: result.newJobs,
       emailsFetched: result.emailsFetched,
+      discovered: result.discovered,
     });
     const autoSent = result.autoEmailsSent ?? 0;
-    console.log(`[Scheduler] Freehunter scrape done: ${result.newJobs} new jobs, ${result.emailsFetched} emails fetched, ${autoSent} auto emails sent`);
+    console.log(
+      `[Scheduler] Freehunter scrape done: discovered=${result.discovered}, new=${result.newJobs}, emails=${result.emailsFetched}, autoSent=${autoSent}`
+    );
 
     if (result.newJobs > 0 || autoSent > 0) {
       try {

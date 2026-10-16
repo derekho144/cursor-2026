@@ -759,21 +759,24 @@ export default function FreehunterBoard() {
         </div>
       )}
 
-      {/* Health alert */}
+      {/* Health alert — tone from server (never claim 正常 on fail/blind/ambiguous) */}
       {(data as any)?.health && (
         <div
           className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${
-            (data as any).health.scrapeStale || !(data as any).health.sessionConnected
+            (data as any).health.tone === "bad"
               ? "bg-red-50 text-red-700 border border-red-200"
-              : "bg-slate-50 text-slate-600 border border-slate-200"
+              : (data as any).health.tone === "warn"
+                ? "bg-amber-50 text-amber-800 border border-amber-200"
+                : "bg-slate-50 text-slate-600 border border-slate-200"
           }`}
         >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <p className="font-medium">
-              {(data as any).health.scrapeStale
-                ? "爬取可能已停滯 — 請檢查登入或按「立即爬取」"
-                : "爬取狀態正常"}
+              {(data as any).health.title ||
+                ((data as any).health.scrapeStale
+                  ? "爬取可能已停滯 — 請檢查登入或按「立即爬取」"
+                  : "爬取狀態正常")}
             </p>
             <p className="text-xs mt-0.5 opacity-80">
               上次資料：
@@ -782,7 +785,11 @@ export default function FreehunterBoard() {
                 : "尚無"}
               {(data as any).health.ageHours != null ? `（${(data as any).health.ageHours} 小時前）` : ""}
               {(data as any).health.lastScrapeResult
-                ? ` · 最近一次 +${(data as any).health.lastScrapeResult.newJobs} 新工作 / ${(data as any).health.lastScrapeResult.emailsFetched} 電郵`
+                ? ` · 最近一次 +${(data as any).health.lastScrapeResult.newJobs} 新工作 / ${(data as any).health.lastScrapeResult.emailsFetched} 電郵${
+                    (data as any).health.discovered != null
+                      ? ` / 見到 ${(data as any).health.discovered} 個`
+                      : ""
+                  }`
                 : ""}
               {(data as any).health.lastScrapeOk === false && (data as any).health.lastScrapeRaw
                 ? ` · 上次失敗：${(data as any).health.lastScrapeRaw}`
