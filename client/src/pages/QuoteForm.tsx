@@ -49,6 +49,7 @@ import {
   computeQuoteDiscountAmount,
   discountableQuoteSubtotal,
 } from "@shared/quoteDiscount";
+import { applySuggestedLearningPriceToItems } from "@shared/applySuggestedQuotePrice";
 import {
   applySectionBForServiceType,
   canToggleQuoteWaive,
@@ -1092,6 +1093,29 @@ export default function QuoteForm() {
     }));
   };
 
+  const handleApplySuggestedPrice = (
+    _tier: "essential" | "standard" | "coverage",
+    target: number,
+    label: string
+  ) => {
+    if (!(target > 0)) {
+      toast.error("建議價無效");
+      return;
+    }
+    const result = applySuggestedLearningPriceToItems(form.items, target);
+    if (!result.ok) {
+      toast.error(result.error || "無法套用建議價");
+      return;
+    }
+    setForm((prev) => ({ ...prev, items: result.items }));
+    if (priceSuggest?.confidence === "advisory") {
+      toast.message("樣本仍少，建議價僅供參考 — 已套用，請再人手核對");
+    }
+    toast.success(
+      `已套用${label} HK$${target.toLocaleString("en-HK")}（學習合計 ${result.previousLearningTotal.toLocaleString("en-HK")} → ${result.nextLearningTotal.toLocaleString("en-HK")}，調咗 ${result.scaledCount} 項）`
+    );
+  };
+
   const handleSubmit = async () => {
     if (!form.clientName.trim()) { toast.error("請填寫客戶名稱"); return; }
     if (!form.leadSource) { toast.error("請選擇詢價來源"); return; }
@@ -1771,14 +1795,34 @@ export default function QuoteForm() {
                     ).map(([key, pkg]) => (
                       <div
                         key={key}
-                        className="p-2 rounded"
+                        className="p-2 rounded flex flex-col gap-2"
                         style={{ background: "rgba(0,0,0,0.25)" }}
                       >
-                        <div className="text-muted-foreground">{pkg.label}</div>
-                        <div style={{ color: "#e8e0d0", fontSize: "1.05rem" }}>
-                          HK$ {pkg.mid.toLocaleString("en-HK")}
+                        <div>
+                          <div className="text-muted-foreground">{pkg.label}</div>
+                          <div style={{ color: "#e8e0d0", fontSize: "1.05rem" }}>
+                            HK$ {pkg.mid.toLocaleString("en-HK")}
+                          </div>
+                          <div className="text-muted-foreground mt-0.5">{pkg.note}</div>
                         </div>
-                        <div className="text-muted-foreground mt-0.5">{pkg.note}</div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleApplySuggestedPrice(key, pkg.mid, pkg.label)
+                          }
+                          className="mt-auto text-[11px] px-2 py-1.5 rounded transition-opacity hover:opacity-90"
+                          style={{
+                            border: "1px solid rgba(212,168,67,0.55)",
+                            color: key === "standard" ? "#1a1a1a" : "#d4a843",
+                            background:
+                              key === "standard"
+                                ? "#d4a843"
+                                : "rgba(212,168,67,0.1)",
+                            fontWeight: key === "standard" ? 700 : 500,
+                          }}
+                        >
+                          一鍵套用
+                        </button>
                       </div>
                     ))}
                 </div>
@@ -1786,6 +1830,8 @@ export default function QuoteForm() {
                   {priceSuggest.note}
                   {" "}
                   {priceSuggest.costFloorNote}
+                  {" "}
+                  一鍵套用會按比例調整攝影師項目單價（保留交通／Photobooth／錄影／豁免項）。
                   {pricingMode === "time_crew" &&
                   (form.durationPackage === "half_day" ||
                     form.durationPackage === "full_day" ||
