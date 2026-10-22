@@ -566,8 +566,32 @@ const EXCLUDED_SENDER_PATTERNS = [
   "mailsuite.com", "notification@mailsuite",
 ];
 
-function isExcludedSender(fromEmail: string): boolean {
+// Platforms that send real RFQ/inquiry emails via noreply@ — must not be filtered
+const WHITELISTED_SENDER_PATTERNS = [
+  "pro360.com.hk",
+  "pro360.com",
+];
+
+// Exact / patterned subjects that must always be treated as inquiries
+const WHITELISTED_SUBJECTS = [
+  "[RFQ261892] Photography Service",
+];
+
+function isWhitelistedSubject(subject: string): boolean {
+  const s = (subject || "").trim();
+  if (!s) return false;
+  if (WHITELISTED_SUBJECTS.some((w) => s.toLowerCase() === w.toLowerCase())) return true;
+  // Pro360 RFQ subjects: [RFQ261892] Photography Service
+  if (/^\[RFQ\d+\]/i.test(s)) return true;
+  return false;
+}
+
+function isExcludedSender(fromEmail: string, subject?: string): boolean {
+  if (subject && isWhitelistedSubject(subject)) return false;
   const lower = fromEmail.toLowerCase();
+  if (WHITELISTED_SENDER_PATTERNS.some((pattern) => lower.includes(pattern))) {
+    return false;
+  }
   return EXCLUDED_SENDER_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
@@ -1605,13 +1629,17 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
       continue;
     }
 
-    if (isExcludedSender(fromEmail)) { 
+    if (isExcludedSender(fromEmail, subject)) { 
       console.log(`[EmailInquiry] Skip(excluded-sender): from=${fromEmail}`);
       skipped++; continue; 
     }
 
     // Supplier / vendor reply to OUR outbound RFQ — not a customer inquiry
-    if (isLikelySupplierOrOutboundReply(subject, bodyText)) {
+    // Whitelisted inbound Pro360 RFQs must never be treated as supplier replies
+    if (
+      !isWhitelistedSubject(subject) &&
+      isLikelySupplierOrOutboundReply(subject, bodyText)
+    ) {
       console.log(
         `[EmailInquiry] Skip(outbound/supplier-reply): from=${fromEmail} subj="${subject?.slice(0, 40)}"`
       );
@@ -1621,7 +1649,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
 
     // Keyword + body check (also consider PDF text so attachment-only briefs still match)
     const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
-    if (!containsTriggerKeyword(combinedText)) { 
+    if (!containsTriggerKeyword(combinedText) && !isWhitelistedSubject(subject)) { 
       console.log(`[EmailInquiry] Skip(no-keyword): from=${fromEmail} subj="${subject?.slice(0,40)}"`);
       skipped++; continue; 
     }
@@ -1832,279 +1860,20 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
 }
 
 export const emailInquiriesRouter = router({
-  // Manually trigger a Gmail scan
+  // Manually trigger a Gmail scan (async — returns immediately to avoid proxy/Safari timeouts)
   scanGmail: protectedProcedure
     .input(z.object({ maxResults: z.number().min(1).max(50).default(20) }))
     .mutation(async ({ input }) => {
-      let emails: Awaited<ReturnType<typeof fetchRecentEmailsViaIMAP>> = [];
-
-      try {
-        emails = await fetchRecentEmailsViaIMAP(input.maxResults);
-        console.log(`[EmailInquiry] Fetched ${emails.length} emails via IMAP`);
-      } catch (e) {
-        console.error("[EmailInquiry] IMAP fetch failed:", e);
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Gmail 掃描失敗: ${(e as Error).message}` });
-      }
-
-      if (!emails.length) return { scanned: 0, newInquiries: 0, skipped: 0 };
-
-      let newInquiries = 0;
-      let skipped = 0;
-
-      for (const email of emails) {
-        const { subject, fromEmail, fromName, bodyText, htmlBody, receivedAt, attachmentText, attachmentMeta, skippedAttachments } = email;
-        // Truncate messageId to 500 chars to fit DB column
-        const messageId = email.messageId.slice(0, 500);
-
-        // Skip if already processed
-        const existing = await getEmailInquiryByMessageId(messageId);
-        if (existing) { skipped++; continue; }
-
-        // ─── FH 系統通知郵件：直接跳過 ─────
-        if (isFHSystemNotification(subject)) {
-          console.log(`[EmailInquiry] scanGmail: Skipping FH system notification: "${subject}"`);
-          skipped++;
-          continue;
-        }
-
-        // ─── FH 工作板通知郵件：自動比對 FH 工作板記錄，避免重複 ─────
-        const matchedFHJobScan = await findMatchingFHJob(subject, fromEmail);
-        if (matchedFHJobScan) {
-          const fhStatusScan = matchedFHJobScan.firstEmailSentAt ? "已發第一封郵件" : "已在 FH 工作板";
-          console.log(`[EmailInquiry] scanGmail: FH notification matched job #${matchedFHJobScan.id} "${matchedFHJobScan.title}" (${fhStatusScan}), saving as ignored with fhJobId`);
-          await createEmailInquiry({
-            gmailMessageId: messageId,
-            gmailThreadId: messageId,
-            fromEmail: fromEmail || "info@freehunter.hk",
-            fromName: "FreelanceHunter",
-            subject: subject || "(No Subject)",
-            bodyText: bodyText.slice(0, 10000),
-            receivedAt,
-            aiConfidence: "low",
-            status: "ignored",
-            processedAt: new Date(),
-            externalLink: `https://freehunter.hk/freelancejobs/${matchedFHJobScan.id}`,
-            fhJobId: matchedFHJobScan.id,
-          });
-          skipped++;
-          continue;
-        }
-
-        // Check excluded senders
-        if (isExcludedSender(fromEmail)) { skipped++; continue; }
-
-        // Supplier / vendor reply to OUR outbound RFQ — not a customer inquiry
-        if (isLikelySupplierOrOutboundReply(subject, bodyText)) {
-          console.log(
-            `[EmailInquiry] scanGmail Skip(outbound/supplier-reply): from=${fromEmail} subj="${subject?.slice(0, 40)}"`
-          );
-          skipped++;
-          continue;
-        }
-
-        // Check trigger keywords (include PDF text)
-        const combinedText = `${subject} ${bodyText} ${attachmentText ?? ""}`;
-        if (!containsTriggerKeyword(combinedText)) { skipped++; continue; }
-
-        // AI parse (body + PDF attachment text)
-        const parseBody = mergeEmailBodyWithPdfText(bodyText, attachmentText ?? "");
-        let aiResult = await parseInquiryWithAI(
-      subject,
-      parseBody.slice(0, MERGED_BODY_MAX_CHARS),
-      fromEmail
-    );
-        aiResult = enrichParsedWithAttachmentGate(aiResult, {
-          subject,
-          bodyText,
-          attachmentText,
-          attachmentMeta,
-          skippedAttachments,
-        }) as typeof aiResult;
-
-        // 如果是 Freehunter 郵件，從 HTML 中提取「查看工作」連結
-        let externalLink: string | null = null;
-        if (isFreehunterEmail(fromEmail, htmlBody) && htmlBody) {
-          externalLink = extractFreehunterJobLink(htmlBody);
-          if (externalLink) {
-            console.log(`[EmailInquiry] Freehunter job link extracted: ${externalLink}`);
-          }
-        }
-        // AI 高信心度（high）且是真正詢價：
-        // - 非 FH 來源 → 設為 pending_send（待管理員確認後發送報價）——仍需 draftReadiness
-        // - FH 來源 → 維持 pending（FH 有獨立的自動發送流程）
-        const isFHSrc = isFreehunterEmail(fromEmail, htmlBody);
-        const isHighConf = aiResult?.confidence === "high" && aiResult?.isInquiry === true;
-        const draftReadinessScan = aiResult
-          ? evaluateInquiryDraftReadiness({
-              ...aiResult,
-              learningReady: (
-                await getLearningAutoDraftGate(aiResult.serviceType ?? "other")
-              ).ready,
-            })
-          : null;
-        if (aiResult && draftReadinessScan) {
-          aiResult.draftReadiness = draftReadinessScan;
-        }
-        const readyForAutoDraftScan = !!draftReadinessScan?.readyForAutoDraft;
-        const HIGH_VALUE_THRESHOLD_SCAN = 8000;
-        const estimatedTotalScan = aiResult?.pricingMid ? Number(aiResult.pricingMid) : 0;
-        const crewSignalScan = detectCrewHighValue(`${subject}\n${bodyText}\n${attachmentText ?? ""}`);
-        // High-value: pricingMid >= HK$8,000, OR video team (2+ photographers alone is not enough)
-        const isHighValueScan =
-          !isFHSrc &&
-          (crewSignalScan.highValue ||
-            (isHighConf && estimatedTotalScan >= HIGH_VALUE_THRESHOLD_SCAN));
-        if (isHighValueScan && crewSignalScan.highValue) {
-          console.log(
-            `[EmailInquiry] scanGmail crew high-value override for ${fromEmail}: ${crewSignalScan.reasons.join(", ")}`
-          );
-        }
-        const inqStatus =
-          isHighConf && !isFHSrc && !isHighValueScan && readyForAutoDraftScan
-            ? "pending_send"
-            : "pending";
-        let meetingEmailDraftScan: string | undefined;
-        if (isHighValueScan) {
-          const clientNameScan = resolveInquiryClientName(aiResult?.clientName, fromName);
-          try {
-            meetingEmailDraftScan = await generateAIMeetingDraft({
-              clientName: clientNameScan,
-              serviceType: aiResult?.serviceType,
-              shootingDate: aiResult?.shootingDate,
-              shootingLocation: aiResult?.shootingLocation,
-              eventName: aiResult?.eventName,
-              notes: aiResult?.notes,
-              pricingMid: aiResult?.pricingMid,
-              subject,
-            });
-          } catch (e) {
-            console.warn("[EmailInquiry] scanGmail: LLM meeting draft failed, using fallback:", e);
-            meetingEmailDraftScan = buildFallbackMeetingDraft(clientNameScan);
-          }
-        }
-        // Save inquiry
-        const savedInquiry = await createEmailInquiry({
-          gmailMessageId: messageId,
-          gmailThreadId: messageId,
-          fromEmail: fromEmail || "unknown@unknown.com",
-          fromName: fromName || aiResult?.clientName || "",
-          subject: subject || "(No Subject)",
-          bodyText: bodyText.slice(0, 10000),
-          receivedAt,
-          aiParsed: aiResult ? JSON.stringify(aiResult) : null,
-          aiConfidence: aiResult?.confidence ?? "low",
-          status: inqStatus,
-          processedAt: inqStatus === "pending_send" ? new Date() : undefined,
-          externalLink: externalLink ?? undefined,
-          meetingStatus: isHighValueScan ? "pending_meeting" : undefined,
-          estimatedTotal: estimatedTotalScan > 0 ? estimatedTotalScan : undefined,
-          meetingEmailDraft: meetingEmailDraftScan,
-        });
-        // AI 高信心度 + 非 FH 來源 + 高價值：自動發送預約會議電郵，不發報價
-        // 使用 Gmail SMTP 直接發送，確保寄件人是 info.exposurehk@gmail.com（非 Resend onboarding 地址）
-        // 防止重複發送：若已曾向此 email 發送過任何郵件（包括之前的 meeting email），跳過
-        const alreadySentScan = fromEmail ? await hasAlreadySentToEmail(fromEmail) : false;
-        if (isHighValueScan && savedInquiry && meetingEmailDraftScan && !alreadySentScan) {
-          try {
-            const htmlMeetingScan = buildMeetingEmailHtml(meetingEmailDraftScan, savedInquiry.id);
-            const gmailResultScan = await sendViaGmail({
-              to: fromEmail || "unknown@unknown.com",
-              subject: `Re: ${subject || "Your Photography Inquiry"}`,
-              html: htmlMeetingScan,
-              text: meetingEmailDraftScan,
-            });
-            if (gmailResultScan.success) {
-              await updateEmailInquiry(savedInquiry.id, {
-                meetingStatus: "meeting_scheduled",
-                processedAt: new Date(),
-              });
-              console.log(`[EmailInquiry] scanGmail: High-value inquiry ${savedInquiry.id} (HK$${estimatedTotalScan}): auto-sent meeting email to ${fromEmail} (msgId: ${gmailResultScan.messageId})`);
-            } else {
-              console.error(`[EmailInquiry] scanGmail: High-value inquiry ${savedInquiry.id}: Gmail send FAILED, status NOT updated. Error: ${gmailResultScan.error}`);
-              // Keep meetingStatus as pending_meeting so admin can retry manually
-            }
-          } catch (e) {
-            console.error("[EmailInquiry] scanGmail: Failed to auto-send meeting email:", e);
-          }
-        }
-        // AI 高信心度 + 非 FH + 非高價值 + 需求夠清晰：自動建立草稿報價單
-        if (isHighConf && !isFHSrc && !isHighValueScan && readyForAutoDraftScan && savedInquiry) {
-          try {
-            const clientName = aiResult?.clientName || fromName || fromEmail;
-            const items = (aiResult?.suggestedItems ?? []).map((item: any, idx: number) => ({
-              description: item.description || "Photography Service",
-              quantity: Number(item.quantity) || 1,
-              unitPrice: Number(item.unitPrice) || 0,
-              amount: (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0),
-              sortOrder: idx,
-            }));
-            if (items.length === 0) {
-              items.push({ description: "Photography Service", quantity: 1, unitPrice: 0, amount: 0, sortOrder: 0 });
-            }
-            const subtotalNum = items.reduce(
-              (sum: number, it: { amount: number }) => sum + it.amount,
-              0
-            );
-            const newQuote = await createQuote({
-              clientName,
-              clientEmail: aiResult?.clientEmail || fromEmail,
-              clientPhone: aiResult?.clientPhone || "",
-              clientCompany: aiResult?.clientCompany || "",
-              serviceType: (aiResult?.serviceType as any) || "other",
-              shootingDate: aiResult?.shootingDate || "",
-              shootingLocation: aiResult?.shootingLocation || "",
-              notes: formatInquiryDraftNotes({
-                fromEmail: fromEmail || "",
-                subject: subject || "",
-                aiNotes: aiResult?.notes,
-                readiness: draftReadinessScan,
-                autoDraft: true,
-                serviceType: (aiResult?.serviceType as string) || "other",
-              }),
-              subtotal: subtotalNum.toString(),
-              discountAmount: "0",
-              total: subtotalNum.toString(),
-              currency: "HKD",
-              status: "draft",
-              emailInquiryId: savedInquiry.id,
-              shootHours:
-                aiResult?.shootHours != null && Number(aiResult.shootHours) > 0
-                  ? String(aiResult.shootHours)
-                  : undefined,
-              shotCount:
-                aiResult?.shotCount != null && Number(aiResult.shotCount) > 0
-                  ? Number(aiResult.shotCount)
-                  : undefined,
-              durationPackage:
-                aiResult?.durationPackage === "hours" ||
-                aiResult?.durationPackage === "half_day" ||
-                aiResult?.durationPackage === "full_day" ||
-                aiResult?.durationPackage === "multi_day"
-                  ? aiResult.durationPackage
-                  : undefined,
-              ...inquiryCrewFieldsForQuote(aiResult, subject, bodyText),
-              leadSource: resolveQuoteLeadSource({
-                fromEmail,
-                htmlBody,
-                subject,
-                fhJobId: savedInquiry.fhJobId,
-              }),
-              items,
-            });
-            await updateEmailInquiry(savedInquiry.id, { quoteId: newQuote.id });
-            console.log(`[EmailInquiry] scanGmail: AI pending_send inquiry ${savedInquiry.id}, created draft quote ${newQuote.id} (awaiting admin confirmation)`);
-          } catch (e) {
-            console.error("[EmailInquiry] scanGmail: Failed to create draft quote for pending_send inquiry:", e);
-          }
-        } else if (isHighConf && !isFHSrc && !isHighValueScan && !readyForAutoDraftScan) {
-          console.log(
-            `[EmailInquiry] scanGmail: kept pending (not auto-draft): ${draftReadinessScan?.summary ?? "readiness unknown"}`
-          );
-        }
-        newInquiries++;
-      }
-
-      return { scanned: emails.length, newInquiries, skipped };
+      const { startManualGmailScan } = await import("../scheduler");
+      const kick = startManualGmailScan(input.maxResults);
+      return {
+        started: kick.started,
+        alreadyRunning: kick.alreadyRunning,
+        // Keep fields for older clients; real counts come from scanStatus after completion
+        scanned: 0,
+        newInquiries: 0,
+        skipped: 0,
+      };
     }),
 
   // List inquiries
@@ -2498,7 +2267,12 @@ Do NOT include a subject line. Start directly with "Dear ${clientName},". Output
 
   scanStatus: protectedProcedure
     .query(async () => {
-      const { lastGmailScanAt, lastGmailScanResult } = await import("../scheduler");
+      const {
+        lastGmailScanAt,
+        lastGmailScanResult,
+        gmailScanInProgress,
+        gmailScanError,
+      } = await import("../scheduler");
       const GMAIL_SCAN_INTERVAL_MS = 30 * 60 * 1000;
       const nextScanAt = lastGmailScanAt
         ? new Date(lastGmailScanAt.getTime() + GMAIL_SCAN_INTERVAL_MS)
@@ -2512,6 +2286,8 @@ Do NOT include a subject line. Start directly with "Dear ${clientName},". Output
         nextScanAt,
         withinActiveHours,
         lastResult: lastGmailScanResult,
+        inProgress: gmailScanInProgress,
+        error: gmailScanError,
       };
     }),
 

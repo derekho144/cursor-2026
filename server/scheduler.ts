@@ -126,7 +126,46 @@ export let lastPitchOutreachResult: { scraped: number; saved?: number; emailsFou
 
 // Track last Gmail scan time (in-memory + persisted for silent heal across restarts)
 export let lastGmailScanAt: Date | null = null;
-export let lastGmailScanResult: { scanned: number; newInquiries: number } | null = null;
+export let lastGmailScanResult: { scanned: number; newInquiries: number; skipped?: number } | null = null;
+export let gmailScanInProgress = false;
+export let gmailScanError: string | null = null;
+
+/**
+ * Start a manual Gmail scan in the background and return immediately.
+ * Avoids reverse-proxy / Safari timeouts on long IMAP+AI scans.
+ */
+export function startManualGmailScan(maxResults = 20): {
+  started: boolean;
+  alreadyRunning: boolean;
+} {
+  if (gmailScanInProgress) {
+    return { started: false, alreadyRunning: true };
+  }
+  gmailScanInProgress = true;
+  gmailScanError = null;
+  void (async () => {
+    try {
+      console.log(`[Scheduler] Manual Gmail scan started (maxResults=${maxResults})...`);
+      const result = await runEmailScan(maxResults);
+      lastGmailScanAt = new Date();
+      lastGmailScanResult = {
+        scanned: result.scanned,
+        newInquiries: result.newInquiries,
+        skipped: result.skipped,
+      };
+      console.log(
+        `[Scheduler] Manual Gmail scan done: ${result.scanned} scanned, ${result.newInquiries} new, ${result.skipped} skipped`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      gmailScanError = msg;
+      console.error("[Scheduler] Manual Gmail scan error:", err);
+    } finally {
+      gmailScanInProgress = false;
+    }
+  })();
+  return { started: true, alreadyRunning: false };
+}
 
 const GMAIL_SCAN_STATUS_KEY = "gmail-scan-status";
 

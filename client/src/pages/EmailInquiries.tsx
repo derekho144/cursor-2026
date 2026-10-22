@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { Mail, RefreshCw, CheckCircle, XCircle, EyeOff, ChevronDown, ChevronUp, FileText, Loader2, ExternalLink, Phone, User, AlertCircle, Video, Calendar, MessageSquare, Sparkles } from "lucide-react";
@@ -1169,17 +1169,66 @@ export default function EmailInquiries() {
     placeholderData: keepPreviousData,
   });
 
+  const [awaitingScan, setAwaitingScan] = useState(false);
+  const scanBaselineAt = useRef<string | null>(null);
+
   const { data: scanStatus } = trpc.emailInquiries.scanStatus.useQuery(undefined, {
-    refetchInterval: 60_000,
+    refetchInterval: (query) =>
+      awaitingScan || query.state.data?.inProgress ? 2_000 : 60_000,
   });
+
+  // Poll until background scan finishes, then toast + refresh list
+  useEffect(() => {
+    if (!awaitingScan) return;
+    if (scanStatus?.error) {
+      toast.error(`掃描失敗：${scanStatus.error}`);
+      setAwaitingScan(false);
+      return;
+    }
+    if (scanStatus?.inProgress) return;
+    const lastAt = scanStatus?.lastScanAt
+      ? new Date(scanStatus.lastScanAt).toISOString()
+      : null;
+    // Wait until we see a newer lastScanAt than when we kicked off
+    if (lastAt && lastAt !== scanBaselineAt.current) {
+      const r = scanStatus?.lastResult;
+      toast.success(
+        `掃描完成：發現 ${r?.newInquiries ?? 0} 封新詢價郵件（共掃描 ${r?.scanned ?? 0} 封）`
+      );
+      setAwaitingScan(false);
+      refetch();
+    }
+  }, [awaitingScan, scanStatus, refetch]);
 
   const scanMutation = trpc.emailInquiries.scanGmail.useMutation({
     onSuccess: (result) => {
-      toast.success(`掃描完成：發現 ${result.newInquiries} 封新詢價郵件（共掃描 ${result.scanned} 封）`);
-      refetch();
+      if (result.alreadyRunning) {
+        toast.message("掃描進行中，請稍候…");
+      } else {
+        toast.message("已開始掃描 Gmail…");
+      }
+      scanBaselineAt.current = scanStatus?.lastScanAt
+        ? new Date(scanStatus.lastScanAt).toISOString()
+        : null;
+      setAwaitingScan(true);
     },
-    onError: (e) => toast.error(`掃描失敗：${e.message}`),
+    onError: (e) => {
+      const msg = e.message || "";
+      if (
+        msg.includes("expected pattern") ||
+        msg.includes("not valid JSON") ||
+        msg.includes("Unexpected token") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed")
+      ) {
+        toast.error("掃描請求逾時或伺服器忙碌，請稍後再試一次");
+      } else {
+        toast.error(`掃描失敗：${msg}`);
+      }
+    },
   });
+
+  const scanBusy = scanMutation.isPending || awaitingScan || !!scanStatus?.inProgress;
 
   const totalPages = Math.ceil((data?.total ?? 0) / limit);
 
@@ -1198,8 +1247,8 @@ export default function EmailInquiries() {
             </p>
           </div>
           <button
-            onClick={() => scanMutation.mutate({ maxResults: 20 })}
-            disabled={scanMutation.isPending}
+            onClick={() => scanMutation.mutate({ maxResults: 50 })}
+            disabled={scanBusy}
             className="flex items-center gap-2 px-5 py-2.5 transition-all hover:opacity-80 disabled:opacity-50"
             style={{
               background: "#d4a843",
@@ -1211,11 +1260,11 @@ export default function EmailInquiries() {
               borderRadius: "2px",
             }}
           >
-            {scanMutation.isPending
+            {scanBusy
               ? <Loader2 className="h-4 w-4 animate-spin" />
               : <RefreshCw className="h-4 w-4" />
             }
-            {scanMutation.isPending ? "掃描中..." : "掃描 Gmail"}
+            {scanBusy ? "掃描中..." : "掃描 Gmail"}
           </button>
         </div>
 
@@ -1228,6 +1277,12 @@ export default function EmailInquiries() {
             <span className="text-muted-foreground">🌙 夜間暫停（21:00 – 09:00 HKT），明早 09:00 自動恢復</span>
           ) : (
             <span className="text-muted-foreground">每 30 分鐘自動掃描一次（09:00 – 21:00 HKT）</span>
+          )}
+          {scanStatus?.inProgress && (
+            <span style={{ color: "#d4a843" }}>⏳ 正在掃描 Gmail…</span>
+          )}
+          {scanStatus?.error && !scanStatus?.inProgress && (
+            <span style={{ color: "#e53935" }}>上次失敗：{scanStatus.error}</span>
           )}
           {scanStatus?.lastScanAt && (
             <span className="text-muted-foreground">
