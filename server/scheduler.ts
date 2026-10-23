@@ -346,6 +346,16 @@ export async function runScheduledFreehunterScrape(): Promise<void> {
         // notification failure is non-critical
       }
     }
+
+    // Discovery-first leaves new jobs without email. Kick high-confidence
+    // backfill shortly after scrape releases the browser — do not wait for the hourly tick.
+    if (result.newJobs > 0) {
+      setTimeout(() => {
+        runFHHighConfidenceBackfill().catch((e) =>
+          console.warn("[Scheduler] post-scrape FH backfill error:", e)
+        );
+      }, 5_000);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Scheduler] Freehunter scrape error:", err);
@@ -400,13 +410,17 @@ export async function runScheduledGmailScan(): Promise<void> {
 }
 
 /**
- * Auto-backfill: find jobs that still need first-email handling:
- * - status=new with no email → fetch email (+ auto-send if AI ≥ 80)
- * - status=email_fetched with AI ≥ 80 and email present → retry send (stuck after failed auto-send)
+ * Auto-backfill: high-confidence (AI ≥ 80) first-email handling only:
+ * - status=new with no email → fetch email + auto-send
+ * - status=email_fetched with email present → retry send (stuck after failed auto-send)
+ * Low-confidence email fetch is left to watchdog / manual scrapeNow so this path
+ * cannot burn the Playwright session on non-auto jobs and stall the queue.
  * Always creates an email_inquiries row before sending so FH follow-ups can fire later.
  */
 export async function runFHHighConfidenceBackfill(): Promise<void> {
-  await withSchedulerLock("fh-backfill", 55 * 60 * 1000, async () => {
+  // 25 min TTL: enough for ~10×90s fetches; release early in finally so post-scrape
+  // kicks are not blocked for nearly an hour after a quick/empty run.
+  await withSchedulerLock("fh-backfill", 25 * 60 * 1000, async () => {
   if (!isWithinScanHours(8)) {
     return; // Only run during 08:00-21:00 HKT
   }
@@ -415,13 +429,14 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
     const db = await getDb();
     if (!db) return;
 
-    // Include stuck email_fetched high-confidence jobs so failed auto-sends get retried
+    // High-confidence only — matches auto-send threshold in freehunterBoard scraper
     const pendingJobs = await db
       .select()
       .from(freehunterJobs)
       .where(
         sql`(
-          (${freehunterJobs.status} = 'new' AND (${freehunterJobs.clientEmail} IS NULL OR ${freehunterJobs.clientEmail} = ''))
+          (${freehunterJobs.status} = 'new' AND ${freehunterJobs.aiScore} >= 80
+              AND (${freehunterJobs.clientEmail} IS NULL OR ${freehunterJobs.clientEmail} = ''))
           OR (${freehunterJobs.status} = 'email_fetched' AND ${freehunterJobs.aiScore} >= 80
               AND ${freehunterJobs.clientEmail} IS NOT NULL AND ${freehunterJobs.clientEmail} != '')
         )`
@@ -430,11 +445,11 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
       .limit(10);
 
     if (pendingJobs.length === 0) {
-      console.log("[Scheduler] FH backfill: no pending jobs without email.");
+      console.log("[Scheduler] FH backfill: no pending high-confidence jobs.");
       return;
     }
 
-    console.log(`[Scheduler] FH backfill: ${pendingJobs.length} job(s) to process.`);
+    console.log(`[Scheduler] FH backfill: ${pendingJobs.length} high-confidence job(s) to process.`);
     let fetched = 0;
     let sent = 0;
 
@@ -445,17 +460,16 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
         let email = job.clientEmail || "";
         if (!email) {
           const result = await fetchEmailForJob(job.jobId);
-          if (!result.email) continue;
+          if (!result.email) {
+            console.warn(
+              `[Scheduler] FH backfill: no email for job ${job.jobId} (score: ${job.aiScore}): ${result.error ?? "unknown"}`
+            );
+            continue;
+          }
           email = result.email;
           fetched++;
         } else {
           fetched++;
-        }
-
-        const isHighConfidence = (job.aiScore ?? 0) >= 80;
-        if (!isHighConfidence) {
-          console.log(`[Scheduler] FH backfill: fetched email for job ${job.jobId} (score: ${job.aiScore}, low-confidence, manual review needed)`);
-          continue;
         }
 
         // Create tracking inquiry so follow-ups can find this job later
@@ -525,12 +539,15 @@ export async function runFHHighConfidenceBackfill(): Promise<void> {
       try {
         await notifyOwner({
           title: `🤖 FH 自動補跑：取得 ${fetched} 個電郵，發送 ${sent} 封郵件`,
-          content: `補跑處理 ${pendingJobs.length} 個工作，成功取得／重試 ${fetched} 個電郵。其中 ${sent} 個高信心工作已自動發送第一封郵件。`,
+          content: `補跑處理 ${pendingJobs.length} 個高信心工作，成功取得／重試 ${fetched} 個電郵。其中 ${sent} 個已自動發送第一封郵件。`,
         });
       } catch (_) {}
     }
   } catch (err) {
     console.error("[Scheduler] FH high-confidence backfill error:", err);
+  } finally {
+    // Allow post-scrape / heartbeat retries instead of sitting on a long TTL
+    await releaseLock("fh-backfill").catch(() => {});
   }
   }); // end withSchedulerLock("fh-backfill")
 }
