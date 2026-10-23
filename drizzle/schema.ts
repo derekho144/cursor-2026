@@ -98,6 +98,21 @@ export const quotes = mysqlTable("quotes", {
   crewOthers: int("crewOthers").notNull().default(0),
   deliveryMethod: text("deliveryMethod"),
   leadSource: varchar("leadSource", { length: 64 }),
+  /** Google Ads click id (auto-tagging) — primary join key to Ads */
+  gclid: varchar("gclid", { length: 255 }),
+  gbraid: varchar("gbraid", { length: 255 }),
+  wbraid: varchar("wbraid", { length: 255 }),
+  utmSource: varchar("utm_source", { length: 128 }),
+  utmMedium: varchar("utm_medium", { length: 128 }),
+  utmCampaign: varchar("utm_campaign", { length: 255 }),
+  utmContent: varchar("utm_content", { length: 255 }),
+  utmTerm: varchar("utm_term", { length: 255 }),
+  /** Google Ads campaign.id when known (e.g. Search #3 = 24002224927) */
+  adsCampaignId: varchar("ads_campaign_id", { length: 64 }),
+  adsCampaignName: varchar("ads_campaign_name", { length: 255 }),
+  landingPageUrl: text("landing_page_url"),
+  /** Link to whatsapp_click_events.id when quote came from a tracked WA click */
+  whatsappClickId: int("whatsapp_click_id"),
   receiptUrl: text("receiptUrl"),
   receiptKey: varchar("receiptKey", { length: 512 }),
   // Signing
@@ -519,7 +534,28 @@ export const whatsappClickEvents = mysqlTable("whatsapp_click_events", {
   inquiryId: int("inquiry_id"), // 關聯 email_inquiries.id（FH 工作）
   fhJobId: int("fh_job_id"),    // 關聯 freehunter_jobs.id
   quoteId: int("quote_id"),     // 關聯 quotes.id（如有）
-  source: mysqlEnum("source", ["fh_first_email", "fh_follow_up", "quote_email", "review_invite", "other"]).notNull().default("other"),
+  source: mysqlEnum("source", [
+    "fh_first_email",
+    "fh_follow_up",
+    "quote_email",
+    "review_invite",
+    "google_ads",
+    "website",
+    "other",
+  ])
+    .notNull()
+    .default("other"),
+  gclid: varchar("gclid", { length: 255 }),
+  gbraid: varchar("gbraid", { length: 255 }),
+  wbraid: varchar("wbraid", { length: 255 }),
+  utmSource: varchar("utm_source", { length: 128 }),
+  utmMedium: varchar("utm_medium", { length: 128 }),
+  utmCampaign: varchar("utm_campaign", { length: 255 }),
+  utmContent: varchar("utm_content", { length: 255 }),
+  utmTerm: varchar("utm_term", { length: 255 }),
+  adsCampaignId: varchar("ads_campaign_id", { length: 64 }),
+  adsCampaignName: varchar("ads_campaign_name", { length: 255 }),
+  landingPageUrl: text("landing_page_url"),
   ip: varchar("ip", { length: 64 }),
   userAgent: varchar("user_agent", { length: 512 }),
   clickedAt: timestamp("clicked_at").defaultNow().notNull(),

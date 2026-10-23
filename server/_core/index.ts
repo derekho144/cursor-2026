@@ -268,25 +268,46 @@ async function startServer() {
   // so staff can tell email-link vs website-button from the first chat line.
   app.get("/api/track/wa", async (req, res) => {
     const { waMeUrlWithPrefill } = await import("./waTracking");
-    const source = (req.query.src as string) || "other";
+    const { parseAdsAttribution, hasAdsAttribution } = await import("./adsAttribution");
+    const sourceRaw = (req.query.src as string) || "other";
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
     const fhJobId = req.query.fhj ? parseInt(req.query.fhj as string, 10) : undefined;
     const quoteId = req.query.q ? parseInt(req.query.q as string, 10) : undefined;
+    const attr = parseAdsAttribution(req.query as Record<string, unknown>);
+    // Prefer explicit src; auto-tag google_ads when GCLID present
+    const allowed = [
+      "fh_first_email",
+      "fh_follow_up",
+      "quote_email",
+      "review_invite",
+      "google_ads",
+      "website",
+      "other",
+    ] as const;
+    let source: (typeof allowed)[number] = allowed.includes(sourceRaw as any)
+      ? (sourceRaw as (typeof allowed)[number])
+      : "other";
+    if (source === "other" && (attr.gclid || attr.adsCampaignId)) source = "google_ads";
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
     const userAgent = req.headers["user-agent"] ?? "";
-    // Fire-and-forget: record click then redirect
+    // Prefer website prefill when traffic is from the marketing site / Ads
+    const prefill = source === "google_ads" || source === "website" ? "website" : "email";
+    // Fire-and-forget: record click (+ Ads attribution) then redirect
     recordWhatsappClick({
       inquiryId: inquiryId && !isNaN(inquiryId) ? inquiryId : undefined,
       fhJobId: fhJobId && !isNaN(fhJobId) ? fhJobId : undefined,
       quoteId: quoteId && !isNaN(quoteId) ? quoteId : undefined,
-      source: ["fh_first_email","fh_follow_up","quote_email","review_invite","other"].includes(source)
-        ? source as "fh_first_email" | "fh_follow_up" | "quote_email" | "review_invite" | "other"
-        : "other",
+      source,
       ip,
       userAgent,
+      ...attr,
     }).catch(err => console.error("[WA Track] Failed:", err));
-    // Email / system tracked links → email prefill (website button keeps its own wording)
-    res.redirect(waMeUrlWithPrefill("email"));
+    if (hasAdsAttribution(attr)) {
+      console.log(
+        `[WA Track] Ads attribution src=${source} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
+      );
+    }
+    res.redirect(waMeUrlWithPrefill(prefill));
   });
 
   // ─── Heartbeat: FH job board scrape (every 30 min, 08:00-21:00 HKT) ──────

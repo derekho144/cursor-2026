@@ -39,6 +39,20 @@ vi.mock("./db", () => ({
   saveHelloTobyCookies: vi.fn().mockResolvedValue(undefined),
   getPlatformEfficiency: vi.fn().mockResolvedValue([]),
   upsertClientFromQuote: vi.fn().mockResolvedValue({ id: 1, name: "Test Client" }),
+  listRecentAdsWhatsappClicks: vi.fn().mockResolvedValue([
+    {
+      id: 9,
+      source: "google_ads",
+      gclid: "test-gclid",
+      adsCampaignId: "24002224927",
+      adsCampaignName: "Search #3",
+      utmCampaign: "search-3",
+      landingPageUrl: "https://jdstudiohk.com/food-photography",
+      clickedAt: new Date("2026-10-20T04:00:00Z"),
+      quoteId: null,
+    },
+  ]),
+  linkWhatsappClickToQuote: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock scheduler
@@ -121,6 +135,53 @@ describe("quotes router", () => {
     });
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("quoteNumber");
+  });
+
+  it("create persists Ads attribution and links WA click", async () => {
+    const db = await import("./db");
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    await caller.quotes.create({
+      clientName: "Ads Lead",
+      serviceType: "food_beverage",
+      leadSource: "Google",
+      gclid: "test-gclid",
+      adsCampaignId: "24002224927",
+      adsCampaignName: "Search #3",
+      landingPageUrl: "https://jdstudiohk.com/food-photography",
+      utmSource: "google",
+      utmMedium: "cpc",
+      whatsappClickId: 9,
+      subtotal: 3000,
+      discountAmount: 0,
+      total: 3000,
+      currency: "HKD",
+      items: [
+        {
+          description: "Food photography",
+          quantity: 1,
+          unit: "式",
+          unitPrice: 3000,
+          amount: 3000,
+        },
+      ],
+    });
+    expect(db.createQuote).toHaveBeenCalled();
+    const arg = (db.createQuote as any).mock.calls.at(-1)?.[0];
+    expect(arg.gclid).toBe("test-gclid");
+    expect(arg.adsCampaignId).toBe("24002224927");
+    expect(arg.landingPageUrl).toBe("https://jdstudiohk.com/food-photography");
+    expect(arg.whatsappClickId).toBe(9);
+    expect(db.linkWhatsappClickToQuote).toHaveBeenCalledWith(9, 1);
+  });
+
+  it("recentAdsWaClicks returns attributed clicks", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.quotes.recentAdsWaClicks({ limit: 10 });
+    expect(result).toHaveLength(1);
+    expect(result[0].gclid).toBe("test-gclid");
+    expect(result[0].adsCampaignId).toBe("24002224927");
   });
 
   it.each([
