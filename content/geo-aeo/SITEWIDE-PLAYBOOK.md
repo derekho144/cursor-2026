@@ -6,6 +6,8 @@
 
 **CMS:** Squarespace (`www.jdstudiohk.com`) — **not** `jdsys.biz`.
 
+**URL hygiene / GSC redirects:** see `GSC-URL-HYGIENE.md` (apex→www is normal; fix `/home`, soft-404 aliases, dead nav slugs).
+
 ---
 
 ## 1. What wins AEO/GEO (2025–2026)
