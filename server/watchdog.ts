@@ -64,13 +64,19 @@ async function healStuckFHJobs(): Promise<number> {
     const db = await getDb();
     if (!db) return 0;
 
+    // High-confidence (≥80): heal after 30 min so discovery-first jobs don't wait 2h.
+    // Low-confidence: keep 2h delay (manual review path; avoid burning Playwright).
     const stuckJobs = await db
       .select()
       .from(freehunterJobs)
       .where(
         sql`${freehunterJobs.status} = 'new'
           AND (${freehunterJobs.clientEmail} IS NULL OR ${freehunterJobs.clientEmail} = '')
-          AND ${freehunterJobs.scrapedAt} < DATE_SUB(NOW(), INTERVAL 2 HOUR)`
+          AND (
+            (${freehunterJobs.aiScore} >= 80 AND ${freehunterJobs.scrapedAt} < DATE_SUB(NOW(), INTERVAL 30 MINUTE))
+            OR ((${freehunterJobs.aiScore} IS NULL OR ${freehunterJobs.aiScore} < 80)
+                AND ${freehunterJobs.scrapedAt} < DATE_SUB(NOW(), INTERVAL 2 HOUR))
+          )`
       )
       .orderBy(desc(freehunterJobs.aiScore))
       .limit(10);
