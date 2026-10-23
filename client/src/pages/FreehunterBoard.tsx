@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -477,9 +477,47 @@ export default function FreehunterBoard() {
 
   const utils = trpc.useUtils();
 
+  /** Background email fetch — poll until ok/error (avoids Safari long-request false failures). */
+  const [pendingFetchJobId, setPendingFetchJobId] = useState<string | null>(null);
+  const fetchPollStartedAt = useRef<number>(0);
+
   const { data, isLoading, refetch } = trpc.freehunterBoard.getStatus.useQuery(undefined, {
-    refetchInterval: 60_000,
+    refetchInterval: pendingFetchJobId ? 4_000 : 60_000,
   });
+
+  const fetchEmailStatus = trpc.freehunterBoard.fetchEmailStatus.useQuery(
+    { jobId: pendingFetchJobId ?? "" },
+    {
+      enabled: !!pendingFetchJobId,
+      refetchInterval: pendingFetchJobId ? 2_500 : false,
+    }
+  );
+
+  useEffect(() => {
+    if (!pendingFetchJobId) return;
+    const st = fetchEmailStatus.data;
+    if (!st) return;
+
+    if (st.status === "ok" && st.email) {
+      toast.success(`成功取得電郵：${st.email}`);
+      utils.freehunterBoard.getStatus.invalidate();
+      setPendingFetchJobId(null);
+      setActionJobId(null);
+      return;
+    }
+    if (st.status === "error") {
+      toast.error(`無法取得電郵：${st.error || "請稍後再試"}`);
+      setPendingFetchJobId(null);
+      setActionJobId(null);
+      return;
+    }
+    // Hard stop after 2.5 min so the button does not spin forever
+    if (Date.now() - fetchPollStartedAt.current > 150_000) {
+      toast.error("取得電郵逾時，請稍後再試一次");
+      setPendingFetchJobId(null);
+      setActionJobId(null);
+    }
+  }, [fetchEmailStatus.data, pendingFetchJobId, utils.freehunterBoard.getStatus]);
 
   const backfill = trpc.freehunterBoard.backfillHighConfidenceEmails.useMutation({
     onSuccess: (result) => {
@@ -516,12 +554,30 @@ export default function FreehunterBoard() {
 
   const fetchEmail = trpc.freehunterBoard.fetchEmail.useMutation({
     onSuccess: (result) => {
-      toast.success(`成功取得電郵：${result.email}`);
-      utils.freehunterBoard.getStatus.invalidate();
-      setActionJobId(null);
+      if (result.alreadyRunning) {
+        toast.message("正在取得電郵，請稍候…");
+      } else {
+        toast.message("已開始取得電郵（約 30–90 秒），請稍候…");
+      }
+      fetchPollStartedAt.current = Date.now();
+      // pendingFetchJobId already set in handleFetchEmail
+      utils.freehunterBoard.fetchEmailStatus.invalidate();
     },
     onError: (e) => {
-      toast.error(`無法取得電郵：${e.message}`);
+      const msg = e.message || "";
+      if (
+        msg.includes("expected pattern") ||
+        msg.includes("not valid JSON") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed") ||
+        msg.includes("network connection was lost") ||
+        msg.includes("The request timed out")
+      ) {
+        toast.error("連線中斷或逾時，請再按一次「取得電郵」");
+      } else {
+        toast.error(`無法取得電郵：${msg}`);
+      }
+      setPendingFetchJobId(null);
       setActionJobId(null);
     },
   });
@@ -612,6 +668,8 @@ export default function FreehunterBoard() {
 
   const handleFetchEmail = (jobId: string) => {
     setActionJobId(jobId);
+    setPendingFetchJobId(jobId);
+    fetchPollStartedAt.current = Date.now();
     fetchEmail.mutate({ jobId });
   };
 
@@ -865,7 +923,10 @@ export default function FreehunterBoard() {
                   onIgnore={handleIgnore}
                   onCreateTracking={handleCreateTracking}
                   onAiCompose={handleAiCompose}
-                  isFetchingEmail={fetchEmail.isPending && actionJobId === job.jobId}
+                  isFetchingEmail={
+                    (fetchEmail.isPending || pendingFetchJobId === job.jobId) &&
+                    actionJobId === job.jobId
+                  }
                   isImporting={importAsInquiry.isPending && actionJobId === job.jobId}
                   isIgnoring={ignoreJob.isPending && actionJobId === job.jobId}
                   isCreatingTracking={createTrackingRecord.isPending && actionJobId === job.jobId}

@@ -325,21 +325,67 @@ export const freehunterBoardRouter = router({
     }),
 
   /**
-   * Fetch client email for a specific job
+   * Fetch client email for a specific job (async — returns immediately).
+   * Playwright takes 30–90s; awaiting inline breaks Safari / proxies with
+   * "The string did not match the expected pattern". Poll fetchEmailStatus.
    */
   fetchEmail: protectedProcedure
     .input(z.object({ jobId: z.string() }))
     .mutation(async ({ input }) => {
-      const { email, error } = await fetchEmailForJob(input.jobId);
-      if (!email) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message:
-            error ||
-            "無法取得客戶電郵，可能需要 Premium 帳號或工作已過期",
-        });
+      const { startFhEmailFetch } = await import("../fhEmailFetchQueue");
+      const kick = startFhEmailFetch(input.jobId);
+      return {
+        started: kick.started,
+        alreadyRunning: kick.alreadyRunning,
+        // Legacy field: clients that expected a sync email must poll status.
+        email: undefined as string | undefined,
+      };
+    }),
+
+  /** Poll background email-fetch progress for one job. */
+  fetchEmailStatus: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const { getFhEmailFetchStatus } = await import("../fhEmailFetchQueue");
+      const st = getFhEmailFetchStatus(input.jobId);
+      if (!st) {
+        // Fall back to DB — fetch may have finished before status was polled
+        // (or after server restart).
+        const db = await getDb();
+        if (db) {
+          const [job] = await db
+            .select({
+              clientEmail: freehunterJobs.clientEmail,
+              status: freehunterJobs.status,
+            })
+            .from(freehunterJobs)
+            .where(eq(freehunterJobs.jobId, input.jobId))
+            .limit(1);
+          if (job?.clientEmail) {
+            return {
+              jobId: input.jobId,
+              status: "ok" as const,
+              email: job.clientEmail,
+              error: undefined as string | undefined,
+              inProgress: false,
+            };
+          }
+        }
+        return {
+          jobId: input.jobId,
+          status: "idle" as const,
+          email: undefined as string | undefined,
+          error: undefined as string | undefined,
+          inProgress: false,
+        };
       }
-      return { email };
+      return {
+        jobId: st.jobId,
+        status: st.status,
+        email: st.email,
+        error: st.error,
+        inProgress: st.status === "running",
+      };
     }),
 
   /**
