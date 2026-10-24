@@ -438,6 +438,7 @@ export async function updateQuote(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  await ensureAdsQuoteAttributionSchema();
   const { items, ...quoteData } = data;
 
   if (Object.keys(quoteData).length > 0) {
