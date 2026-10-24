@@ -829,6 +829,52 @@ export default function QuoteForm() {
     applyAdsWaClickRow,
   ]);
 
+  // Full automation path: WhatsApp Cloud API inbound matched this phone → Ads click.
+  const phoneForAds = (form.clientPhone || "").replace(/\D/g, "");
+  const { data: phoneAdsAttr } = trpc.whatsapp.attributionForPhone.useQuery(
+    { phone: form.clientPhone },
+    {
+      enabled: !isEdit && phoneForAds.length >= 8,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    }
+  );
+  const phoneAdsAttachedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEdit) return;
+    if (!phoneAdsAttr?.matched || !phoneAdsAttr.attribution) return;
+    const key = `${phoneAdsAttr.phone}:${phoneAdsAttr.attribution.whatsappClickId}`;
+    if (phoneAdsAttachedRef.current === key) return;
+    if (
+      form.whatsappClickId != null &&
+      form.whatsappClickId === phoneAdsAttr.attribution.whatsappClickId
+    ) {
+      phoneAdsAttachedRef.current = key;
+      return;
+    }
+    phoneAdsAttachedRef.current = key;
+    applyAdsWaClickRow(
+      {
+        id: phoneAdsAttr.attribution.whatsappClickId,
+        ...phoneAdsAttr.attribution,
+      },
+      {
+        toastMsg: `WhatsApp API 已自動對上 Google Ads（電話 ${phoneAdsAttr.phone}${
+          phoneAdsAttr.contactName ? ` · ${phoneAdsAttr.contactName}` : ""
+        }）`,
+      }
+    );
+    if (phoneAdsAttr.contactName && !form.clientName.trim()) {
+      setForm((p) => ({ ...p, clientName: phoneAdsAttr.contactName || p.clientName }));
+    }
+  }, [
+    isEdit,
+    phoneAdsAttr,
+    form.whatsappClickId,
+    form.clientName,
+    applyAdsWaClickRow,
+  ]);
+
   const { data: existingQuote, isLoading: loadingQuote } = trpc.quotes.getById.useQuery(
     { id: quoteId! },
     { enabled: isEdit }
@@ -1852,7 +1898,7 @@ export default function QuoteForm() {
                   className="text-xs"
                   style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
                 >
-                  Google Ads 歸因（客人開場白唔會見到短碼）
+                  Google Ads 歸因（WhatsApp API 有配對會自動填）
                 </div>
                 <FormField label="從最近 Ads WA 點擊選擇">
                   <Select
@@ -1896,7 +1942,7 @@ export default function QuoteForm() {
                     </SelectContent>
                   </Select>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    撳咗連結 ≠ 有搵你。得真係傾完、時間對得上先揀；48 小時內只有 1 次未用 click 會自動帶入。唔肯定就揀「不連結」。
+                    填電話後，若 WhatsApp Cloud API 已收到訊息並對上 Ads click，會自動帶入。否則得真係傾完先人手揀；唔肯定就「不連結」。
                   </div>
                 </FormField>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

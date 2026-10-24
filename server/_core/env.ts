@@ -45,4 +45,9 @@ export const ENV = {
    * If empty, a stable token is derived from JWT_SECRET.
    */
   calendarFeedSecret: process.env.CALENDAR_FEED_SECRET ?? "",
+  /** WhatsApp Cloud API (Meta) — inbound webhook + optional send */
+  whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
+  whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
+  whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",
+  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? "",
 };
