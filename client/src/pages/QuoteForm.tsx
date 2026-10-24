@@ -763,8 +763,31 @@ export default function QuoteForm() {
     adsCampaignId?: string | null;
     adsCampaignName?: string | null;
     landingPageUrl?: string | null;
+    matchedPhone?: string | null;
     quoteId?: number | null;
     clickedAt?: Date | string | null;
+  };
+
+  const formatAdsWaPhone = (phone?: string | null) => {
+    const d = (phone || "").replace(/\D/g, "");
+    if (!d) return "";
+    if (d.startsWith("852") && d.length === 11) {
+      return `${d.slice(3, 7)} ${d.slice(7)}`;
+    }
+    if (d.length === 8) return `${d.slice(0, 4)} ${d.slice(4)}`;
+    return d;
+  };
+
+  const shortLandingLabel = (url?: string | null) => {
+    const raw = (url || "").trim();
+    if (!raw) return "";
+    try {
+      const u = new URL(raw);
+      const path = `${u.pathname}${u.search}`.replace(/\/$/, "") || "/";
+      return path.length > 40 ? `${path.slice(0, 37)}…` : path;
+    } catch {
+      return raw.length > 40 ? `${raw.slice(0, 37)}…` : raw;
+    }
   };
 
   const applyAdsWaClickRow = useCallback((click: AdsWaClickRow, opts?: { toastMsg?: string }) => {
@@ -1924,17 +1947,16 @@ export default function QuoteForm() {
                               minute: "2-digit",
                             })
                           : "";
-                        const camp =
+                        const phone = formatAdsWaPhone(c.matchedPhone) || "未配對電話";
+                        const page =
+                          shortLandingLabel(c.landingPageUrl) ||
                           c.adsCampaignName ||
-                          c.adsCampaignId ||
                           c.utmCampaign ||
                           "—";
-                        const ref = c.refCode ? `${c.refCode} · ` : "";
-                        const g = c.gclid ? `gclid…${String(c.gclid).slice(-6)}` : "no gclid";
                         const linked = c.quoteId ? " · 已連結報價" : "";
                         return (
                           <SelectItem key={c.id} value={String(c.id)}>
-                            {ref}#{c.id} · {when} · {camp} · {g}
+                            {phone} · {when} · {page}
                             {linked}
                           </SelectItem>
                         );
@@ -1942,7 +1964,7 @@ export default function QuoteForm() {
                     </SelectContent>
                   </Select>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    填電話後，若 WhatsApp Cloud API 已收到訊息並對上 Ads click，會自動帶入。否則得真係傾完先人手揀；唔肯定就「不連結」。
+                    列表優先顯示已配對電話同 landing page。填電話後若 WhatsApp API 對上 Ads click，會自動帶入 GCLID／landing／campaign；唔肯定就「不連結」。
                   </div>
                 </FormField>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1954,13 +1976,13 @@ export default function QuoteForm() {
                       style={inputStyle}
                     />
                   </FormField>
-                  <FormField label="Landing page">
+                  <FormField label="Landing page（邊頁搵到我哋）">
                     <Input
                       value={form.landingPageUrl}
                       onChange={(e) =>
                         setForm((p) => ({ ...p, landingPageUrl: e.target.value }))
                       }
-                      placeholder="https://jdstudiohk.com/..."
+                      placeholder="自動帶入，例如 /food-photography"
                       style={inputStyle}
                     />
                   </FormField>

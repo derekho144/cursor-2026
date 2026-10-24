@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendAttributionParams,
   hasAdsAttribution,
+  landingPageFromReferer,
   normalizeAttributionForDb,
   parseAdsAttribution,
 } from "./adsAttribution";
@@ -70,5 +71,18 @@ describe("normalizeAttributionForDb", () => {
     expect(n.adsCampaignId).toBe("24002224927");
     expect(n.landingPageUrl).toBeNull();
     expect(n.whatsappClickId).toBe(42);
+  });
+});
+
+describe("landingPageFromReferer", () => {
+  it("keeps marketing-site referers and drops WhatsApp / track self-hits", () => {
+    expect(
+      landingPageFromReferer("https://jdstudiohk.com/food-photography?utm_source=google")
+    ).toContain("/food-photography");
+    expect(landingPageFromReferer("https://wa.me/85291531976")).toBeNull();
+    expect(
+      landingPageFromReferer("https://jdsys.biz/api/track/wa?src=google_ads")
+    ).toBeNull();
+    expect(landingPageFromReferer("")).toBeNull();
   });
 });

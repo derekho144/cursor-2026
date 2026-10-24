@@ -363,6 +363,16 @@ async function startServer() {
     const fhJobId = req.query.fhj ? parseInt(req.query.fhj as string, 10) : undefined;
     const quoteId = req.query.q ? parseInt(req.query.q as string, 10) : undefined;
     const attr = parseAdsAttribution(req.query as Record<string, unknown>);
+    if (!attr.landingPageUrl) {
+      const { landingPageFromReferer } = await import("./adsAttribution");
+      attr.landingPageUrl = landingPageFromReferer(
+        typeof req.headers.referer === "string"
+          ? req.headers.referer
+          : typeof req.headers.referrer === "string"
+            ? req.headers.referrer
+            : null
+      );
+    }
     // Prefer explicit src; auto-tag google_ads when GCLID present
     const allowed = [
       "fh_first_email",
