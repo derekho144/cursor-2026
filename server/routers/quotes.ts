@@ -91,6 +91,7 @@ export async function generateQuotePdfMatchingDownload(
  */
 function enrichShootFundamentals(input: {
   shootHours?: number | string | null;
+  durationPackage?: string | null;
   shotCount?: number | string | null;
   crewPhotographers?: number | null;
   crewAssistants?: number | null;
@@ -103,6 +104,7 @@ function enrichShootFundamentals(input: {
 }) {
   const features = extractQuoteShootFeatures({
     shootHours: input.shootHours,
+    durationPackage: input.durationPackage,
     shotCount: input.shotCount,
     crewPhotographers: input.crewPhotographers,
     crewAssistants: input.crewAssistants,
@@ -114,10 +116,12 @@ function enrichShootFundamentals(input: {
     items: input.items,
   });
 
+  // multi_day: shootHours is day count — never backfill from clock-hour text
+  const multiDay = (input.durationPackage ?? "").trim() === "multi_day";
   const shootHours =
     input.shootHours != null && Number(input.shootHours) > 0
       ? String(input.shootHours)
-      : features.hours != null
+      : !multiDay && features.hours != null
         ? String(features.hours)
         : null;
 
@@ -485,6 +489,7 @@ export const quotesRouter = router({
       const finalItems = reconciled.items;
       const enriched = enrichShootFundamentals({
         shootHours,
+        durationPackage,
         shotCount,
         crewPhotographers: input.crewPhotographers,
         crewAssistants: input.crewAssistants,
@@ -736,6 +741,10 @@ export const quotesRouter = router({
             shootHours !== undefined
               ? shootHours
               : (existing as any)?.shootHours,
+          durationPackage:
+            durationPackage !== undefined
+              ? durationPackage
+              : (existing as any)?.durationPackage,
           shotCount:
             shotCount !== undefined
               ? shotCount

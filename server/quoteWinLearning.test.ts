@@ -14,13 +14,18 @@ describe("duration package", () => {
     expect(inferDurationPackageFromHours(5)).toBe("half_day");
     expect(inferDurationPackageFromHours(6)).toBe("full_day");
     expect(inferDurationPackageFromHours(8)).toBe("full_day");
-    expect(inferDurationPackageFromHours(14)).toBe("multi_day");
+    // >10h: form must pick 多日 explicitly (shootHours then = day count)
+    expect(inferDurationPackageFromHours(14)).toBe("unknown");
   });
 
-  it("prefers explicit package", () => {
+  it("prefers explicit package; unlabeled long hours resolve to multi_day", () => {
     expect(
       resolveDurationPackage({ durationPackage: "full_day", shootHours: 2 })
     ).toBe("full_day");
+    expect(
+      resolveDurationPackage({ durationPackage: "multi_day", shootHours: 2 })
+    ).toBe("multi_day");
+    expect(resolveDurationPackage({ shootHours: 14 })).toBe("multi_day");
   });
 });
 

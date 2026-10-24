@@ -174,6 +174,20 @@ describe("extractQuoteShootFeatures", () => {
     expect(f.crewSource).toBe("structured");
     expect(f.pricePerHour).toBe(2000);
   });
+
+  it("multi_day shootHours is day count → learning hours × 8", () => {
+    const f = extractQuoteShootFeatures({
+      shootHours: 2,
+      durationPackage: "multi_day",
+      crewVideographers: 6,
+      total: 93300,
+    });
+    expect(f.durationDays).toBe(2);
+    expect(f.hours).toBe(16);
+    expect(f.hoursSource).toBe("structured");
+    expect(f.hoursBucket).toBe("gt_8");
+    expect(f.pricePerHour).toBe(Math.round(93300 / 16));
+  });
 });
 
 describe("summarizeTotals", () => {
