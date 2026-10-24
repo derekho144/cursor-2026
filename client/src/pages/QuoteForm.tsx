@@ -30,6 +30,11 @@ import {
   isPricingLearningServiceType,
 } from "@shared/quotePricingMode";
 import {
+  campaignIdFromLandingUrl,
+  isProbeAdsWaClick,
+  rankAdsWaClicksForPicker,
+} from "@shared/adsWaClickQuality";
+import {
   formatHourlyQuantityAdjustments,
   reconcileHourlyQuoteItems,
 } from "@shared/quoteItemHours";
@@ -754,7 +759,7 @@ export default function QuoteForm() {
       refetchOnWindowFocus: false,
     }
   );
-  const adsAutoAttachedRef = useRef(false);
+  const [showManualAdsPick, setShowManualAdsPick] = useState(false);
 
   type AdsWaClickRow = {
     id: number;
@@ -798,6 +803,7 @@ export default function QuoteForm() {
   };
 
   const applyAdsWaClickRow = useCallback((click: AdsWaClickRow, opts?: { toastMsg?: string }) => {
+    const campFromLp = campaignIdFromLandingUrl(click.landingPageUrl) || "";
     setForm((p) => ({
       ...p,
       leadSource: "Google",
@@ -810,7 +816,7 @@ export default function QuoteForm() {
       utmCampaign: strOrEmpty(click.utmCampaign) || p.utmCampaign,
       utmContent: strOrEmpty(click.utmContent) || p.utmContent,
       utmTerm: strOrEmpty(click.utmTerm) || p.utmTerm,
-      adsCampaignId: strOrEmpty(click.adsCampaignId) || p.adsCampaignId,
+      adsCampaignId: strOrEmpty(click.adsCampaignId) || campFromLp || p.adsCampaignId,
       adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
       landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
     }));
@@ -827,39 +833,9 @@ export default function QuoteForm() {
     applyAdsWaClickRow(click);
   };
 
-  // Auto-attach: when staff picks Google Ads and there is exactly one unmatched
-  // Ads WA click in the last 48h, fill attribution without reading WhatsApp chats.
-  useEffect(() => {
-    if (isEdit) return;
-    if (form.leadSource !== "Google") {
-      adsAutoAttachedRef.current = false;
-      return;
-    }
-    if (form.whatsappClickId != null) return;
-    if (adsAutoAttachedRef.current) return;
-    if (!recentAdsWaClicks?.length) return;
-    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-    const unmatched = recentAdsWaClicks.filter((c) => {
-      if (c.quoteId != null) return false;
-      const t = c.clickedAt ? new Date(c.clickedAt).getTime() : 0;
-      return t >= cutoff;
-    });
-    if (unmatched.length !== 1) return;
-    adsAutoAttachedRef.current = true;
-    applyAdsWaClickRow(unmatched[0], {
-      toastMsg: `已自動帶入最近 Ads WA 點擊 #${unmatched[0].id}${
-        unmatched[0].refCode ? `（${unmatched[0].refCode}）` : ""
-      }`,
-    });
-  }, [
-    isEdit,
-    form.leadSource,
-    form.whatsappClickId,
-    recentAdsWaClicks,
-    applyAdsWaClickRow,
-  ]);
-
   // Full automation path: WhatsApp Cloud API inbound matched this phone → Ads click.
+  // (No longer auto-pick "the only unmatched click in 48h" — that becomes wrong as
+  // volume grows. Phone / WhatsApp match is the accurate path.)
   const { data: phoneAdsAttr } = trpc.whatsapp.attributionForPhone.useQuery(
     { phone: form.clientPhone },
     {
@@ -918,6 +894,7 @@ export default function QuoteForm() {
         : phoneForAds;
     const hit = recentAdsWaClicks.find((c) => {
       if (c.quoteId != null) return false;
+      if (isProbeAdsWaClick(c)) return false;
       const mp = (c.matchedPhone || "").replace(/\D/g, "");
       if (!mp) return false;
       return mp === normalized || mp.endsWith(phoneForAds) || normalized.endsWith(mp);
@@ -1962,75 +1939,178 @@ export default function QuoteForm() {
               </div>
             </FormField>
 
-            {form.leadSource === "Google" && (
+            {form.leadSource === "Google" && (() => {
+              const normalizedPhone =
+                phoneForAds.length === 8 && /^[4-9]/.test(phoneForAds)
+                  ? `852${phoneForAds}`
+                  : phoneForAds;
+              const pickerClicks = rankAdsWaClicksForPicker(recentAdsWaClicks ?? [], {
+                preferPhoneDigits: normalizedPhone,
+              });
+              const linkedClick =
+                form.whatsappClickId != null
+                  ? pickerClicks.find((c) => c.id === form.whatsappClickId) ||
+                    (recentAdsWaClicks ?? []).find((c) => c.id === form.whatsappClickId)
+                  : null;
+              const autoMatched =
+                form.whatsappClickId != null &&
+                (phoneAdsAttr?.matched === true ||
+                  (!!linkedClick?.matchedPhone &&
+                    !!normalizedPhone &&
+                    (linkedClick.matchedPhone.replace(/\D/g, "") === normalizedPhone ||
+                      linkedClick.matchedPhone.replace(/\D/g, "").endsWith(phoneForAds))));
+              const waitingPhone = phoneForAds.length < 8;
+              const noMatchYet =
+                !waitingPhone && form.whatsappClickId == null && phoneAdsAttr && !phoneAdsAttr.matched;
+
+              return (
               <div className="md:col-span-2 space-y-3 rounded-md border border-[rgba(212,168,67,0.25)] p-3">
                 <div
                   className="text-xs"
                   style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
                 >
-                  Google Ads 歸因（WhatsApp API 有配對會自動填）
+                  Google Ads 歸因
                 </div>
-                <FormField label="從最近 Ads WA 點擊選擇">
-                  <Select
-                    value={
-                      form.whatsappClickId != null
-                        ? String(form.whatsappClickId)
-                        : "__none__"
-                    }
-                    onValueChange={applyAdsWaClick}
-                  >
-                    <SelectTrigger style={inputStyle}>
-                      <SelectValue placeholder="選擇近期追蹤點擊（可選）" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">不連結 WA 點擊（淨係 click 冇傾就唔好綁）</SelectItem>
-                      {(recentAdsWaClicks ?? []).map((c) => {
-                        const when = c.clickedAt
-                          ? new Date(c.clickedAt).toLocaleString("zh-HK", {
-                              timeZone: "Asia/Hong_Kong",
-                              month: "2-digit",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "";
-                        const phone = formatAdsWaPhone(c.matchedPhone) || "未配對電話";
-                        const page =
-                          shortLandingLabel(c.landingPageUrl) ||
-                          c.adsCampaignName ||
-                          c.utmCampaign ||
-                          "—";
-                        const linked = c.quoteId ? " · 已連結報價" : "";
-                        return (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {phone} · {when} · {page}
-                            {linked}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <div className="text-[11px] text-muted-foreground mt-1">
-                    列表優先顯示已配對電話同 landing page。填電話後若 WhatsApp API 對上 Ads click，會自動帶入 GCLID／landing／campaign；唔肯定就「不連結」。
+
+                {autoMatched ? (
+                  <div className="rounded-md bg-[rgba(212,168,67,0.08)] px-3 py-2 text-sm space-y-1">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                      已按電話自動配對，唔使揀列表
+                    </div>
+                    <div className="text-xs text-muted-foreground pl-6">
+                      {formatAdsWaPhone(linkedClick?.matchedPhone || phoneAdsAttr?.phone) ||
+                        formatAdsWaPhone(normalizedPhone) ||
+                        phoneForAds}
+                      {linkedClick?.clickedAt
+                        ? ` · ${new Date(linkedClick.clickedAt).toLocaleString("zh-HK", {
+                            timeZone: "Asia/Hong_Kong",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}`
+                        : ""}
+                      {" · "}
+                      {shortLandingLabel(linkedClick?.landingPageUrl || form.landingPageUrl) ||
+                        linkedClick?.adsCampaignName ||
+                        form.adsCampaignName ||
+                        `click #${form.whatsappClickId}`}
+                    </div>
+                    <div className="pl-6 flex flex-wrap gap-3 text-[11px]">
+                      <button
+                        type="button"
+                        className="underline text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowManualAdsPick((v) => !v)}
+                      >
+                        {showManualAdsPick ? "收起手動選項" : "改手動／解除連結"}
+                      </button>
+                    </div>
                   </div>
-                </FormField>
+                ) : waitingPhone ? (
+                  <div className="text-xs text-muted-foreground">
+                    填客戶電話後會自動對上 WhatsApp Ads click（GCLID／landing／campaign），一般唔使開列表。
+                  </div>
+                ) : noMatchYet ? (
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>呢個電話暫時未對到近期 Ads WhatsApp click（可能係自然流，或者未撳過追蹤連結）。</div>
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => setShowManualAdsPick(true)}
+                    >
+                      進階：人手揀 click（少用）
+                    </button>
+                  </div>
+                ) : form.whatsappClickId != null ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    已連結 WA click #{form.whatsappClickId}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => setShowManualAdsPick((v) => !v)}
+                    >
+                      {showManualAdsPick ? "收起" : "更改"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs underline text-muted-foreground"
+                    onClick={() => setShowManualAdsPick(true)}
+                  >
+                    進階：人手揀 click（少用）
+                  </button>
+                )}
+
+                {(showManualAdsPick || (!autoMatched && form.whatsappClickId == null && phoneForAds.length >= 8 && phoneAdsAttr?.matched === false)) && (
+                  <FormField label="手動揀 Ads WA 點擊（可選）">
+                    <Select
+                      value={
+                        form.whatsappClickId != null
+                          ? String(form.whatsappClickId)
+                          : "__none__"
+                      }
+                      onValueChange={(v) => {
+                        applyAdsWaClick(v);
+                        if (v !== "__none__") setShowManualAdsPick(false);
+                      }}
+                    >
+                      <SelectTrigger style={inputStyle}>
+                        <SelectValue placeholder="選擇近期追蹤點擊（可選）" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">不連結 WA 點擊</SelectItem>
+                        {pickerClicks.map((c) => {
+                          const when = c.clickedAt
+                            ? new Date(c.clickedAt).toLocaleString("zh-HK", {
+                                timeZone: "Asia/Hong_Kong",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "";
+                          const phone = formatAdsWaPhone(c.matchedPhone) || "未配對電話";
+                          const page =
+                            shortLandingLabel(c.landingPageUrl) ||
+                            c.adsCampaignName ||
+                            c.utmCampaign ||
+                            "—";
+                          const linked = c.quoteId ? " · 已連結報價" : "";
+                          return (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {phone} · {when} · {page}
+                              {linked}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                )}
+
+                {(form.gclid || form.landingPageUrl || form.adsCampaignId || showManualAdsPick) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <FormField label="GCLID">
                     <Input
                       value={form.gclid}
                       onChange={(e) => setForm((p) => ({ ...p, gclid: e.target.value }))}
-                      placeholder="自動帶入或手動貼上"
+                      placeholder="自動帶入"
                       style={inputStyle}
+                      readOnly={autoMatched && !showManualAdsPick}
                     />
                   </FormField>
-                  <FormField label="Landing page（邊頁搵到我哋）">
+                  <FormField label="Landing page">
                     <Input
                       value={form.landingPageUrl}
                       onChange={(e) =>
                         setForm((p) => ({ ...p, landingPageUrl: e.target.value }))
                       }
-                      placeholder="自動帶入，例如 /food-photography"
+                      placeholder="自動帶入"
                       style={inputStyle}
+                      readOnly={autoMatched && !showManualAdsPick}
                     />
                   </FormField>
                   <FormField label="Campaign ID">
@@ -2039,8 +2119,9 @@ export default function QuoteForm() {
                       onChange={(e) =>
                         setForm((p) => ({ ...p, adsCampaignId: e.target.value }))
                       }
-                      placeholder="例如 Search #3 = 24002224927"
+                      placeholder="自動帶入"
                       style={inputStyle}
+                      readOnly={autoMatched && !showManualAdsPick}
                     />
                   </FormField>
                   <FormField label="Campaign 名稱">
@@ -2053,39 +2134,11 @@ export default function QuoteForm() {
                       style={inputStyle}
                     />
                   </FormField>
-                  <FormField label="utm_campaign">
-                    <Input
-                      value={form.utmCampaign}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, utmCampaign: e.target.value }))
-                      }
-                      placeholder="可選"
-                      style={inputStyle}
-                    />
-                  </FormField>
-                  <FormField label="utm_source / medium">
-                    <div className="flex gap-2">
-                      <Input
-                        value={form.utmSource}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, utmSource: e.target.value }))
-                        }
-                        placeholder="google"
-                        style={inputStyle}
-                      />
-                      <Input
-                        value={form.utmMedium}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, utmMedium: e.target.value }))
-                        }
-                        placeholder="cpc"
-                        style={inputStyle}
-                      />
-                    </div>
-                  </FormField>
                 </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {quotePricingMode(form.serviceType) === "time_crew" && (
               <div className="md:col-span-2">

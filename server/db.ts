@@ -3141,7 +3141,9 @@ export async function listRecentAdsWhatsappClicks(limit = 30) {
   const db = await getDb();
   if (!db) return [];
   await ensureAdsQuoteAttributionSchema();
-  return db
+  const { rankAdsWaClicksForPicker } = await import("../shared/adsWaClickQuality");
+  // Over-fetch then drop probe/template rows so the picker stays short & real.
+  const rows = await db
     .select(adsWaClickSelect)
     .from(whatsappClickEvents)
     .where(
@@ -3153,7 +3155,8 @@ export async function listRecentAdsWhatsappClicks(limit = 30) {
         OR LOWER(COALESCE(${whatsappClickEvents.utmMedium}, '')) IN ('cpc','ppc','paid','paidsearch','paid_search','display','shopping')`
     )
     .orderBy(desc(whatsappClickEvents.clickedAt))
-    .limit(limit);
+    .limit(Math.min(Math.max(limit * 4, 40), 120));
+  return rankAdsWaClicksForPicker(rows).slice(0, limit);
 }
 
 /** Lookup Ads WA click by short ref code from the customer's first WhatsApp line. */
