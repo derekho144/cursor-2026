@@ -1149,11 +1149,13 @@ export async function getPlatformEfficiency(year: number) {
     { key: "360pro",     leadSource: "PRO360",          adKey: "360pro" as const,      label: "360Pro",     hasAd: true,  adType: "cpc" },
     { key: "freehunter", leadSource: "FreelanceHunter", adKey: "freehunter" as const,  label: "FreeHunter", hasAd: true,  adType: "subscription" },
     { key: "google_ads", leadSource: "Google",          adKey: "google_ads" as const,  label: "Google Ads", hasAd: true,  adType: "cpc" },
+    { key: "organic",    leadSource: "Organic",         adKey: null,                   label: "SEO／GEO 自然搜尋", hasAd: false, adType: "none" },
+    { key: "ai",         leadSource: "AI",              adKey: null,                   label: "AI／AEO",    hasAd: false, adType: "none" },
     { key: "instagram",  leadSource: "Instagram",       adKey: null,                   label: "Instagram",  hasAd: false, adType: "none" },
     { key: "facebook",   leadSource: "Facebook",        adKey: null,                   label: "Facebook",   hasAd: false, adType: "none" },
     { key: "88db",       leadSource: "88DB",            adKey: null,                   label: "88DB",       hasAd: false, adType: "none" },
     { key: "referral",   leadSource: "Referral",        adKey: null,                   label: "朋友介紹",   hasAd: false, adType: "none" },
-    { key: "website",    leadSource: "Website",         adKey: null,                   label: "自然流量",   hasAd: false, adType: "none" },
+    { key: "website",    leadSource: "Website",         adKey: null,                   label: "網站直訪",   hasAd: false, adType: "none" },
     { key: "repeat",     leadSource: "Repeat",          adKey: null,                   label: "回頭客",     hasAd: false, adType: "none" },
     { key: "other",      leadSource: "Other",           adKey: null,                   label: "其他",       hasAd: false, adType: "none" },
   ];
@@ -2988,6 +2990,8 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
       'quote_email',
       'review_invite',
       'google_ads',
+      'organic',
+      'ai',
       'website',
       'other'
     ) NOT NULL DEFAULT 'other'`));
@@ -2997,6 +3001,8 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
       String((err as any)?.message || err).slice(0, 200)
     );
   }
+
+  await addCol("whatsapp_click_events", "page_referrer", "text");
 
   await addCol("whatsapp_click_events", "gclid", "varchar(255)");
   await addCol("whatsapp_click_events", "gbraid", "varchar(255)");
@@ -3061,6 +3067,8 @@ export async function recordWhatsappClick(opts: {
     | "quote_email"
     | "review_invite"
     | "google_ads"
+    | "organic"
+    | "ai"
     | "website"
     | "other";
   ip?: string;
@@ -3076,6 +3084,7 @@ export async function recordWhatsappClick(opts: {
   adsCampaignId?: string | null;
   adsCampaignName?: string | null;
   landingPageUrl?: string | null;
+  pageReferrer?: string | null;
   refCode?: string | null;
 }): Promise<number | undefined> {
   const db = await getDb();
@@ -3097,6 +3106,7 @@ export async function recordWhatsappClick(opts: {
     adsCampaignId: opts.adsCampaignId ?? null,
     adsCampaignName: opts.adsCampaignName ?? null,
     landingPageUrl: opts.landingPageUrl ?? null,
+    pageReferrer: opts.pageReferrer ?? null,
     refCode: opts.refCode ?? null,
     ip: opts.ip ?? null,
     userAgent: opts.userAgent ?? null,
@@ -3120,6 +3130,7 @@ const adsWaClickSelect = {
   adsCampaignId: whatsappClickEvents.adsCampaignId,
   adsCampaignName: whatsappClickEvents.adsCampaignName,
   landingPageUrl: whatsappClickEvents.landingPageUrl,
+  pageReferrer: whatsappClickEvents.pageReferrer,
   matchedPhone: whatsappClickEvents.matchedPhone,
   clickedAt: whatsappClickEvents.clickedAt,
   quoteId: whatsappClickEvents.quoteId,
@@ -3135,9 +3146,11 @@ export async function listRecentAdsWhatsappClicks(limit = 30) {
     .from(whatsappClickEvents)
     .where(
       sql`(${whatsappClickEvents.gclid} IS NOT NULL AND ${whatsappClickEvents.gclid} != '')
+        OR (${whatsappClickEvents.gbraid} IS NOT NULL AND ${whatsappClickEvents.gbraid} != '')
+        OR (${whatsappClickEvents.wbraid} IS NOT NULL AND ${whatsappClickEvents.wbraid} != '')
         OR ${whatsappClickEvents.source} = 'google_ads'
         OR (${whatsappClickEvents.adsCampaignId} IS NOT NULL AND ${whatsappClickEvents.adsCampaignId} != '')
-        OR (${whatsappClickEvents.utmCampaign} IS NOT NULL AND ${whatsappClickEvents.utmCampaign} != '')`
+        OR LOWER(COALESCE(${whatsappClickEvents.utmMedium}, '')) IN ('cpc','ppc','paid','paidsearch','paid_search','display','shopping')`
     )
     .orderBy(desc(whatsappClickEvents.clickedAt))
     .limit(limit);

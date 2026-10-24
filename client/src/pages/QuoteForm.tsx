@@ -100,6 +100,8 @@ const LEAD_SOURCE_VALUES = new Set([
   "Instagram",
   "Facebook",
   "Google",
+  "Organic",
+  "AI",
   "Referral",
   "Website",
   "Repeat",
@@ -1907,12 +1909,17 @@ export default function QuoteForm() {
                   <SelectItem value="Instagram">Instagram</SelectItem>
                   <SelectItem value="Facebook">Facebook</SelectItem>
                   <SelectItem value="Google">Google Ads</SelectItem>
+                  <SelectItem value="Organic">SEO／GEO 自然搜尋</SelectItem>
+                  <SelectItem value="AI">AI／AEO（ChatGPT 等）</SelectItem>
                   <SelectItem value="Referral">朋友介紹</SelectItem>
-                  <SelectItem value="Website">自然流量</SelectItem>
+                  <SelectItem value="Website">網站直訪</SelectItem>
                   <SelectItem value="Repeat">舊客回頭</SelectItem>
                   <SelectItem value="Other">其他</SelectItem>
                 </SelectContent>
               </Select>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Ads＝有 gclid／付費 UTM；SEO／GEO＝utm_medium=organic 或搜尋 referrer；AI／AEO＝ChatGPT 等；網站直訪＝無來源訊號
+              </div>
             </FormField>
 
             {form.leadSource === "Google" && (

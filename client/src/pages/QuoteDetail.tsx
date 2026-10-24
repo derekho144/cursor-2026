@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { QUOTE_REJECT_REASONS } from "@shared/quoteRejectReasons";
 import { durationPackageLabel, resolveDurationPackage } from "@shared/quoteDurationPackage";
+import { leadSourceLabel } from "@shared/leadChannels";
 
 const DEFAULT_EMAIL_BODY = `Hello,
 
@@ -612,18 +613,20 @@ export default function QuoteDetail() {
                 <div className="flex items-center gap-2 mt-2">
                   <span style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(212,168,67,0.6)", textTransform: "uppercase" }}>詢價來源</span>
                   <span className="inline-block px-2 py-0.5 text-xs" style={{ background: "rgba(212,168,67,0.1)", color: "#d4a843", border: "1px solid rgba(212,168,67,0.25)", borderRadius: "2px" }}>
-                    {(quote as any).leadSource}
+                    {leadSourceLabel((quote as any).leadSource)}
                   </span>
                 </div>
               )}
               {((quote as any).gclid ||
                 (quote as any).adsCampaignId ||
                 (quote as any).adsCampaignName ||
+                (quote as any).utmSource ||
+                (quote as any).utmMedium ||
                 (quote as any).utmCampaign ||
                 (quote as any).landingPageUrl) && (
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                   <div style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(212,168,67,0.6)", textTransform: "uppercase" }}>
-                    Ads 歸因
+                    流量歸因
                   </div>
                   {((quote as any).adsCampaignName || (quote as any).adsCampaignId) && (
                     <div>

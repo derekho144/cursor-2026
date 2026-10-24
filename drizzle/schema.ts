@@ -544,6 +544,8 @@ export const whatsappClickEvents = mysqlTable("whatsapp_click_events", {
     "quote_email",
     "review_invite",
     "google_ads",
+    "organic",
+    "ai",
     "website",
     "other",
   ])
@@ -560,6 +562,8 @@ export const whatsappClickEvents = mysqlTable("whatsapp_click_events", {
   adsCampaignId: varchar("ads_campaign_id", { length: 64 }),
   adsCampaignName: varchar("ads_campaign_name", { length: 255 }),
   landingPageUrl: text("landing_page_url"),
+  /** document.referrer from marketing page (search / AI engines) */
+  pageReferrer: text("page_referrer"),
   /** Short code for staff dropdown (never shown in customer WA opener) */
   refCode: varchar("ref_code", { length: 16 }),
   /** Filled when Cloud API inbound message is matched to this click */

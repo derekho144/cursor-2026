@@ -1,11 +1,30 @@
 /**
  * Sitewide WhatsApp click rewriter for jdstudiohk.com (Squarespace).
  * Inject once: <script src="https://jdsys.biz/wa-track-rewrite.js" defer></script>
+ *
+ * Classifies src: google_ads | organic | ai | website from landing UTM + document.referrer.
  */
 (function () {
   var TRACK = "https://jdsys.biz/api/track/wa";
   var WA_HOSTS =
     /(wa\.me\/85291531976|api\.whatsapp\.com\/send\?.*phone=85291531976|web\.whatsapp\.com\/send\?.*phone=85291531976)/i;
+
+  var PAID_MEDIA = {
+    cpc: 1,
+    ppc: 1,
+    paid: 1,
+    paidsearch: 1,
+    paid_search: 1,
+    display: 1,
+    shopping: 1,
+    cpm: 1,
+  };
+  var AI_SOURCES =
+    /(chatgpt|openai|perplexity|gemini|copilot|claude|anthropic|you\.com|youcom|phind|poe|deepseek|grok|meta\.ai|metaai)/i;
+  var AI_HOST =
+    /(chat\.openai\.com|chatgpt\.com|perplexity\.ai|gemini\.google\.com|copilot\.microsoft\.com|claude\.ai|you\.com|phind\.com|poe\.com|meta\.ai|grok\.com)/i;
+  var SEARCH_HOST =
+    /(google\.|bing\.com|yahoo\.|duckduckgo\.com|baidu\.com|yandex\.|search\.brave\.com)/i;
 
   function pageLp() {
     try {
@@ -15,13 +34,48 @@
     }
   }
 
+  function pageReferrer() {
+    try {
+      return document.referrer || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function classifySrc(cur, referrer) {
+    var gclid = cur && cur.searchParams.get("gclid");
+    var gbraid = cur && cur.searchParams.get("gbraid");
+    var wbraid = cur && cur.searchParams.get("wbraid");
+    var cid =
+      (cur && (cur.searchParams.get("campaign_id") || cur.searchParams.get("campaignid"))) || "";
+    var utmSource = ((cur && cur.searchParams.get("utm_source")) || "").toLowerCase();
+    var utmMedium = ((cur && cur.searchParams.get("utm_medium")) || "").toLowerCase();
+    if (gclid || gbraid || wbraid || cid || PAID_MEDIA[utmMedium]) return "google_ads";
+    if (utmMedium === "ai" || utmMedium === "llm" || utmMedium === "aeo" || AI_SOURCES.test(utmSource)) {
+      return "ai";
+    }
+    if (referrer && AI_HOST.test(referrer)) return "ai";
+    if (
+      utmMedium === "organic" ||
+      utmMedium === "seo" ||
+      utmMedium === "geo" ||
+      (utmSource &&
+        /^(google|bing|yahoo|duckduckgo)/i.test(utmSource) &&
+        !PAID_MEDIA[utmMedium])
+    ) {
+      return "organic";
+    }
+    if (referrer && SEARCH_HOST.test(referrer)) return "organic";
+    return "website";
+  }
+
   function buildTrackHref() {
     var u = new URL(TRACK);
     var cur = null;
     try {
       cur = new URL(location.href);
     } catch (e) {}
-    var src = "website";
+    var referrer = pageReferrer();
     if (cur) {
       ["gclid", "gbraid", "wbraid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].forEach(
         function (k) {
@@ -31,12 +85,12 @@
       );
       var cid = cur.searchParams.get("campaign_id") || cur.searchParams.get("campaignid");
       if (cid) u.searchParams.set("campaign_id", cid);
-      if (cur.searchParams.get("gclid") || cur.searchParams.get("gbraid") || cur.searchParams.get("wbraid") || cid) {
-        src = "google_ads";
-      }
     }
+    var src = classifySrc(cur, referrer);
     u.searchParams.set("src", src);
     u.searchParams.set("lp", pageLp());
+    // Capture marketing-page referrer before noreferrer strip on the track hop
+    if (referrer) u.searchParams.set("ref", referrer.slice(0, 2048));
     return u.toString();
   }
 

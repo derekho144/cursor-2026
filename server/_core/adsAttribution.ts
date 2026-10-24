@@ -8,9 +8,11 @@
  * Auto-tagging (ValueTrack) can fill gclid / campaignid / lpurl on final URL.
  * Optional UTM: utm_source, utm_medium, utm_campaign, utm_content, utm_term
  * Optional: gbraid, wbraid, campaign (name)
+ * Optional: ref / referrer = document.referrer (for Organic / AI split)
  */
 
 import { z } from "zod";
+import { hasPaidAdsSignal } from "../../shared/leadChannels";
 
 export type AdsAttribution = {
   gclid: string | null;
@@ -24,6 +26,8 @@ export type AdsAttribution = {
   adsCampaignId: string | null;
   adsCampaignName: string | null;
   landingPageUrl: string | null;
+  /** Marketing-page document.referrer (search / AI / etc.) */
+  pageReferrer: string | null;
 };
 
 const EMPTY: AdsAttribution = {
@@ -38,6 +42,7 @@ const EMPTY: AdsAttribution = {
   adsCampaignId: null,
   adsCampaignName: null,
   landingPageUrl: null,
+  pageReferrer: null,
 };
 
 function clip(raw: unknown, max: number): string | null {
@@ -74,18 +79,33 @@ export function parseAdsAttribution(
       255
     ),
     landingPageUrl: clip(get("lp") ?? get("landing") ?? get("landingPageUrl"), 2048),
+    pageReferrer: clip(
+      get("ref") ?? get("referrer") ?? get("pageReferrer") ?? get("page_referrer"),
+      2048
+    ),
   };
 }
 
+/**
+ * True when this click/quote should be treated as paid Google Ads attribution.
+ * Landing URL alone is NOT Ads (organic/AI/direct also have lp).
+ */
 export function hasAdsAttribution(a: AdsAttribution | null | undefined): boolean {
+  return hasPaidAdsSignal(a);
+}
+
+/** Any marketing attribution worth persisting (Ads, UTM, referrer, landing). */
+export function hasMarketingAttribution(
+  a: AdsAttribution | null | undefined
+): boolean {
   if (!a) return false;
   return Boolean(
-    a.gclid ||
-      a.gbraid ||
-      a.wbraid ||
+    hasPaidAdsSignal(a) ||
+      a.utmSource ||
+      a.utmMedium ||
       a.utmCampaign ||
-      a.adsCampaignId ||
-      a.landingPageUrl
+      a.landingPageUrl ||
+      a.pageReferrer
   );
 }
 
@@ -121,7 +141,7 @@ export function appendAttributionParams(
   url: string,
   attr: Partial<AdsAttribution> | null | undefined
 ): string {
-  if (!attr || !hasAdsAttribution(attr as AdsAttribution)) return url;
+  if (!attr || !hasMarketingAttribution(attr as AdsAttribution)) return url;
   const u = new URL(url);
   const map: Array<[string, string | null | undefined]> = [
     ["gclid", attr.gclid],
@@ -135,6 +155,7 @@ export function appendAttributionParams(
     ["campaign_id", attr.adsCampaignId],
     ["campaign", attr.adsCampaignName],
     ["lp", attr.landingPageUrl],
+    ["ref", attr.pageReferrer],
   ];
   for (const [k, v] of map) {
     if (v) u.searchParams.set(k, v);
@@ -157,6 +178,7 @@ export const adsAttributionInputSchema = z.object({
   adsCampaignId: optStr(64),
   adsCampaignName: optStr(255),
   landingPageUrl: optStr(2048),
+  pageReferrer: optStr(2048),
   whatsappClickId: z.number().int().positive().nullable().optional(),
 });
 
@@ -178,6 +200,7 @@ export function normalizeAttributionForDb(
     adsCampaignId: input?.adsCampaignId,
     adsCampaignName: input?.adsCampaignName,
     landingPageUrl: input?.landingPageUrl,
+    pageReferrer: input?.pageReferrer,
   });
   const clickId =
     input?.whatsappClickId != null &&
