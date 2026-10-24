@@ -67,6 +67,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH AGENT_PROFILE PUBLISH_ONLY ROOT
+# Piped logs (e.g. `| tee`) otherwise reorder stderr ahead of buffered stdout.
+export PYTHONUNBUFFERED=1
 
 python3 <<'PY'
 import json, os, subprocess, sys, time
@@ -358,7 +360,8 @@ def do_publish(
 
     published = False
     final_vid = ""
-    for _ in range(60):
+    # Manus publish often stays "publishing" 3–8+ minutes after version_id advances.
+    for _ in range(120):
         st = api("GET", f"website.status?website_id={website_id}")
         ps = st.get("publish_status")
         final_vid = str(st.get("version_id") or "").strip()
@@ -370,17 +373,34 @@ def do_publish(
             break
         if ps == "failed":
             sys.exit(3)
-        time.sleep(3)
-
-    if not published:
-        print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
-        sys.exit(3)
+        time.sleep(4)
 
     pub_vid = str(pub.get("version_id") or "").strip()
     if pub_vid and (not final_vid or final_vid == before_vid):
         # Status poll sometimes lags; prefer publish response when it advanced.
         if pub_vid != before_vid:
             final_vid = pub_vid
+
+    if not published:
+        if final_vid and before_vid and final_vid != before_vid:
+            print(
+                "manus-auto-deploy: publish_status still not 'published', "
+                f"but version advanced {before_vid} → {final_vid}; continuing to verify",
+                file=sys.stderr,
+            )
+        elif pub_vid and before_vid and pub_vid != before_vid:
+            final_vid = pub_vid
+            print(
+                "manus-auto-deploy: publish_status timed out, "
+                f"using publish response version_id={final_vid}; continuing to verify",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "manus-auto-deploy: publish did not reach published in time",
+                file=sys.stderr,
+            )
+            sys.exit(3)
 
     is_stale = False
     if require_new_version:
