@@ -556,12 +556,33 @@ export const whatsappClickEvents = mysqlTable("whatsapp_click_events", {
   adsCampaignId: varchar("ads_campaign_id", { length: 64 }),
   adsCampaignName: varchar("ads_campaign_name", { length: 255 }),
   landingPageUrl: text("landing_page_url"),
+  /** Short code for staff dropdown (never shown in customer WA opener) */
+  refCode: varchar("ref_code", { length: 16 }),
+  /** Filled when Cloud API inbound message is matched to this click */
+  matchedPhone: varchar("matched_phone", { length: 32 }),
   ip: varchar("ip", { length: 64 }),
   userAgent: varchar("user_agent", { length: 512 }),
   clickedAt: timestamp("clicked_at").defaultNow().notNull(),
 });
 export type WhatsappClickEvent = typeof whatsappClickEvents.$inferSelect;
 export type InsertWhatsappClickEvent = typeof whatsappClickEvents.$inferInsert;
+
+// ─── WhatsApp Cloud API inbound (真實客人訊息) ─────────────────────────────
+export const whatsappInboundMessages = mysqlTable("whatsapp_inbound_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  waMessageId: varchar("wa_message_id", { length: 128 }).notNull().unique(),
+  fromPhone: varchar("from_phone", { length: 32 }).notNull(),
+  contactName: varchar("contact_name", { length: 255 }),
+  body: text("body"),
+  waTimestamp: timestamp("wa_timestamp"),
+  matchedClickId: int("matched_click_id"),
+  /** single_recent | none | manual */
+  matchReason: varchar("match_reason", { length: 32 }),
+  rawJson: mediumtext("raw_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type WhatsappInboundMessage = typeof whatsappInboundMessages.$inferSelect;
+export type InsertWhatsappInboundMessage = typeof whatsappInboundMessages.$inferInsert;
 
 // ─── Quote Costs (項目直接成本) ──────────────────────────────────────────
 // 記錄每張報價單的直接成本，用於計算每個 job 的毛利

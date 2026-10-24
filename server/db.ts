@@ -48,6 +48,7 @@ import {
   quotes,
   users,
   whatsappClickEvents,
+  whatsappInboundMessages,
   quoteFollowUps,
   QuoteFollowUp,
   InsertQuoteFollowUp,
@@ -3005,9 +3006,45 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
   await addCol("whatsapp_click_events", "ads_campaign_id", "varchar(64)");
   await addCol("whatsapp_click_events", "ads_campaign_name", "varchar(255)");
   await addCol("whatsapp_click_events", "landing_page_url", "text");
+  await addCol("whatsapp_click_events", "ref_code", "varchar(16)");
+  await addCol("whatsapp_click_events", "matched_phone", "varchar(32)");
+  try {
+    await db.execute(
+      sql.raw(
+        "CREATE UNIQUE INDEX `whatsapp_click_events_ref_code_uidx` ON `whatsapp_click_events` (`ref_code`)"
+      )
+    );
+  } catch (err) {
+    const msg = String((err as any)?.message || err);
+    if (!/Duplicate|already exists/i.test(msg)) {
+      console.warn("[ads-attribution] ref_code index:", msg.slice(0, 200));
+    }
+  }
+
+  try {
+    await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS \`whatsapp_inbound_messages\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`wa_message_id\` varchar(128) NOT NULL,
+      \`from_phone\` varchar(32) NOT NULL,
+      \`contact_name\` varchar(255),
+      \`body\` text,
+      \`wa_timestamp\` timestamp NULL,
+      \`matched_click_id\` int,
+      \`match_reason\` varchar(32),
+      \`raw_json\` mediumtext,
+      \`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT \`whatsapp_inbound_messages_id\` PRIMARY KEY(\`id\`),
+      CONSTRAINT \`whatsapp_inbound_messages_wa_message_id_uidx\` UNIQUE(\`wa_message_id\`)
+    )`));
+  } catch (err) {
+    console.warn(
+      "[ads-attribution] whatsapp_inbound_messages:",
+      String((err as any)?.message || err).slice(0, 200)
+    );
+  }
 
   adsQuoteAttributionSchemaReady = true;
-  console.log("[ads-attribution] schema 0066 ensured");
+  console.log("[ads-attribution] schema 0066/0067/0068 ensured");
 }
 
 /** 記錄一次 WhatsApp 點擊事件；回傳 insert id（若 DB 可用） */
@@ -3036,6 +3073,7 @@ export async function recordWhatsappClick(opts: {
   adsCampaignId?: string | null;
   adsCampaignName?: string | null;
   landingPageUrl?: string | null;
+  refCode?: string | null;
 }): Promise<number | undefined> {
   const db = await getDb();
   if (!db) return undefined;
@@ -3056,6 +3094,7 @@ export async function recordWhatsappClick(opts: {
     adsCampaignId: opts.adsCampaignId ?? null,
     adsCampaignName: opts.adsCampaignName ?? null,
     landingPageUrl: opts.landingPageUrl ?? null,
+    refCode: opts.refCode ?? null,
     ip: opts.ip ?? null,
     userAgent: opts.userAgent ?? null,
   });
@@ -3063,28 +3102,32 @@ export async function recordWhatsappClick(opts: {
   return insertId > 0 ? insertId : undefined;
 }
 
+const adsWaClickSelect = {
+  id: whatsappClickEvents.id,
+  source: whatsappClickEvents.source,
+  refCode: whatsappClickEvents.refCode,
+  gclid: whatsappClickEvents.gclid,
+  gbraid: whatsappClickEvents.gbraid,
+  wbraid: whatsappClickEvents.wbraid,
+  utmSource: whatsappClickEvents.utmSource,
+  utmMedium: whatsappClickEvents.utmMedium,
+  utmCampaign: whatsappClickEvents.utmCampaign,
+  utmContent: whatsappClickEvents.utmContent,
+  utmTerm: whatsappClickEvents.utmTerm,
+  adsCampaignId: whatsappClickEvents.adsCampaignId,
+  adsCampaignName: whatsappClickEvents.adsCampaignName,
+  landingPageUrl: whatsappClickEvents.landingPageUrl,
+  clickedAt: whatsappClickEvents.clickedAt,
+  quoteId: whatsappClickEvents.quoteId,
+} as const;
+
 /** Recent Google Ads / attributed WA clicks for staff to attach to a quote */
 export async function listRecentAdsWhatsappClicks(limit = 30) {
   const db = await getDb();
   if (!db) return [];
+  await ensureAdsQuoteAttributionSchema();
   return db
-    .select({
-      id: whatsappClickEvents.id,
-      source: whatsappClickEvents.source,
-      gclid: whatsappClickEvents.gclid,
-      gbraid: whatsappClickEvents.gbraid,
-      wbraid: whatsappClickEvents.wbraid,
-      utmSource: whatsappClickEvents.utmSource,
-      utmMedium: whatsappClickEvents.utmMedium,
-      utmCampaign: whatsappClickEvents.utmCampaign,
-      utmContent: whatsappClickEvents.utmContent,
-      utmTerm: whatsappClickEvents.utmTerm,
-      adsCampaignId: whatsappClickEvents.adsCampaignId,
-      adsCampaignName: whatsappClickEvents.adsCampaignName,
-      landingPageUrl: whatsappClickEvents.landingPageUrl,
-      clickedAt: whatsappClickEvents.clickedAt,
-      quoteId: whatsappClickEvents.quoteId,
-    })
+    .select(adsWaClickSelect)
     .from(whatsappClickEvents)
     .where(
       sql`(${whatsappClickEvents.gclid} IS NOT NULL AND ${whatsappClickEvents.gclid} != '')
@@ -3094,6 +3137,194 @@ export async function listRecentAdsWhatsappClicks(limit = 30) {
     )
     .orderBy(desc(whatsappClickEvents.clickedAt))
     .limit(limit);
+}
+
+/** Lookup Ads WA click by short ref code from the customer's first WhatsApp line. */
+export async function findAdsWhatsappClickByRef(refCode: string) {
+  const db = await getDb();
+  if (!db) return null;
+  await ensureAdsQuoteAttributionSchema();
+  const { extractWaRefCode } = await import("./_core/waTracking");
+  const ref = extractWaRefCode(refCode);
+  if (!ref) return null;
+  const rows = await db
+    .select(adsWaClickSelect)
+    .from(whatsappClickEvents)
+    .where(eq(whatsappClickEvents.refCode, ref))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listUnmatchedAdsWhatsappClicks(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  await ensureAdsQuoteAttributionSchema();
+  return db
+    .select({
+      id: whatsappClickEvents.id,
+      clickedAt: whatsappClickEvents.clickedAt,
+      quoteId: whatsappClickEvents.quoteId,
+      matchedPhone: whatsappClickEvents.matchedPhone,
+      gclid: whatsappClickEvents.gclid,
+      adsCampaignId: whatsappClickEvents.adsCampaignId,
+      adsCampaignName: whatsappClickEvents.adsCampaignName,
+      utmCampaign: whatsappClickEvents.utmCampaign,
+      landingPageUrl: whatsappClickEvents.landingPageUrl,
+      refCode: whatsappClickEvents.refCode,
+      gbraid: whatsappClickEvents.gbraid,
+      wbraid: whatsappClickEvents.wbraid,
+      utmSource: whatsappClickEvents.utmSource,
+      utmMedium: whatsappClickEvents.utmMedium,
+      utmContent: whatsappClickEvents.utmContent,
+      utmTerm: whatsappClickEvents.utmTerm,
+    })
+    .from(whatsappClickEvents)
+    .where(
+      sql`(${whatsappClickEvents.gclid} IS NOT NULL AND ${whatsappClickEvents.gclid} != '')
+        OR ${whatsappClickEvents.source} = 'google_ads'
+        OR (${whatsappClickEvents.adsCampaignId} IS NOT NULL AND ${whatsappClickEvents.adsCampaignId} != '')`
+    )
+    .orderBy(desc(whatsappClickEvents.clickedAt))
+    .limit(limit);
+}
+
+/** Persist Cloud API inbound message + auto-match Ads click when unambiguous. */
+export async function recordWhatsappInboundMessage(opts: {
+  waMessageId: string;
+  fromPhone: string;
+  contactName?: string | null;
+  body?: string | null;
+  waTimestamp?: Date | null;
+  rawJson?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+  await ensureAdsQuoteAttributionSchema();
+
+  const existing = await db
+    .select({ id: whatsappInboundMessages.id })
+    .from(whatsappInboundMessages)
+    .where(eq(whatsappInboundMessages.waMessageId, opts.waMessageId))
+    .limit(1);
+  if (existing[0]) {
+    return getWhatsappInboundById(existing[0].id);
+  }
+
+  const { pickAdsClickForInbound } = await import("./_core/whatsappCloud");
+  const messageAt = opts.waTimestamp ?? new Date();
+  const candidates = await listUnmatchedAdsWhatsappClicks(40);
+  const match = pickAdsClickForInbound(candidates, messageAt);
+
+  await db.insert(whatsappInboundMessages).values({
+    waMessageId: opts.waMessageId,
+    fromPhone: opts.fromPhone,
+    contactName: opts.contactName ?? null,
+    body: opts.body ?? null,
+    waTimestamp: opts.waTimestamp ?? null,
+    matchedClickId: match.clickId,
+    matchReason: match.reason,
+    rawJson: opts.rawJson ?? null,
+  });
+
+  if (match.clickId) {
+    await db
+      .update(whatsappClickEvents)
+      .set({ matchedPhone: opts.fromPhone })
+      .where(eq(whatsappClickEvents.id, match.clickId));
+  }
+
+  const rows = await db
+    .select()
+    .from(whatsappInboundMessages)
+    .where(eq(whatsappInboundMessages.waMessageId, opts.waMessageId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getWhatsappInboundById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(whatsappInboundMessages)
+    .where(eq(whatsappInboundMessages.id, id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Latest inbound (+ matched Ads click attribution) for a phone — used when
+ * creating a quote so Google source fills automatically.
+ */
+export async function getAdsAttributionForPhone(phone: string) {
+  const db = await getDb();
+  if (!db) return null;
+  await ensureAdsQuoteAttributionSchema();
+  const { normalizeWaPhone } = await import("./_core/whatsappCloud");
+  const normalized = normalizeWaPhone(phone);
+  if (!normalized) return null;
+
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const inbounds = await db
+    .select()
+    .from(whatsappInboundMessages)
+    .where(
+      and(
+        eq(whatsappInboundMessages.fromPhone, normalized),
+        sql`${whatsappInboundMessages.createdAt} >= ${since}`
+      )
+    )
+    .orderBy(desc(whatsappInboundMessages.createdAt))
+    .limit(5);
+
+  const withClick = inbounds.find((m) => m.matchedClickId != null);
+  if (!withClick?.matchedClickId) {
+    return {
+      phone: normalized,
+      inboundId: inbounds[0]?.id ?? null,
+      contactName: inbounds[0]?.contactName ?? null,
+      matched: false as const,
+      attribution: null,
+    };
+  }
+
+  const clicks = await db
+    .select(adsWaClickSelect)
+    .from(whatsappClickEvents)
+    .where(eq(whatsappClickEvents.id, withClick.matchedClickId))
+    .limit(1);
+  const click = clicks[0];
+  if (!click) {
+    return {
+      phone: normalized,
+      inboundId: withClick.id,
+      contactName: withClick.contactName,
+      matched: false as const,
+      attribution: null,
+    };
+  }
+
+  return {
+    phone: normalized,
+    inboundId: withClick.id,
+    contactName: withClick.contactName,
+    matched: true as const,
+    attribution: {
+      whatsappClickId: click.id,
+      gclid: click.gclid,
+      gbraid: click.gbraid,
+      wbraid: click.wbraid,
+      utmSource: click.utmSource,
+      utmMedium: click.utmMedium,
+      utmCampaign: click.utmCampaign,
+      utmContent: click.utmContent,
+      utmTerm: click.utmTerm,
+      adsCampaignId: click.adsCampaignId,
+      adsCampaignName: click.adsCampaignName,
+      landingPageUrl: click.landingPageUrl,
+      refCode: click.refCode,
+    },
+  };
 }
 
 /** Attach a tracked WA click to a quote (bidirectional link). */

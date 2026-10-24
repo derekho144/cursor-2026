@@ -52,6 +52,95 @@ async function startServer() {
     }
   );
 
+  // WhatsApp Cloud API — Meta webhook verification + inbound messages
+  app.get("/api/webhooks/whatsapp", async (req, res) => {
+    try {
+      const { verifyWhatsappWebhookChallenge, isWhatsappCloudConfigured } = await import(
+        "./whatsappCloud"
+      );
+      if (!isWhatsappCloudConfigured()) {
+        res.status(503).type("text/plain").send("WhatsApp Cloud API not configured");
+        return;
+      }
+      const challenge = verifyWhatsappWebhookChallenge({
+        "hub.mode": typeof req.query["hub.mode"] === "string" ? req.query["hub.mode"] : undefined,
+        "hub.verify_token":
+          typeof req.query["hub.verify_token"] === "string"
+            ? req.query["hub.verify_token"]
+            : undefined,
+        "hub.challenge":
+          typeof req.query["hub.challenge"] === "string" ? req.query["hub.challenge"] : undefined,
+      });
+      if (challenge == null) {
+        res.status(403).type("text/plain").send("Forbidden");
+        return;
+      }
+      res.status(200).type("text/plain").send(challenge);
+    } catch (err) {
+      console.error("[WhatsApp Webhook] verify error:", err);
+      res.status(500).type("text/plain").send("error");
+    }
+  });
+
+  app.post(
+    "/api/webhooks/whatsapp",
+    express.raw({ type: "application/json", limit: "2mb" }),
+    async (req, res) => {
+      try {
+        const {
+          verifyWhatsappSignature,
+          parseWhatsappWebhookPayload,
+          isWhatsappCloudConfigured,
+        } = await import("./whatsappCloud");
+        const { recordWhatsappInboundMessage } = await import("../db");
+
+        if (!isWhatsappCloudConfigured()) {
+          res.status(503).json({ error: "not_configured" });
+          return;
+        }
+
+        const raw: Buffer = Buffer.isBuffer(req.body)
+          ? req.body
+          : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body ?? {}));
+        const sig = req.headers["x-hub-signature-256"];
+        if (!verifyWhatsappSignature(raw, typeof sig === "string" ? sig : undefined)) {
+          console.warn("[WhatsApp Webhook] bad signature");
+          res.status(401).json({ error: "invalid_signature" });
+          return;
+        }
+
+        let payload: unknown;
+        try {
+          payload = JSON.parse(raw.toString("utf8"));
+        } catch {
+          res.status(400).json({ error: "invalid_json" });
+          return;
+        }
+
+        const messages = parseWhatsappWebhookPayload(payload);
+        for (const msg of messages) {
+          const saved = await recordWhatsappInboundMessage({
+            waMessageId: msg.waMessageId,
+            fromPhone: msg.fromPhone,
+            contactName: msg.contactName,
+            body: msg.body,
+            waTimestamp: msg.waTimestamp,
+            rawJson: raw.toString("utf8").slice(0, 100_000),
+          });
+          console.log(
+            `[WhatsApp Webhook] inbound from=${msg.fromPhone} match=${saved?.matchReason || "?"} click=${saved?.matchedClickId ?? "-"}`
+          );
+        }
+
+        // Meta requires 200 quickly
+        res.status(200).json({ ok: true, received: messages.length });
+      } catch (err) {
+        console.error("[WhatsApp Webhook] Error:", err);
+        res.status(200).json({ ok: true, received: 0 });
+      }
+    }
+  );
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -267,7 +356,7 @@ async function startServer() {
   // Prefill wording differs from the official-site button (same meaning, no "Email" label)
   // so staff can tell email-link vs website-button from the first chat line.
   app.get("/api/track/wa", async (req, res) => {
-    const { waMeUrlWithPrefill } = await import("./waTracking");
+    const { waMeUrlWithPrefill, generateWaRefCode } = await import("./waTracking");
     const { parseAdsAttribution, hasAdsAttribution } = await import("./adsAttribution");
     const sourceRaw = (req.query.src as string) || "other";
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
@@ -292,7 +381,14 @@ async function startServer() {
     const userAgent = req.headers["user-agent"] ?? "";
     // Prefer website prefill when traffic is from the marketing site / Ads
     const prefill = source === "google_ads" || source === "website" ? "website" : "email";
-    // Fire-and-forget: record click (+ Ads attribution) then redirect
+    // Staff-only match label in quote form dropdown — never shown in customer WA text.
+    const wantsRef =
+      source === "google_ads" ||
+      (source === "website" && hasAdsAttribution(attr)) ||
+      Boolean(attr.gclid || attr.adsCampaignId);
+    const refCode = wantsRef ? generateWaRefCode() : null;
+
+    // Fire-and-forget: record click (+ Ads attribution / staff ref) then redirect
     recordWhatsappClick({
       inquiryId: inquiryId && !isNaN(inquiryId) ? inquiryId : undefined,
       fhJobId: fhJobId && !isNaN(fhJobId) ? fhJobId : undefined,
@@ -300,13 +396,15 @@ async function startServer() {
       source,
       ip,
       userAgent,
+      refCode,
       ...attr,
-    }).catch(err => console.error("[WA Track] Failed:", err));
-    if (hasAdsAttribution(attr)) {
+    }).catch((err) => console.error("[WA Track] Failed:", err));
+    if (hasAdsAttribution(attr) || refCode) {
       console.log(
-        `[WA Track] Ads attribution src=${source} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
+        `[WA Track] Ads attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
       );
     }
+    // Clean opener only — same as Squarespace button (no weird codes for the customer)
     res.redirect(waMeUrlWithPrefill(prefill));
   });
 

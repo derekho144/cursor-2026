@@ -742,10 +742,50 @@ export default function QuoteForm() {
     }
   }, []);
 
+  const utils = trpc.useUtils();
   const { data: recentAdsWaClicks } = trpc.quotes.recentAdsWaClicks.useQuery(
     { limit: 30 },
     { enabled: form.leadSource === "Google", refetchOnWindowFocus: false }
   );
+  const adsAutoAttachedRef = useRef(false);
+
+  type AdsWaClickRow = {
+    id: number;
+    refCode?: string | null;
+    gclid?: string | null;
+    gbraid?: string | null;
+    wbraid?: string | null;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmContent?: string | null;
+    utmTerm?: string | null;
+    adsCampaignId?: string | null;
+    adsCampaignName?: string | null;
+    landingPageUrl?: string | null;
+    quoteId?: number | null;
+    clickedAt?: Date | string | null;
+  };
+
+  const applyAdsWaClickRow = useCallback((click: AdsWaClickRow, opts?: { toastMsg?: string }) => {
+    setForm((p) => ({
+      ...p,
+      leadSource: "Google",
+      whatsappClickId: click.id,
+      gclid: strOrEmpty(click.gclid) || p.gclid,
+      gbraid: strOrEmpty(click.gbraid) || p.gbraid,
+      wbraid: strOrEmpty(click.wbraid) || p.wbraid,
+      utmSource: strOrEmpty(click.utmSource) || p.utmSource,
+      utmMedium: strOrEmpty(click.utmMedium) || p.utmMedium,
+      utmCampaign: strOrEmpty(click.utmCampaign) || p.utmCampaign,
+      utmContent: strOrEmpty(click.utmContent) || p.utmContent,
+      utmTerm: strOrEmpty(click.utmTerm) || p.utmTerm,
+      adsCampaignId: strOrEmpty(click.adsCampaignId) || p.adsCampaignId,
+      adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
+      landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
+    }));
+    if (opts?.toastMsg) toast.success(opts.toastMsg);
+  }, []);
 
   const applyAdsWaClick = (clickId: string) => {
     if (clickId === "__none__") {
@@ -754,23 +794,86 @@ export default function QuoteForm() {
     }
     const click = recentAdsWaClicks?.find((c) => String(c.id) === clickId);
     if (!click) return;
-    setForm((p) => ({
-      ...p,
-      leadSource: "Google",
-      whatsappClickId: click.id,
-      gclid: strOrEmpty(click.gclid) || p.gclid,
-      gbraid: strOrEmpty((click as any).gbraid) || p.gbraid,
-      wbraid: strOrEmpty((click as any).wbraid) || p.wbraid,
-      utmSource: strOrEmpty((click as any).utmSource) || p.utmSource,
-      utmMedium: strOrEmpty((click as any).utmMedium) || p.utmMedium,
-      utmCampaign: strOrEmpty(click.utmCampaign) || p.utmCampaign,
-      utmContent: strOrEmpty((click as any).utmContent) || p.utmContent,
-      utmTerm: strOrEmpty((click as any).utmTerm) || p.utmTerm,
-      adsCampaignId: strOrEmpty(click.adsCampaignId) || p.adsCampaignId,
-      adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
-      landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
-    }));
+    applyAdsWaClickRow(click);
   };
+
+  // Auto-attach: when staff picks Google Ads and there is exactly one unmatched
+  // Ads WA click in the last 48h, fill attribution without reading WhatsApp chats.
+  useEffect(() => {
+    if (isEdit) return;
+    if (form.leadSource !== "Google") {
+      adsAutoAttachedRef.current = false;
+      return;
+    }
+    if (form.whatsappClickId != null) return;
+    if (adsAutoAttachedRef.current) return;
+    if (!recentAdsWaClicks?.length) return;
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    const unmatched = recentAdsWaClicks.filter((c) => {
+      if (c.quoteId != null) return false;
+      const t = c.clickedAt ? new Date(c.clickedAt).getTime() : 0;
+      return t >= cutoff;
+    });
+    if (unmatched.length !== 1) return;
+    adsAutoAttachedRef.current = true;
+    applyAdsWaClickRow(unmatched[0], {
+      toastMsg: `已自動帶入最近 Ads WA 點擊 #${unmatched[0].id}${
+        unmatched[0].refCode ? `（${unmatched[0].refCode}）` : ""
+      }`,
+    });
+  }, [
+    isEdit,
+    form.leadSource,
+    form.whatsappClickId,
+    recentAdsWaClicks,
+    applyAdsWaClickRow,
+  ]);
+
+  // Full automation path: WhatsApp Cloud API inbound matched this phone → Ads click.
+  const phoneForAds = (form.clientPhone || "").replace(/\D/g, "");
+  const { data: phoneAdsAttr } = trpc.whatsapp.attributionForPhone.useQuery(
+    { phone: form.clientPhone },
+    {
+      enabled: !isEdit && phoneForAds.length >= 8,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    }
+  );
+  const phoneAdsAttachedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEdit) return;
+    if (!phoneAdsAttr?.matched || !phoneAdsAttr.attribution) return;
+    const key = `${phoneAdsAttr.phone}:${phoneAdsAttr.attribution.whatsappClickId}`;
+    if (phoneAdsAttachedRef.current === key) return;
+    if (
+      form.whatsappClickId != null &&
+      form.whatsappClickId === phoneAdsAttr.attribution.whatsappClickId
+    ) {
+      phoneAdsAttachedRef.current = key;
+      return;
+    }
+    phoneAdsAttachedRef.current = key;
+    applyAdsWaClickRow(
+      {
+        id: phoneAdsAttr.attribution.whatsappClickId,
+        ...phoneAdsAttr.attribution,
+      },
+      {
+        toastMsg: `WhatsApp API 已自動對上 Google Ads（電話 ${phoneAdsAttr.phone}${
+          phoneAdsAttr.contactName ? ` · ${phoneAdsAttr.contactName}` : ""
+        }）`,
+      }
+    );
+    if (phoneAdsAttr.contactName && !form.clientName.trim()) {
+      setForm((p) => ({ ...p, clientName: phoneAdsAttr.contactName || p.clientName }));
+    }
+  }, [
+    isEdit,
+    phoneAdsAttr,
+    form.whatsappClickId,
+    form.clientName,
+    applyAdsWaClickRow,
+  ]);
 
   const { data: existingQuote, isLoading: loadingQuote } = trpc.quotes.getById.useQuery(
     { id: quoteId! },
@@ -999,7 +1102,6 @@ export default function QuoteForm() {
     }
   }, [existingQuote, editDraftKey]);
 
-  const utils = trpc.useUtils();
   const createMutation = trpc.quotes.create.useMutation({
     onSuccess: (data) => {
       clearDraft(); // Clear draft after successful save
@@ -1796,7 +1898,7 @@ export default function QuoteForm() {
                   className="text-xs"
                   style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
                 >
-                  Google Ads 歸因（GCLID／Campaign／Landing）
+                  Google Ads 歸因（WhatsApp API 有配對會自動填）
                 </div>
                 <FormField label="從最近 Ads WA 點擊選擇">
                   <Select
@@ -1811,7 +1913,7 @@ export default function QuoteForm() {
                       <SelectValue placeholder="選擇近期追蹤點擊（可選）" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">不連結 WA 點擊</SelectItem>
+                      <SelectItem value="__none__">不連結 WA 點擊（淨係 click 冇傾就唔好綁）</SelectItem>
                       {(recentAdsWaClicks ?? []).map((c) => {
                         const when = c.clickedAt
                           ? new Date(c.clickedAt).toLocaleString("zh-HK", {
@@ -1827,11 +1929,12 @@ export default function QuoteForm() {
                           c.adsCampaignId ||
                           c.utmCampaign ||
                           "—";
+                        const ref = c.refCode ? `${c.refCode} · ` : "";
                         const g = c.gclid ? `gclid…${String(c.gclid).slice(-6)}` : "no gclid";
                         const linked = c.quoteId ? " · 已連結報價" : "";
                         return (
                           <SelectItem key={c.id} value={String(c.id)}>
-                            #{c.id} · {when} · {camp} · {g}
+                            {ref}#{c.id} · {when} · {camp} · {g}
                             {linked}
                           </SelectItem>
                         );
@@ -1839,7 +1942,7 @@ export default function QuoteForm() {
                     </SelectContent>
                   </Select>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    選取後會帶入 GCLID／campaign／landing；官網 WA 須經 jdsys `/api/track/wa` 才會出現
+                    填電話後，若 WhatsApp Cloud API 已收到訊息並對上 Ads click，會自動帶入。否則得真係傾完先人手揀；唔肯定就「不連結」。
                   </div>
                 </FormField>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
