@@ -14,3 +14,4 @@ lead-organic-ai-split-v1
 wa-attr-phone-lookback-v1
 wa-ads-auto-no-picker-v1
 wa-ads-auto-no-picker-v1-force
+manus-stale-version-retry-v1

@@ -6,6 +6,11 @@
 # Task: MANUS_PROJECT_TASK_ID (preferred) or defaults to JD SYS 8b23sC2fWWQJLaDHXQRwZX
 # Agent: MANUS_AGENT_PROFILE (default manus-1.6-lite — full 1.6 often hits quota)
 #
+# Stale-version handling: if JD SYS "sync" finishes but website version_id is
+# unchanged, the script retries sync+checkpoint (up to 3 attempts) before
+# publish. Callers that pipe this script MUST use `set -o pipefail` (or check
+# ${PIPESTATUS[0]}) — otherwise a failed deploy can look like exit 0 via `tee`.
+#
 # Usage:
 #   bash scripts/manus-auto-deploy.sh
 #   bash scripts/manus-auto-deploy.sh --dry-run
@@ -146,17 +151,37 @@ def verify_hosting() -> None:
     sys.exit(9)
 
 
+def deploy_revision_markers() -> tuple[str, str]:
+    """Return (first_marker, latest_marker) from deploy-revision.txt."""
+    marker_path = os.path.join(root, "client/public/deploy-revision.txt")
+    lines: list[str] = []
+    if os.path.isfile(marker_path):
+        lines = [
+            ln.strip()
+            for ln in open(marker_path, encoding="utf-8").read().splitlines()
+            if ln.strip()
+        ]
+    first = lines[0] if lines else sha
+    latest = lines[-1] if lines else sha
+    return first, latest
+
+
+def website_version_id() -> str:
+    st = api("GET", f"website.status?website_id={website_id}")
+    return str(st.get("version_id") or "").strip()
+
+
 def verify_live_revision() -> None:
     """Fail if published site still serves a stale client (Manus sync gap)."""
     import re
 
-    marker_path = os.path.join(root, "client/public/deploy-revision.txt")
-    expected = ""
-    if os.path.isfile(marker_path):
-        expected = open(marker_path, encoding="utf-8").read().strip().splitlines()[0].strip()
-    if not expected:
-        expected = sha
-    print(f"manus-auto-deploy: verifying live deploy-revision contains {expected!r} …")
+    first_marker, latest_marker = deploy_revision_markers()
+    # Prefer latest bump (e.g. wa-ads-auto-no-picker-v1-force); keep first for legacy.
+    expected = latest_marker or first_marker or sha
+    print(
+        f"manus-auto-deploy: verifying live deploy-revision contains {expected!r} "
+        f"(first={first_marker!r}) …"
+    )
     urls = [
         "https://jdsys.biz/deploy-revision.txt",
         "https://www.jdsys.biz/deploy-revision.txt",
@@ -286,10 +311,28 @@ def verify_live_revision() -> None:
     sys.exit(10)
 
 
-def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None:
+class StalePublish(Exception):
+    """Publish finished but website version_id did not advance."""
+
+    def __init__(self, before_vid: str, final_vid: str):
+        super().__init__(f"stale publish before={before_vid} final={final_vid}")
+        self.before_vid = before_vid
+        self.final_vid = final_vid
+
+
+def do_publish(
+    *,
+    verify: bool = True,
+    require_new_version: bool = True,
+    forbid_vid: str | None = None,
+) -> str:
+    """Publish current JD SYS checkpoint. Returns final version_id.
+
+    Raises StalePublish when require_new_version and version_id did not change
+    (caller should retry sync+checkpoint). Hard publish failures sys.exit.
+    """
     stale_versions = {"8043430f", "b7c0ce4d", "f6c7e274"}
-    before = api("GET", f"website.status?website_id={website_id}")
-    before_vid = str(before.get("version_id") or "")
+    before_vid = (forbid_vid if forbid_vid is not None else website_version_id()).strip()
     print(
         f"manus-auto-deploy: website.publish {website_id} "
         f"(current version_id={before_vid or '?'}) …"
@@ -318,7 +361,7 @@ def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None
     for _ in range(60):
         st = api("GET", f"website.status?website_id={website_id}")
         ps = st.get("publish_status")
-        final_vid = str(st.get("version_id") or "")
+        final_vid = str(st.get("version_id") or "").strip()
         print(
             f"publish_status: {ps} version={final_vid} urls={st.get('site_urls')}"
         )
@@ -333,26 +376,48 @@ def do_publish(*, verify: bool = True, require_new_version: bool = True) -> None
         print("manus-auto-deploy: publish did not reach published in time", file=sys.stderr)
         sys.exit(3)
 
-    if require_new_version and (
-        final_vid in stale_versions
-        or (before_vid in stale_versions and final_vid == before_vid)
-        or (before_vid and final_vid and final_vid == before_vid)
-    ):
+    pub_vid = str(pub.get("version_id") or "").strip()
+    if pub_vid and (not final_vid or final_vid == before_vid):
+        # Status poll sometimes lags; prefer publish response when it advanced.
+        if pub_vid != before_vid:
+            final_vid = pub_vid
+
+    is_stale = False
+    if require_new_version:
+        if not final_vid:
+            is_stale = True
+        elif final_vid in stale_versions:
+            is_stale = True
+        elif before_vid and final_vid == before_vid:
+            is_stale = True
+        elif not before_vid and final_vid in stale_versions:
+            is_stale = True
+    if is_stale:
         print(
-            "manus-auto-deploy: REFUSING stale publish — "
-            f"version_id={final_vid} unchanged from before_vid={before_vid}. "
-            "JD SYS must save a NEW checkpoint after syncing GitHub main, then re-publish.",
+            "manus-auto-deploy: stale publish detected — "
+            f"version_id={final_vid or '?'} unchanged from before_vid={before_vid or '?'}. "
+            "Will retry JD SYS sync+checkpoint if attempts remain.",
             file=sys.stderr,
         )
-        sys.exit(11)
+        raise StalePublish(before_vid, final_vid)
 
     if verify:
         verify_hosting()
         verify_live_revision()
+    return final_vid
 
 
 if publish_only:
-    do_publish()
+    try:
+        do_publish()
+    except StalePublish as e:
+        print(
+            "manus-auto-deploy: REFUSING stale publish-only — "
+            f"version_id={e.final_vid} unchanged from before_vid={e.before_vid}. "
+            "Run full deploy (without --publish-only) so JD SYS can save a NEW checkpoint.",
+            file=sys.stderr,
+        )
+        sys.exit(11)
     print("manus-auto-deploy: done — publish-only (Manus hosting OK)")
     sys.exit(0)
 
@@ -380,7 +445,10 @@ if st0 == "error":
             "then set MANUS_PROJECT_TASK_ID. Falling through to website.publish only.",
             file=sys.stderr,
         )
-        do_publish()
+        try:
+            do_publish(verify=True, require_new_version=False)
+        except StalePublish:
+            pass
         sys.exit(8)
     print(
         "manus-auto-deploy: JD SYS task is in unrecoverable error — "
@@ -390,13 +458,24 @@ if st0 == "error":
     )
     sys.exit(5)
 
-prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 sync】
+def build_sync_prompt(*, forbid_vid: str, attempt: int, revision_marker: str) -> str:
+    force_line = ""
+    if attempt > 1:
+        force_line = f"""
+【重試 #{attempt} — 上次卡住舊 version】
+上一次 sync／checkpoint **失敗模式**：報完成但仍係 version `{forbid_vid}`。
+今次必須 `git fetch` + 硬重置對齊 GitHub main、`rm -rf dist` 後重新 `npm run build`、
+再存 **全新** checkpoint。若新 checkpoint 的 version_id 仍然係 `{forbid_vid}` = 失敗。
+"""
+    return f"""【固定 production 流程 — 已授權執行 · 強制完整 sync · attempt {attempt}】
 
 唯一來源：GitHub main（derekho144/cursor-2026）
 目標 commit：{sha}（{full}）— {msg}
 目前本地 branch 參考：{branch}
-
-上次 publish 失敗模式（必須避免）：checkpoint／publish 成功但 live `/assets/index-*.js` 仍係舊 sidebar（仍有獨立「月度報表」）。今次必須先證明工作區＋build 已係新碼，先至 checkpoint。
+目前 live website version_id（禁止重用）：`{forbid_vid or "(unknown)"}`
+deploy-revision 最新標記（必須出現喺 client/public/deploy-revision.txt）：`{revision_marker}`
+{force_line}
+上次 publish 失敗模式（必須避免）：checkpoint／publish 成功但 live 資產仍舊；或 version_id 冇變。
 
 請嚴格按序執行，唔使再問確認：
 
@@ -404,196 +483,255 @@ prompt = f"""【固定 production 流程 — 已授權執行 · 強制完整 syn
 2. **檔案硬核對（全部要過，否則唔好 checkpoint）**：
    - `client/src/components/DashboardLayout.tsx`：menu **唔可以**有 `id: "reports"` / label「月度報表」獨立項
    - `client/src/pages/MonthlyReport.tsx`：必須係 `Redirect` 去 `/ad-expenses?tab=report`
-   - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔可以**有 `ad-expenses-tabs`（單一頁：分析＋記錄，無 tabs）
-   - `client/public/deploy-revision.txt`：首行必須係 `asset-spa-fallback-v1`（或至少含 `{sha}`）
+   - `client/src/pages/AdExpenses.tsx`：必須含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔可以**有 `ad-expenses-tabs`
+   - `client/public/deploy-revision.txt`：必須含 `{revision_marker}`（同埋首行 `asset-spa-fallback-v1`）
    - `client/src/lib/lazyRetry.ts` 存在且含 `jd-chunk-reload`
    - `server/_core/spaFallback.ts` 存在且含 `shouldSpaFallback`
-3. 執行 frontend production build（`npm run build` 或專案既定 build），確保 `dist/public`／網站靜態資產已更新
+3. 執行 frontend production build（建議先 `rm -rf dist` 再 `npm run build`），確保靜態資產已更新
 4. **授權**：為保存 checkpoint，允許 WebDev workspace 內 commit／merge／清理 conflict／暫存 version.json；GitHub 業務內容必須保持與 main@{full} 一致。同意移除阻擋 checkpoint 的大型本地資產副本（保留 File Storage）。
-5. 保存 **全新** checkpoint — `version_id` **禁止** 再係 `8043430f` 或 `b7c0ce4d`
-6. **Hosting 硬性檢查（必須先過）**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
-7. Publish 到 jdsys.biz（website_id={website_id}, visibility=public）— 若 session 無 publish 工具，checkpoint 後停止並回報，由 API 發佈
-8. 驗證：
-   - `https://jdsys.biz/deploy-revision.txt` 含 `asset-spa-fallback-v1`
-   - live `/assets/index-*.js` 含 `jd-chunk-reload`
-   - `https://jdsys.biz/assets/missing-chunk-test.js` 必須 404 plain（**唔可以**係 HTML index）
-   - live `AdExpenses-*.js` 含 `Ad Spend & Monthly Report`、`ad-expenses-report`、`開支記錄`，且 **唔含** `ad-expenses-tabs` 同舊 nav `id:"reports",label:"月度報表",path:"/reports"`
-9. 完成後只回報：synced_sha、checkpoint_or_version_id、publish_status、site_urls、origin_host、live_revision_ok
+5. 保存 **全新** checkpoint — `version_id` **禁止** 再係 `{forbid_vid}` / `8043430f` / `b7c0ce4d`
+6. **Hosting 硬性檢查**：website_id={website_id} origin／proxy **唔係** *.up.railway.app
+7. **唔使你自己 publish**（API 會發佈）。checkpoint 後停止並回報新 version id
+8. 完成後只回報：synced_sha、checkpoint_or_version_id（必須 ≠ `{forbid_vid}`）、workspace_clean、build_ok
 
 規則：
 - 唔好另開無關標準 task 做 production 發佈
-- 唔好改業務代碼（只 sync／build／checkpoint／publish）
+- 唔好改業務代碼（只 sync／build／checkpoint）
 - **禁止** Railway origin
 - GitHub main 係唯一來源
 - 若 checkpoint 再問確認：直接繼續，唔好停止
 """
 
-print(f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} (profile={agent_profile}) …")
-send = api(
-    "POST",
-    "task.sendMessage",
-    {
-        "task_id": task_id,
-        "message": {"content": prompt},
-        "agent_profile": agent_profile,
-    },
-)
-if not send.get("ok"):
-    print("sendMessage failed:", json.dumps(send, ensure_ascii=False), file=sys.stderr)
-    sys.exit(2)
-print("sendMessage ok", send.get("request_id") or "")
-send_marker = f"目標 commit：{sha}"
-send_started = time.time()
 
-# Avoid racing a previous "stopped" status: wait until this deploy is running,
-# then wait until it finishes.
-saw_running = False
-confirmed = set()
-deadline = time.time() + 25 * 60
-last = None
-terminal = None
-assistant_seen_for_sha = False
-saw_quota = False
+def run_jd_sys_sync(*, forbid_vid: str, attempt: int, revision_marker: str) -> str:
+    """Send sync+checkpoint prompt; wait until task stops. Returns terminal status."""
+    prompt = build_sync_prompt(
+        forbid_vid=forbid_vid, attempt=attempt, revision_marker=revision_marker
+    )
+    print(
+        f"manus-auto-deploy: sendMessage sync+checkpoint on {task_id} for {sha} "
+        f"(profile={agent_profile}, attempt={attempt}, forbid_vid={forbid_vid or '?'}) …"
+    )
+    send = api(
+        "POST",
+        "task.sendMessage",
+        {
+            "task_id": task_id,
+            "message": {"content": prompt},
+            "agent_profile": agent_profile,
+        },
+    )
+    if not send.get("ok"):
+        print("sendMessage failed:", json.dumps(send, ensure_ascii=False), file=sys.stderr)
+        sys.exit(2)
+    print("sendMessage ok", send.get("request_id") or "")
+    send_marker = f"目標 commit：{sha}"
+    send_started = time.time()
 
-while time.time() < deadline:
-    detail = api("GET", f"task.detail?task_id={task_id}")
-    status = task_status(detail)
-    if status != last:
-        print(f"task status: {status or detail}")
-        last = status
-    if status == "running":
-        saw_running = True
+    saw_running = False
+    confirmed = set()
+    deadline = time.time() + 25 * 60
+    last = None
+    terminal = None
+    assistant_seen_for_sha = False
+    saw_quota = False
 
-    msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
-    for ev in msgs.get("data") or msgs.get("messages") or []:
-        # Prefer nested status_detail on waiting updates (Manus messageAskUser).
-        detail = (ev.get("status_update") or {}).get("status_detail") or {}
-        wait_type = (
-            ev.get("waiting_for_event_type")
-            or detail.get("waiting_for_event_type")
-            or ""
-        )
-        event_id = (
-            ev.get("waiting_for_event_id")
-            or detail.get("waiting_for_event_id")
-            or ""
-        )
-        if status == "waiting" and not event_id:
-            event_id = ev.get("event_id") or ev.get("id") or ""
-        if event_id and event_id not in confirmed and wait_type:
-            if wait_type == "messageAskUser":
-                # confirmAction rejects cascadeAskUser; reply with an explicit yes.
-                # Checkpoint often blocks on large local assets (e.g. food-crab.jpg);
-                # approve removing those local copies while keeping File Storage refs.
-                print(f"auto-reply messageAskUser ({event_id})")
-                reply = api(
-                    "POST",
-                    "task.sendMessage",
-                    {
-                        "task_id": task_id,
-                        "message": {
-                            "content": (
-                                "同意。同意移除本地副本。"
-                                "【明確授權】繼續 production："
-                                f"sync GitHub main → WebDev workspace 內 commit/merge/清理 conflict "
-                                f"（業務內容必須對齊 GitHub main）→ "
-                                f"刪除阻擋 checkpoint 的大型本地資產副本"
-                                f"（保留 File Storage／manus-storage 引用）→ "
-                                f"npm run build → 新 checkpoint（version_id 禁止 8043430f/b7c0ce4d）→ "
-                                f"website.publish (website_id={website_id}, visibility=public) → "
-                                "驗證 deploy-revision=asset-spa-fallback-v1、"
-                                "live JS 含 jd-chunk-reload、"
-                                "missing /assets/*.js 回 404 唔好 HTML、"
-                                "AdExpenses chunk 有 ad-expenses-report、無 ad-expenses-tabs。"
-                                "唔切舊 task、唔改業務代碼、唔改 DNS/Railway。唔使再問。"
-                            )
-                        },
-                        "agent_profile": agent_profile,
-                    },
-                )
-                print("askUser reply:", reply.get("ok"), reply.get("error"))
-                confirmed.add(event_id)
-                time.sleep(2)  # avoid Manus sendMessage rate limits
-            else:
-                print(f"auto-confirm: {wait_type} ({event_id})")
-                conf = api(
-                    "POST",
-                    "task.confirmAction",
-                    {"task_id": task_id, "event_id": event_id},
-                )
-                print("confirm:", conf.get("ok"), conf.get("error"))
-                confirmed.add(event_id)
+    while time.time() < deadline:
+        detail = api("GET", f"task.detail?task_id={task_id}")
+        status = task_status(detail)
+        if status != last:
+            print(f"task status: {status or detail}")
+            last = status
+        if status == "running":
+            saw_running = True
 
-        if ev.get("type") == "error_message":
-            err = ev.get("error_message") or {}
-            if err.get("error_type") == "quota_limit" or "enough credits" in str(
-                err.get("content") or ""
-            ).lower():
-                saw_quota = True
-
-        if ev.get("type") == "assistant_message":
-            content = (ev.get("assistant_message") or {}).get("content") or ""
-            if isinstance(content, list):
-                content = json.dumps(content, ensure_ascii=False)
-            text = str(content)
-            # Require this deploy's SHA (or explicit synced_sha report), not
-            # generic older "checkpoint" chatter from prior turns.
-            lower = text.lower()
-            mentions_this_sha = (
-                send_marker in text
-                or sha in text
-                or full[:12] in text
-                or (f"synced_sha" in lower and sha in lower)
+        msgs = api("GET", f"task.listMessages?task_id={task_id}&limit=40&order=desc")
+        for ev in msgs.get("data") or msgs.get("messages") or []:
+            detail_su = (ev.get("status_update") or {}).get("status_detail") or {}
+            wait_type = (
+                ev.get("waiting_for_event_type")
+                or detail_su.get("waiting_for_event_type")
+                or ""
             )
-            if mentions_this_sha:
-                ts = ev.get("timestamp") or ev.get("created_at") or 0
-                try:
-                    ts_n = float(ts)
-                    # Manus timestamps may be seconds or ms.
-                    if ts_n > 10_000_000_000:
-                        ts_n = ts_n / 1000.0
-                    if ts_n >= send_started - 5:
-                        assistant_seen_for_sha = True
-                except (TypeError, ValueError):
-                    if saw_running:
-                        assistant_seen_for_sha = True
+            event_id = (
+                ev.get("waiting_for_event_id")
+                or detail_su.get("waiting_for_event_id")
+                or ""
+            )
+            if status == "waiting" and not event_id:
+                event_id = ev.get("event_id") or ev.get("id") or ""
+            if event_id and event_id not in confirmed and wait_type:
+                if wait_type == "messageAskUser":
+                    print(f"auto-reply messageAskUser ({event_id})")
+                    reply = api(
+                        "POST",
+                        "task.sendMessage",
+                        {
+                            "task_id": task_id,
+                            "message": {
+                                "content": (
+                                    "同意。同意移除本地副本。"
+                                    "【明確授權】繼續 production："
+                                    f"sync GitHub main → WebDev workspace 內 commit/merge/清理 conflict "
+                                    f"（業務內容必須對齊 GitHub main）→ "
+                                    f"刪除阻擋 checkpoint 的大型本地資產副本"
+                                    f"（保留 File Storage／manus-storage 引用）→ "
+                                    f"rm -rf dist && npm run build → "
+                                    f"新 checkpoint（version_id 禁止 {forbid_vid or '舊 version'}／8043430f／b7c0ce4d）→ "
+                                    f"回報新 checkpoint id。Publish 交俾 API。"
+                                    "唔切舊 task、唔改業務代碼、唔改 DNS/Railway。唔使再問。"
+                                )
+                            },
+                            "agent_profile": agent_profile,
+                        },
+                    )
+                    print("askUser reply:", reply.get("ok"), reply.get("error"))
+                    confirmed.add(event_id)
+                    time.sleep(2)
+                else:
+                    print(f"auto-confirm: {wait_type} ({event_id})")
+                    conf = api(
+                        "POST",
+                        "task.confirmAction",
+                        {"task_id": task_id, "event_id": event_id},
+                    )
+                    print("confirm:", conf.get("ok"), conf.get("error"))
+                    confirmed.add(event_id)
 
-    if status == "error":
-        terminal = status
-        break
+            if ev.get("type") == "error_message":
+                err = ev.get("error_message") or {}
+                if err.get("error_type") == "quota_limit" or "enough credits" in str(
+                    err.get("content") or ""
+                ).lower():
+                    saw_quota = True
 
-    # Require that we observed running (or waited briefly) before accepting stopped.
-    if status in ("stopped", "completed") and (saw_running or time.time() - send_started > 45):
-        if assistant_seen_for_sha or time.time() - send_started > 90:
+            if ev.get("type") == "assistant_message":
+                content = (ev.get("assistant_message") or {}).get("content") or ""
+                if isinstance(content, list):
+                    content = json.dumps(content, ensure_ascii=False)
+                text = str(content)
+                lower = text.lower()
+                mentions_this_sha = (
+                    send_marker in text
+                    or sha in text
+                    or full[:12] in text
+                    or ("synced_sha" in lower and sha in lower)
+                )
+                if mentions_this_sha:
+                    ts = ev.get("timestamp") or ev.get("created_at") or 0
+                    try:
+                        ts_n = float(ts)
+                        if ts_n > 10_000_000_000:
+                            ts_n = ts_n / 1000.0
+                        if ts_n >= send_started - 5:
+                            assistant_seen_for_sha = True
+                    except (TypeError, ValueError):
+                        if saw_running:
+                            assistant_seen_for_sha = True
+
+        if status == "error":
             terminal = status
             break
 
-    time.sleep(5)
+        if status in ("stopped", "completed") and (
+            saw_running or time.time() - send_started > 45
+        ):
+            if assistant_seen_for_sha or time.time() - send_started > 90:
+                terminal = status
+                break
 
-if terminal is None:
-    print("manus-auto-deploy: timed out waiting for JD SYS sync", file=sys.stderr)
-    sys.exit(7)
+        time.sleep(5)
 
-if terminal == "error":
-    print("manus-auto-deploy: JD SYS task ended in error during sync", file=sys.stderr)
-    if saw_quota or recent_quota_error(task_id):
+    if terminal is None:
+        print("manus-auto-deploy: timed out waiting for JD SYS sync", file=sys.stderr)
+        sys.exit(7)
+
+    if terminal == "error":
+        print("manus-auto-deploy: JD SYS task ended in error during sync", file=sys.stderr)
+        if saw_quota or recent_quota_error(task_id):
+            print(
+                "manus-auto-deploy: root cause looks like Manus quota_limit — "
+                "top up credits and recreate project task with manus-1.6-lite.",
+                file=sys.stderr,
+            )
+            sys.exit(8)
+        sys.exit(6)
+
+    print(f"manus-auto-deploy: JD SYS sync finished ({terminal})")
+    return terminal
+
+
+# ── Main: sync → require new version → publish → verify; retry on stale ──
+_, revision_marker = deploy_revision_markers()
+forbid_vid = website_version_id()
+print(
+    f"manus-auto-deploy: starting deploy loop "
+    f"(forbid_vid={forbid_vid or '?'}, revision_marker={revision_marker!r})"
+)
+
+max_attempts = 3
+last_err = ""
+for attempt in range(1, max_attempts + 1):
+    run_jd_sys_sync(
+        forbid_vid=forbid_vid, attempt=attempt, revision_marker=revision_marker
+    )
+    after_sync_vid = website_version_id()
+    if forbid_vid and after_sync_vid and after_sync_vid == forbid_vid:
         print(
-            "manus-auto-deploy: root cause looks like Manus quota_limit — "
-            "top up credits and recreate project task with manus-1.6-lite. "
-            "Still attempting website.publish for current checkpoint.",
+            f"manus-auto-deploy: after sync version still {after_sync_vid} "
+            f"(attempt {attempt}/{max_attempts}) — need a new checkpoint",
             file=sys.stderr,
         )
-        do_publish()
-        sys.exit(8)
-    # Still try publish — agent may have checkpointed before dying.
-    do_publish()
-    sys.exit(6)
+        if attempt < max_attempts:
+            last_err = f"sync left version_id={after_sync_vid}"
+            time.sleep(3)
+            continue
+    try:
+        # Publish first (require new version); verify separately so live-verify
+        # failures can also trigger another sync attempt.
+        final_vid = do_publish(
+            verify=False, require_new_version=True, forbid_vid=forbid_vid
+        )
+        verify_hosting()
+        verify_live_revision()
+        print(
+            "manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published "
+            f"(version_id={final_vid}, Manus hosting OK)"
+        )
+        sys.exit(0)
+    except StalePublish as e:
+        last_err = str(e)
+        print(
+            f"manus-auto-deploy: stale on attempt {attempt}/{max_attempts}: {e}",
+            file=sys.stderr,
+        )
+        forbid_vid = e.final_vid or forbid_vid or e.before_vid
+        if attempt >= max_attempts:
+            break
+        time.sleep(3)
+    except SystemExit as e:
+        code = e.code
+        # verify_hosting → 9, verify_live_revision → 10; retry sync for those.
+        if code in (9, 10) and attempt < max_attempts:
+            last_err = f"verify exit {code}"
+            print(
+                f"manus-auto-deploy: live verify failed (exit {code}) on attempt "
+                f"{attempt}/{max_attempts} — retrying sync+checkpoint",
+                file=sys.stderr,
+            )
+            # After a publish that advanced version but failed live verify,
+            # forbid the new version so the next checkpoint must advance again.
+            cur = website_version_id()
+            if cur:
+                forbid_vid = cur
+            time.sleep(3)
+            continue
+        raise
 
-print(f"manus-auto-deploy: JD SYS sync finished ({terminal})")
-
-# Always publish via website API so production publish is deterministic
-# even if the agent reply omitted the publish step.
-do_publish()
-
-print("manus-auto-deploy: done — GitHub main → JD SYS → checkpoint → published (Manus hosting OK)")
+print(
+    "manus-auto-deploy: REFUSING — exhausted retries without a new website version. "
+    f"last_err={last_err!r}. JD SYS must save a NEW checkpoint after syncing GitHub main.",
+    file=sys.stderr,
+)
+sys.exit(11)
 PY
