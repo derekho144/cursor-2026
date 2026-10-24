@@ -3,3 +3,4 @@ fh-fetch-email-async-v1
 ads-quote-attribution-v1
 ads-wa-ref-auto-v1
 whatsapp-cloud-api-v1
+whatsapp-cloud-api-v1-force
