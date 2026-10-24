@@ -4,3 +4,4 @@ ads-quote-attribution-v1
 ads-wa-ref-auto-v1
 whatsapp-cloud-api-v1
 whatsapp-cloud-api-v1-force
+wa-last-click-match-v1

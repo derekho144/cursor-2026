@@ -62,7 +62,7 @@ describe("pickAdsClickForInbound", () => {
     expect(result).toEqual({ clickId: 1, reason: "single_recent" });
   });
 
-  it("does not match when multiple recent unmatched clicks", () => {
+  it("picks most recent click when multiple unmatched in window", () => {
     const result = pickAdsClickForInbound(
       [
         { id: 1, clickedAt: new Date("2026-10-24T04:00:00Z"), quoteId: null },
@@ -70,7 +70,8 @@ describe("pickAdsClickForInbound", () => {
       ],
       t0
     );
-    expect(result).toEqual({ clickId: null, reason: "none" });
+    // t0 = 04:30; both before message → last click is id 2 at 04:10
+    expect(result).toEqual({ clickId: 2, reason: "last_click" });
   });
 
   it("ignores already matched / quoted clicks", () => {
