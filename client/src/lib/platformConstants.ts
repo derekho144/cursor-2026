@@ -11,17 +11,19 @@ export const AD_PLATFORMS = [
   { value: "google_ads", label: "Google Ads", color: "#7B8CFF" },
 ] as const;
 
-/** All lead source platforms (ad + organic) */
+/** All lead source platforms (ad + organic / AI) */
 export const ALL_PLATFORMS = [
   { value: "hellotoby",  label: "HelloToby",  color: "#FFB800", hasAd: true },
   { value: "360pro",     label: "360Pro",     color: "#00D4AA", hasAd: true },
   { value: "freehunter", label: "FreeHunter", color: "#FF6B6B", hasAd: true },
   { value: "google_ads", label: "Google Ads", color: "#7B8CFF", hasAd: true },
+  { value: "organic",    label: "SEO／GEO 自然搜尋", color: "#34d399", hasAd: false },
+  { value: "ai",         label: "AI／AEO",    color: "#22d3ee", hasAd: false },
   { value: "instagram",  label: "Instagram",  color: "#E1306C", hasAd: false },
   { value: "facebook",   label: "Facebook",   color: "#1877F2", hasAd: false },
   { value: "88db",       label: "88DB",       color: "#f97316", hasAd: false },
-  { value: "referral",   label: "朋友介紹",   color: "#34d399", hasAd: false },
-  { value: "website",    label: "自然流量",   color: "#60a5fa", hasAd: false },
+  { value: "referral",   label: "朋友介紹",   color: "#a3e635", hasAd: false },
+  { value: "website",    label: "網站直訪",   color: "#60a5fa", hasAd: false },
   { value: "repeat",     label: "回頭客",     color: "#a78bfa", hasAd: false },
   { value: "other",      label: "其他",       color: "#9ca3af", hasAd: false },
 ] as const;

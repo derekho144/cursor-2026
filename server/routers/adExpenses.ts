@@ -1081,6 +1081,8 @@ CPL 暴升、成交率驟降、ROAS < 1、某渠道只燒錢無成交 → 立即
         PRO360: "360pro",
         FreelanceHunter: "freehunter",
         Google: "google_ads",
+        Organic: "organic",
+        AI: "ai",
         Instagram: "instagram",
         Facebook: "facebook",
         "88DB": "88db",

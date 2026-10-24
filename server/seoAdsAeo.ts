@@ -13,6 +13,7 @@ import {
   type GoogleAdsKeywordQuality,
   type GoogleAdsSearchTerm,
 } from "./googleAds";
+import { SEARCH_DEMAND_LEAD_SOURCES } from "../shared/leadChannels";
 
 /**
  * A transparent, read-only prioritisation model for JD Studio growth work.
@@ -23,12 +24,12 @@ import {
  * (0-25), and AEO/page readiness gap (0-10).
  *
  * System data enrichment (fail-soft when unavailable):
- * - Quote funnel + leadSource (Google / Website) for demand validation
+ * - Quote funnel + leadSource (Google / Organic / AI / Website) for demand validation
  * - Ads search_term_view conversions for paid commercial proof
  */
 
-/** Lead sources that indicate SEO / Ads / site demand (not marketplace). */
-const SEARCH_LEAD_SOURCES = new Set(["Google", "Website"]);
+/** Paid Ads + Organic SEO/GEO + AI/AEO + legacy Website direct */
+const SEARCH_LEAD_SOURCES = SEARCH_DEMAND_LEAD_SOURCES;
 
 export type AeoReadiness = "ready" | "partial" | "weak" | "unavailable";
 
@@ -1117,7 +1118,7 @@ export async function getGrowthPriorities(days = 28) {
         available: Boolean(db),
         acceptedStatuses: ["accepted"],
         funnel: Boolean(db),
-        searchLeadSources: ["Google", "Website"],
+        searchLeadSources: ["Google", "Organic", "AI", "Website"],
         openInquiries: Boolean(db),
       },
       googleAds: {

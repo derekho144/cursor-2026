@@ -42,6 +42,27 @@ describe("parseAdsAttribution", () => {
     expect(hasAdsAttribution(parseAdsAttribution({}))).toBe(false);
     expect(hasAdsAttribution(null)).toBe(false);
   });
+
+  it("does not treat landing page alone as paid Ads", () => {
+    expect(
+      hasAdsAttribution(
+        parseAdsAttribution({ lp: "https://jdstudiohk.com/food-photography" })
+      )
+    ).toBe(false);
+    expect(
+      hasAdsAttribution(
+        parseAdsAttribution({ utm_source: "google", utm_medium: "cpc" })
+      )
+    ).toBe(true);
+  });
+
+  it("captures page referrer for organic / AI split", () => {
+    const a = parseAdsAttribution({
+      ref: "https://www.google.com/search?q=food",
+      lp: "https://jdstudiohk.com/",
+    });
+    expect(a.pageReferrer).toContain("google.com");
+  });
 });
 
 describe("appendAttributionParams", () => {

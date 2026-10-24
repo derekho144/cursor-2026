@@ -357,45 +357,68 @@ async function startServer() {
   // so staff can tell email-link vs website-button from the first chat line.
   app.get("/api/track/wa", async (req, res) => {
     const { waMeUrlWithPrefill, generateWaRefCode } = await import("./waTracking");
-    const { parseAdsAttribution, hasAdsAttribution } = await import("./adsAttribution");
+    const {
+      parseAdsAttribution,
+      hasAdsAttribution,
+      hasMarketingAttribution,
+      landingPageFromReferer,
+    } = await import("./adsAttribution");
+    const { inferWaTrackSource } = await import("../../shared/leadChannels");
     const sourceRaw = (req.query.src as string) || "other";
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
     const fhJobId = req.query.fhj ? parseInt(req.query.fhj as string, 10) : undefined;
     const quoteId = req.query.q ? parseInt(req.query.q as string, 10) : undefined;
     const attr = parseAdsAttribution(req.query as Record<string, unknown>);
+    const headerReferer =
+      typeof req.headers.referer === "string"
+        ? req.headers.referer
+        : typeof req.headers.referrer === "string"
+          ? req.headers.referrer
+          : null;
     if (!attr.landingPageUrl) {
-      const { landingPageFromReferer } = await import("./adsAttribution");
-      attr.landingPageUrl = landingPageFromReferer(
-        typeof req.headers.referer === "string"
-          ? req.headers.referer
-          : typeof req.headers.referrer === "string"
-            ? req.headers.referrer
-            : null
-      );
+      attr.landingPageUrl = landingPageFromReferer(headerReferer);
     }
-    // Prefer explicit src; auto-tag google_ads when GCLID present
+    if (!attr.pageReferrer && headerReferer) {
+      // Prefer explicit ?ref= from site script; header is fallback when not noreferrer
+      attr.pageReferrer = landingPageFromReferer(headerReferer);
+    }
+    // Prefer explicit src; re-classify from UTM / referrer / gclid when src is generic
     const allowed = [
       "fh_first_email",
       "fh_follow_up",
       "quote_email",
       "review_invite",
       "google_ads",
+      "organic",
+      "ai",
       "website",
       "other",
     ] as const;
     let source: (typeof allowed)[number] = allowed.includes(sourceRaw as any)
       ? (sourceRaw as (typeof allowed)[number])
       : "other";
-    if (source === "other" && (attr.gclid || attr.adsCampaignId)) source = "google_ads";
+    if (
+      source === "other" ||
+      source === "website"
+    ) {
+      const inferred = inferWaTrackSource({ ...attr, src: source });
+      if (inferred !== "website" || source === "other") {
+        source = inferred;
+      }
+    }
+    if (source === "other" && hasAdsAttribution(attr)) source = "google_ads";
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
     const userAgent = req.headers["user-agent"] ?? "";
-    // Prefer website prefill when traffic is from the marketing site / Ads
-    const prefill = source === "google_ads" || source === "website" ? "website" : "email";
-    // Staff-only match label in quote form dropdown — never shown in customer WA text.
-    const wantsRef =
+    // Prefer website prefill when traffic is from the marketing site / Ads / organic / AI
+    const prefill =
       source === "google_ads" ||
-      (source === "website" && hasAdsAttribution(attr)) ||
-      Boolean(attr.gclid || attr.adsCampaignId);
+      source === "website" ||
+      source === "organic" ||
+      source === "ai"
+        ? "website"
+        : "email";
+    // Staff-only match label in quote form dropdown — never shown in customer WA text.
+    const wantsRef = source === "google_ads" || hasAdsAttribution(attr);
     const refCode = wantsRef ? generateWaRefCode() : null;
 
     // Fire-and-forget: record click (+ Ads attribution / staff ref) then redirect
@@ -409,9 +432,9 @@ async function startServer() {
       refCode,
       ...attr,
     }).catch((err) => console.error("[WA Track] Failed:", err));
-    if (hasAdsAttribution(attr) || refCode) {
+    if (hasMarketingAttribution(attr) || refCode) {
       console.log(
-        `[WA Track] Ads attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
+        `[WA Track] attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} utm=${attr.utmSource || "-"}/${attr.utmMedium || "-"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
       );
     }
     // Clean opener only — same as Squarespace button (no weird codes for the customer)

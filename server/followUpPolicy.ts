@@ -1,6 +1,8 @@
 /** Channel-adaptive quote follow-up delays (days after first send). */
 export const FOLLOW_UP_DAYS_BY_SOURCE: Record<string, number> = {
   Google: 2,
+  Organic: 3,
+  AI: 3,
   HelloToby: 2,
   PRO360: 2,
   FreelanceHunter: 3,

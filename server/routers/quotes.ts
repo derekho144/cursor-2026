@@ -495,9 +495,21 @@ export const quotesRouter = router({
         equipment: input.equipment,
         items: finalItems,
       });
+      // If staff left Website / empty but UTM·gclid imply Ads/Organic/AI, upgrade
+      const { inferSearchLeadSource } = await import("../../shared/leadChannels");
+      const inferredLead = inferSearchLeadSource(attribution);
+      const leadSourceRaw =
+        typeof (quoteDataRest as { leadSource?: string }).leadSource === "string"
+          ? String((quoteDataRest as { leadSource?: string }).leadSource).trim()
+          : "";
+      const leadSource =
+        !leadSourceRaw || leadSourceRaw === "Website"
+          ? inferredLead || leadSourceRaw || undefined
+          : leadSourceRaw;
       const quoteData = {
         ...quoteDataRest,
         ...enriched,
+        ...(leadSource ? { leadSource } : {}),
         subtotal: reconciled.subtotal,
         discountAmount: reconciled.discountAmount,
         total: reconciled.total,
