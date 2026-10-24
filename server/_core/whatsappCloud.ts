@@ -147,27 +147,37 @@ export type AdsClickMatchCandidate = {
 };
 
 /**
- * Auto-match rule: among unmatched Ads clicks in the lookback window ending at
- * message time, if exactly one → that click. Otherwise none (avoid wrong bind).
+ * Auto-match rule (last-click): among unmatched Ads clicks in the lookback
+ * window ending at message time, pick the most recent click at/before the
+ * message (5m clock skew). Multiple concurrent clicks no longer block matching.
  */
 export function pickAdsClickForInbound(
   candidates: AdsClickMatchCandidate[],
   messageAt: Date,
   lookbackMs = 48 * 60 * 60 * 1000
-): { clickId: number; reason: "single_recent" } | { clickId: null; reason: "none" } {
+):
+  | { clickId: number; reason: "single_recent" | "last_click" }
+  | { clickId: null; reason: "none" } {
   const end = messageAt.getTime();
   const start = end - lookbackMs;
-  const open = candidates.filter((c) => {
-    if (c.quoteId != null) return false;
-    if (c.matchedPhone) return false;
-    const t = c.clickedAt ? new Date(c.clickedAt).getTime() : NaN;
-    if (!Number.isFinite(t)) return false;
-    return t >= start && t <= end + 5 * 60 * 1000; // allow 5m clock skew after message
-  });
+  const open = candidates
+    .map((c) => {
+      if (c.quoteId != null) return null;
+      if (c.matchedPhone) return null;
+      const t = c.clickedAt ? new Date(c.clickedAt).getTime() : NaN;
+      if (!Number.isFinite(t)) return null;
+      if (t < start || t > end + 5 * 60 * 1000) return null; // allow 5m clock skew
+      return { id: c.id, t };
+    })
+    .filter((x): x is { id: number; t: number } => x != null)
+    .sort((a, b) => b.t - a.t);
+  if (open.length === 0) {
+    return { clickId: null, reason: "none" };
+  }
   if (open.length === 1) {
     return { clickId: open[0]!.id, reason: "single_recent" };
   }
-  return { clickId: null, reason: "none" };
+  return { clickId: open[0]!.id, reason: "last_click" };
 }
 
 /** Graph API send text (optional staff reply path). */

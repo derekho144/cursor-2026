@@ -3277,7 +3277,33 @@ export async function getAdsAttributionForPhone(phone: string) {
     .orderBy(desc(whatsappInboundMessages.createdAt))
     .limit(5);
 
-  const withClick = inbounds.find((m) => m.matchedClickId != null);
+  let withClick = inbounds.find((m) => m.matchedClickId != null) ?? null;
+
+  // Retroactive last-click match for inbounds that arrived while multiple
+  // unmatched Ads clicks blocked the old "exactly one" rule.
+  if (!withClick?.matchedClickId && inbounds[0]) {
+    const { pickAdsClickForInbound } = await import("./_core/whatsappCloud");
+    const messageAt =
+      inbounds[0].waTimestamp ?? inbounds[0].createdAt ?? new Date();
+    const candidates = await listUnmatchedAdsWhatsappClicks(40);
+    const match = pickAdsClickForInbound(candidates, new Date(messageAt));
+    if (match.clickId) {
+      await db
+        .update(whatsappInboundMessages)
+        .set({ matchedClickId: match.clickId, matchReason: match.reason })
+        .where(eq(whatsappInboundMessages.id, inbounds[0].id));
+      await db
+        .update(whatsappClickEvents)
+        .set({ matchedPhone: normalized })
+        .where(eq(whatsappClickEvents.id, match.clickId));
+      withClick = {
+        ...inbounds[0],
+        matchedClickId: match.clickId,
+        matchReason: match.reason,
+      };
+    }
+  }
+
   if (!withClick?.matchedClickId) {
     return {
       phone: normalized,
