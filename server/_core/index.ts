@@ -267,7 +267,7 @@ async function startServer() {
   // Prefill wording differs from the official-site button (same meaning, no "Email" label)
   // so staff can tell email-link vs website-button from the first chat line.
   app.get("/api/track/wa", async (req, res) => {
-    const { waMeUrlWithPrefill } = await import("./waTracking");
+    const { waMeUrlWithPrefill, generateWaRefCode } = await import("./waTracking");
     const { parseAdsAttribution, hasAdsAttribution } = await import("./adsAttribution");
     const sourceRaw = (req.query.src as string) || "other";
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
@@ -292,21 +292,41 @@ async function startServer() {
     const userAgent = req.headers["user-agent"] ?? "";
     // Prefer website prefill when traffic is from the marketing site / Ads
     const prefill = source === "google_ads" || source === "website" ? "website" : "email";
-    // Fire-and-forget: record click (+ Ads attribution) then redirect
-    recordWhatsappClick({
+    const wantsRef =
+      source === "google_ads" ||
+      (source === "website" && hasAdsAttribution(attr)) ||
+      Boolean(attr.gclid || attr.adsCampaignId);
+    const refCode = wantsRef ? generateWaRefCode() : null;
+
+    const clickPayload = {
       inquiryId: inquiryId && !isNaN(inquiryId) ? inquiryId : undefined,
       fhJobId: fhJobId && !isNaN(fhJobId) ? fhJobId : undefined,
       quoteId: quoteId && !isNaN(quoteId) ? quoteId : undefined,
       source,
       ip,
       userAgent,
+      refCode,
       ...attr,
-    }).catch(err => console.error("[WA Track] Failed:", err));
-    if (hasAdsAttribution(attr)) {
-      console.log(
-        `[WA Track] Ads attribution src=${source} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
-      );
+    };
+
+    // Ads / attributed website: await insert so prefill can carry the match code.
+    if (wantsRef) {
+      try {
+        await recordWhatsappClick(clickPayload);
+      } catch (err) {
+        console.error("[WA Track] Failed:", err);
+      }
+      if (hasAdsAttribution(attr) || refCode) {
+        console.log(
+          `[WA Track] Ads attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
+        );
+      }
+      res.redirect(waMeUrlWithPrefill(prefill, { refCode }));
+      return;
     }
+
+    // Other sources: fire-and-forget (email / FH latency matters less for ref matching)
+    recordWhatsappClick(clickPayload).catch((err) => console.error("[WA Track] Failed:", err));
     res.redirect(waMeUrlWithPrefill(prefill));
   });
 

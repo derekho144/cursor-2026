@@ -1,3 +1,4 @@
 asset-spa-fallback-v1
 fh-fetch-email-async-v1
 ads-quote-attribution-v1
+ads-wa-ref-auto-v1

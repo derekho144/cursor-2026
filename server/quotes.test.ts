@@ -43,6 +43,7 @@ vi.mock("./db", () => ({
     {
       id: 9,
       source: "google_ads",
+      refCode: "W7K3M",
       gclid: "test-gclid",
       adsCampaignId: "24002224927",
       adsCampaignName: "Search #3",
@@ -52,6 +53,21 @@ vi.mock("./db", () => ({
       quoteId: null,
     },
   ]),
+  findAdsWhatsappClickByRef: vi.fn().mockImplementation(async (ref: string) => {
+    if (String(ref).toUpperCase().includes("W7K3M")) {
+      return {
+        id: 9,
+        source: "google_ads",
+        refCode: "W7K3M",
+        gclid: "test-gclid",
+        adsCampaignId: "24002224927",
+        adsCampaignName: "Search #3",
+        landingPageUrl: "https://jdstudiohk.com/food-photography",
+        quoteId: null,
+      };
+    }
+    return null;
+  }),
   linkWhatsappClickToQuote: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -182,6 +198,18 @@ describe("quotes router", () => {
     expect(result).toHaveLength(1);
     expect(result[0].gclid).toBe("test-gclid");
     expect(result[0].adsCampaignId).toBe("24002224927");
+  });
+
+  it("lookupAdsWaClickByRef matches short code from WA first line", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    const hit = await caller.quotes.lookupAdsWaClickByRef({
+      ref: "你好，我想查詢JD Studio的攝影服務（W7K3M）",
+    });
+    expect(hit?.id).toBe(9);
+    expect(hit?.refCode).toBe("W7K3M");
+    const miss = await caller.quotes.lookupAdsWaClickByRef({ ref: "W9999" });
+    expect(miss).toBeNull();
   });
 
   it.each([

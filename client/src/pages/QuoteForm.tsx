@@ -742,35 +742,115 @@ export default function QuoteForm() {
     }
   }, []);
 
+  const utils = trpc.useUtils();
   const { data: recentAdsWaClicks } = trpc.quotes.recentAdsWaClicks.useQuery(
     { limit: 30 },
     { enabled: form.leadSource === "Google", refetchOnWindowFocus: false }
   );
+  const [waRefInput, setWaRefInput] = useState("");
+  const adsAutoAttachedRef = useRef(false);
 
-  const applyAdsWaClick = (clickId: string) => {
-    if (clickId === "__none__") {
-      setForm((p) => ({ ...p, whatsappClickId: undefined }));
-      return;
-    }
-    const click = recentAdsWaClicks?.find((c) => String(c.id) === clickId);
-    if (!click) return;
+  type AdsWaClickRow = {
+    id: number;
+    refCode?: string | null;
+    gclid?: string | null;
+    gbraid?: string | null;
+    wbraid?: string | null;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmContent?: string | null;
+    utmTerm?: string | null;
+    adsCampaignId?: string | null;
+    adsCampaignName?: string | null;
+    landingPageUrl?: string | null;
+    quoteId?: number | null;
+    clickedAt?: Date | string | null;
+  };
+
+  const applyAdsWaClickRow = useCallback((click: AdsWaClickRow, opts?: { toastMsg?: string }) => {
     setForm((p) => ({
       ...p,
       leadSource: "Google",
       whatsappClickId: click.id,
       gclid: strOrEmpty(click.gclid) || p.gclid,
-      gbraid: strOrEmpty((click as any).gbraid) || p.gbraid,
-      wbraid: strOrEmpty((click as any).wbraid) || p.wbraid,
-      utmSource: strOrEmpty((click as any).utmSource) || p.utmSource,
-      utmMedium: strOrEmpty((click as any).utmMedium) || p.utmMedium,
+      gbraid: strOrEmpty(click.gbraid) || p.gbraid,
+      wbraid: strOrEmpty(click.wbraid) || p.wbraid,
+      utmSource: strOrEmpty(click.utmSource) || p.utmSource,
+      utmMedium: strOrEmpty(click.utmMedium) || p.utmMedium,
       utmCampaign: strOrEmpty(click.utmCampaign) || p.utmCampaign,
-      utmContent: strOrEmpty((click as any).utmContent) || p.utmContent,
-      utmTerm: strOrEmpty((click as any).utmTerm) || p.utmTerm,
+      utmContent: strOrEmpty(click.utmContent) || p.utmContent,
+      utmTerm: strOrEmpty(click.utmTerm) || p.utmTerm,
       adsCampaignId: strOrEmpty(click.adsCampaignId) || p.adsCampaignId,
       adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
       landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
     }));
+    if (click.refCode) setWaRefInput(click.refCode);
+    if (opts?.toastMsg) toast.success(opts.toastMsg);
+  }, []);
+
+  const applyAdsWaClick = (clickId: string) => {
+    if (clickId === "__none__") {
+      setForm((p) => ({ ...p, whatsappClickId: undefined }));
+      setWaRefInput("");
+      return;
+    }
+    const click = recentAdsWaClicks?.find((c) => String(c.id) === clickId);
+    if (!click) return;
+    applyAdsWaClickRow(click);
   };
+
+  const handleLookupWaRef = async () => {
+    const raw = waRefInput.trim();
+    if (!raw) {
+      toast.error("請貼上 WhatsApp 開場白入面嘅短碼（例如 W7K3M）");
+      return;
+    }
+    try {
+      const click = await utils.quotes.lookupAdsWaClickByRef.fetch({ ref: raw });
+      if (!click) {
+        toast.error("搵唔到呢個短碼對應嘅 Ads WA 點擊");
+        return;
+      }
+      applyAdsWaClickRow(click, {
+        toastMsg: `已對上 Ads WA 點擊 #${click.id}${click.refCode ? `（${click.refCode}）` : ""}`,
+      });
+    } catch (e: any) {
+      toast.error(`對碼失敗：${e?.message || "unknown"}`);
+    }
+  };
+
+  // Auto-attach: when staff picks Google Ads and there is exactly one unmatched
+  // Ads WA click in the last 48h, fill attribution without reading WhatsApp chats.
+  useEffect(() => {
+    if (isEdit) return;
+    if (form.leadSource !== "Google") {
+      adsAutoAttachedRef.current = false;
+      return;
+    }
+    if (form.whatsappClickId != null) return;
+    if (adsAutoAttachedRef.current) return;
+    if (!recentAdsWaClicks?.length) return;
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    const unmatched = recentAdsWaClicks.filter((c) => {
+      if (c.quoteId != null) return false;
+      const t = c.clickedAt ? new Date(c.clickedAt).getTime() : 0;
+      return t >= cutoff;
+    });
+    if (unmatched.length !== 1) return;
+    adsAutoAttachedRef.current = true;
+    applyAdsWaClickRow(unmatched[0], {
+      toastMsg: `已自動帶入最近 Ads WA 點擊 #${unmatched[0].id}${
+        unmatched[0].refCode ? `（${unmatched[0].refCode}）` : ""
+      }`,
+    });
+  }, [
+    isEdit,
+    form.leadSource,
+    form.whatsappClickId,
+    recentAdsWaClicks,
+    applyAdsWaClickRow,
+  ]);
 
   const { data: existingQuote, isLoading: loadingQuote } = trpc.quotes.getById.useQuery(
     { id: quoteId! },
@@ -999,7 +1079,6 @@ export default function QuoteForm() {
     }
   }, [existingQuote, editDraftKey]);
 
-  const utils = trpc.useUtils();
   const createMutation = trpc.quotes.create.useMutation({
     onSuccess: (data) => {
       clearDraft(); // Clear draft after successful save
@@ -1796,8 +1875,40 @@ export default function QuoteForm() {
                   className="text-xs"
                   style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
                 >
-                  Google Ads 歸因（GCLID／Campaign／Landing）
+                  Google Ads 歸因（唔使讀 WhatsApp 對話）
                 </div>
+                <FormField label="WhatsApp 開場白短碼">
+                  <div className="flex gap-2">
+                    <Input
+                      value={waRefInput}
+                      onChange={(e) => setWaRefInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleLookupWaRef();
+                        }
+                      }}
+                      placeholder="貼上 W7K3M 或成句開場白"
+                      style={inputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleLookupWaRef()}
+                      className="px-3 text-xs shrink-0"
+                      style={{
+                        background: "rgba(212,168,67,0.15)",
+                        color: "#d4a843",
+                        border: "1px solid rgba(212,168,67,0.35)",
+                        borderRadius: 4,
+                      }}
+                    >
+                      對碼
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    客人由 Ads 撳入黎，開場白會帶（Wxxxx）。抄短碼撳「對碼」即知係 Google。
+                  </div>
+                </FormField>
                 <FormField label="從最近 Ads WA 點擊選擇">
                   <Select
                     value={
@@ -1827,11 +1938,12 @@ export default function QuoteForm() {
                           c.adsCampaignId ||
                           c.utmCampaign ||
                           "—";
+                        const ref = c.refCode ? `${c.refCode} · ` : "";
                         const g = c.gclid ? `gclid…${String(c.gclid).slice(-6)}` : "no gclid";
                         const linked = c.quoteId ? " · 已連結報價" : "";
                         return (
                           <SelectItem key={c.id} value={String(c.id)}>
-                            #{c.id} · {when} · {camp} · {g}
+                            {ref}#{c.id} · {when} · {camp} · {g}
                             {linked}
                           </SelectItem>
                         );
@@ -1839,7 +1951,7 @@ export default function QuoteForm() {
                     </SelectContent>
                   </Select>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    選取後會帶入 GCLID／campaign／landing；官網 WA 須經 jdsys `/api/track/wa` 才會出現
+                    過去 48 小時若只有 1 次未用 Ads WA 點擊，揀 Google Ads 會自動帶入
                   </div>
                 </FormField>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

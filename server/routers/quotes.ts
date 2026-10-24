@@ -14,6 +14,7 @@ import {
   backfillEmailInquiryLeadSources,
   listRecentAdsWhatsappClicks,
   linkWhatsappClickToQuote,
+  findAdsWhatsappClickByRef,
 } from "../db";
 import {
   adsAttributionInputSchema,
@@ -389,6 +390,13 @@ export const quotesRouter = router({
     .input(z.object({ limit: z.number().min(1).max(50).default(30) }).optional())
     .query(async ({ input }) => {
       return listRecentAdsWhatsappClicks(input?.limit ?? 30);
+    }),
+
+  /** Match WA first-line short code (Wxxxx) → Ads click attribution */
+  lookupAdsWaClickByRef: protectedProcedure
+    .input(z.object({ ref: z.string().min(1).max(64) }))
+    .query(async ({ input }) => {
+      return findAdsWhatsappClickByRef(input.ref);
     }),
 
   create: protectedProcedure

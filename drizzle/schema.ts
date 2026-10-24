@@ -556,6 +556,8 @@ export const whatsappClickEvents = mysqlTable("whatsapp_click_events", {
   adsCampaignId: varchar("ads_campaign_id", { length: 64 }),
   adsCampaignName: varchar("ads_campaign_name", { length: 255 }),
   landingPageUrl: text("landing_page_url"),
+  /** Short code embedded in WA prefill (e.g. W7K3M) for staff / future API match */
+  refCode: varchar("ref_code", { length: 16 }),
   ip: varchar("ip", { length: 64 }),
   userAgent: varchar("user_agent", { length: 512 }),
   clickedAt: timestamp("clicked_at").defaultNow().notNull(),
