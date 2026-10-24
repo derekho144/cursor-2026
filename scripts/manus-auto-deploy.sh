@@ -67,6 +67,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 export API_BASE KEY TASK_ID WEBSITE_ID SHA FULL MSG BRANCH AGENT_PROFILE PUBLISH_ONLY ROOT
+# Piped logs (e.g. `| tee`) otherwise reorder stderr ahead of buffered stdout.
+export PYTHONUNBUFFERED=1
 
 python3 <<'PY'
 import json, os, subprocess, sys, time
