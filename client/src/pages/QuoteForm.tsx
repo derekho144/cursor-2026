@@ -157,6 +157,19 @@ type FormData = {
   crewOthers: number;
   deliveryMethod: string;
   leadSource: string;
+  /** Google Ads / WA track attribution (persisted on quote) */
+  gclid: string;
+  gbraid: string;
+  wbraid: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  utmTerm: string;
+  adsCampaignId: string;
+  adsCampaignName: string;
+  landingPageUrl: string;
+  whatsappClickId?: number | undefined;
   items: QuoteItem[];
   clientId?: number;
   saveAsNewClient?: boolean;
@@ -191,12 +204,29 @@ const emptyForm: FormData = {
   crewOthers: 0,
   deliveryMethod: "",
   leadSource: "",
+  gclid: "",
+  gbraid: "",
+  wbraid: "",
+  utmSource: "",
+  utmMedium: "",
+  utmCampaign: "",
+  utmContent: "",
+  utmTerm: "",
+  adsCampaignId: "",
+  adsCampaignName: "",
+  landingPageUrl: "",
+  whatsappClickId: undefined,
   items: [{ id: crypto.randomUUID(), description: "", quantity: 1, unitPrice: 0, amount: 0, category: "" }],
   clientId: undefined,
   saveAsNewClient: false,
   syncToClients: true,
   emailInquiryId: undefined,
 };
+
+function strOrEmpty(v: unknown): string {
+  if (v == null) return "";
+  return String(v);
+}
 
 /** Merge saved drafts / partial payloads onto emptyForm so new fields never crash .trim(). */
 function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData {
@@ -236,6 +266,21 @@ function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData 
     team: raw.team ?? "",
     deliveryMethod: raw.deliveryMethod ?? "",
     leadSource: normalizeLeadSource(raw.leadSource),
+    gclid: strOrEmpty(raw.gclid),
+    gbraid: strOrEmpty(raw.gbraid),
+    wbraid: strOrEmpty(raw.wbraid),
+    utmSource: strOrEmpty(raw.utmSource),
+    utmMedium: strOrEmpty(raw.utmMedium),
+    utmCampaign: strOrEmpty(raw.utmCampaign),
+    utmContent: strOrEmpty(raw.utmContent),
+    utmTerm: strOrEmpty(raw.utmTerm),
+    adsCampaignId: strOrEmpty(raw.adsCampaignId),
+    adsCampaignName: strOrEmpty(raw.adsCampaignName),
+    landingPageUrl: strOrEmpty(raw.landingPageUrl),
+    whatsappClickId:
+      raw.whatsappClickId != null && Number(raw.whatsappClickId) > 0
+        ? Number(raw.whatsappClickId)
+        : undefined,
     notes: raw.notes ?? "",
     crewPhotographers: Number(raw.crewPhotographers) || 0,
     crewAssistants: Number(raw.crewAssistants) || 0,
@@ -697,6 +742,36 @@ export default function QuoteForm() {
     }
   }, []);
 
+  const { data: recentAdsWaClicks } = trpc.quotes.recentAdsWaClicks.useQuery(
+    { limit: 30 },
+    { enabled: form.leadSource === "Google", refetchOnWindowFocus: false }
+  );
+
+  const applyAdsWaClick = (clickId: string) => {
+    if (clickId === "__none__") {
+      setForm((p) => ({ ...p, whatsappClickId: undefined }));
+      return;
+    }
+    const click = recentAdsWaClicks?.find((c) => String(c.id) === clickId);
+    if (!click) return;
+    setForm((p) => ({
+      ...p,
+      leadSource: "Google",
+      whatsappClickId: click.id,
+      gclid: strOrEmpty(click.gclid) || p.gclid,
+      gbraid: strOrEmpty((click as any).gbraid) || p.gbraid,
+      wbraid: strOrEmpty((click as any).wbraid) || p.wbraid,
+      utmSource: strOrEmpty((click as any).utmSource) || p.utmSource,
+      utmMedium: strOrEmpty((click as any).utmMedium) || p.utmMedium,
+      utmCampaign: strOrEmpty(click.utmCampaign) || p.utmCampaign,
+      utmContent: strOrEmpty((click as any).utmContent) || p.utmContent,
+      utmTerm: strOrEmpty((click as any).utmTerm) || p.utmTerm,
+      adsCampaignId: strOrEmpty(click.adsCampaignId) || p.adsCampaignId,
+      adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
+      landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
+    }));
+  };
+
   const { data: existingQuote, isLoading: loadingQuote } = trpc.quotes.getById.useQuery(
     { id: quoteId! },
     { enabled: isEdit }
@@ -877,6 +952,22 @@ export default function QuoteForm() {
         crewOthers: Number((existingQuote as any).crewOthers ?? 0),
         deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
         leadSource: normalizeLeadSource((existingQuote as any).leadSource),
+        gclid: strOrEmpty((existingQuote as any).gclid),
+        gbraid: strOrEmpty((existingQuote as any).gbraid),
+        wbraid: strOrEmpty((existingQuote as any).wbraid),
+        utmSource: strOrEmpty((existingQuote as any).utmSource),
+        utmMedium: strOrEmpty((existingQuote as any).utmMedium),
+        utmCampaign: strOrEmpty((existingQuote as any).utmCampaign),
+        utmContent: strOrEmpty((existingQuote as any).utmContent),
+        utmTerm: strOrEmpty((existingQuote as any).utmTerm),
+        adsCampaignId: strOrEmpty((existingQuote as any).adsCampaignId),
+        adsCampaignName: strOrEmpty((existingQuote as any).adsCampaignName),
+        landingPageUrl: strOrEmpty((existingQuote as any).landingPageUrl),
+        whatsappClickId:
+          (existingQuote as any).whatsappClickId != null &&
+          Number((existingQuote as any).whatsappClickId) > 0
+            ? Number((existingQuote as any).whatsappClickId)
+            : undefined,
         items: (existingQuote.items ?? []).map((item) => ({
           id: crypto.randomUUID(),
           description: item.description,
@@ -1207,6 +1298,10 @@ export default function QuoteForm() {
     const reconciledTotal =
       Math.round((reconciledSubtotal - reconciledDiscountAmount) * 100) / 100;
 
+    const emptyToNull = (v: string) => {
+      const s = (v ?? "").trim();
+      return s ? s : null;
+    };
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
@@ -1228,6 +1323,18 @@ export default function QuoteForm() {
       syncToClients: !isEdit ? (form.syncToClients ?? true) : undefined,
       // Ensure null is not passed (use undefined to omit)
       emailInquiryId: form.emailInquiryId ?? undefined,
+      gclid: emptyToNull(form.gclid),
+      gbraid: emptyToNull(form.gbraid),
+      wbraid: emptyToNull(form.wbraid),
+      utmSource: emptyToNull(form.utmSource),
+      utmMedium: emptyToNull(form.utmMedium),
+      utmCampaign: emptyToNull(form.utmCampaign),
+      utmContent: emptyToNull(form.utmContent),
+      utmTerm: emptyToNull(form.utmTerm),
+      adsCampaignId: emptyToNull(form.adsCampaignId),
+      adsCampaignName: emptyToNull(form.adsCampaignName),
+      landingPageUrl: emptyToNull(form.landingPageUrl),
+      whatsappClickId: form.whatsappClickId ?? null,
     };
 
     if (isEdit && quoteId) {
@@ -1682,6 +1789,131 @@ export default function QuoteForm() {
                 </SelectContent>
               </Select>
             </FormField>
+
+            {form.leadSource === "Google" && (
+              <div className="md:col-span-2 space-y-3 rounded-md border border-[rgba(212,168,67,0.25)] p-3">
+                <div
+                  className="text-xs"
+                  style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
+                >
+                  Google Ads 歸因（GCLID／Campaign／Landing）
+                </div>
+                <FormField label="從最近 Ads WA 點擊選擇">
+                  <Select
+                    value={
+                      form.whatsappClickId != null
+                        ? String(form.whatsappClickId)
+                        : "__none__"
+                    }
+                    onValueChange={applyAdsWaClick}
+                  >
+                    <SelectTrigger style={inputStyle}>
+                      <SelectValue placeholder="選擇近期追蹤點擊（可選）" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">不連結 WA 點擊</SelectItem>
+                      {(recentAdsWaClicks ?? []).map((c) => {
+                        const when = c.clickedAt
+                          ? new Date(c.clickedAt).toLocaleString("zh-HK", {
+                              timeZone: "Asia/Hong_Kong",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "";
+                        const camp =
+                          c.adsCampaignName ||
+                          c.adsCampaignId ||
+                          c.utmCampaign ||
+                          "—";
+                        const g = c.gclid ? `gclid…${String(c.gclid).slice(-6)}` : "no gclid";
+                        const linked = c.quoteId ? " · 已連結報價" : "";
+                        return (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            #{c.id} · {when} · {camp} · {g}
+                            {linked}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    選取後會帶入 GCLID／campaign／landing；官網 WA 須經 jdsys `/api/track/wa` 才會出現
+                  </div>
+                </FormField>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormField label="GCLID">
+                    <Input
+                      value={form.gclid}
+                      onChange={(e) => setForm((p) => ({ ...p, gclid: e.target.value }))}
+                      placeholder="自動帶入或手動貼上"
+                      style={inputStyle}
+                    />
+                  </FormField>
+                  <FormField label="Landing page">
+                    <Input
+                      value={form.landingPageUrl}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, landingPageUrl: e.target.value }))
+                      }
+                      placeholder="https://jdstudiohk.com/..."
+                      style={inputStyle}
+                    />
+                  </FormField>
+                  <FormField label="Campaign ID">
+                    <Input
+                      value={form.adsCampaignId}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, adsCampaignId: e.target.value }))
+                      }
+                      placeholder="例如 Search #3 = 24002224927"
+                      style={inputStyle}
+                    />
+                  </FormField>
+                  <FormField label="Campaign 名稱">
+                    <Input
+                      value={form.adsCampaignName}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, adsCampaignName: e.target.value }))
+                      }
+                      placeholder="可選"
+                      style={inputStyle}
+                    />
+                  </FormField>
+                  <FormField label="utm_campaign">
+                    <Input
+                      value={form.utmCampaign}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, utmCampaign: e.target.value }))
+                      }
+                      placeholder="可選"
+                      style={inputStyle}
+                    />
+                  </FormField>
+                  <FormField label="utm_source / medium">
+                    <div className="flex gap-2">
+                      <Input
+                        value={form.utmSource}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, utmSource: e.target.value }))
+                        }
+                        placeholder="google"
+                        style={inputStyle}
+                      />
+                      <Input
+                        value={form.utmMedium}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, utmMedium: e.target.value }))
+                        }
+                        placeholder="cpc"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </FormField>
+                </div>
+              </div>
+            )}
 
             {quotePricingMode(form.serviceType) === "time_crew" && (
               <div className="md:col-span-2">

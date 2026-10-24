@@ -616,6 +616,42 @@ export default function QuoteDetail() {
                   </span>
                 </div>
               )}
+              {((quote as any).gclid ||
+                (quote as any).adsCampaignId ||
+                (quote as any).adsCampaignName ||
+                (quote as any).utmCampaign ||
+                (quote as any).landingPageUrl) && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <div style={{ fontSize: "0.6rem", letterSpacing: "0.1em", color: "rgba(212,168,67,0.6)", textTransform: "uppercase" }}>
+                    Ads 歸因
+                  </div>
+                  {((quote as any).adsCampaignName || (quote as any).adsCampaignId) && (
+                    <div>
+                      Campaign:{" "}
+                      {(quote as any).adsCampaignName || "—"}
+                      {(quote as any).adsCampaignId
+                        ? ` (${(quote as any).adsCampaignId})`
+                        : ""}
+                    </div>
+                  )}
+                  {(quote as any).utmCampaign && (
+                    <div>utm_campaign: {(quote as any).utmCampaign}</div>
+                  )}
+                  {(quote as any).gclid && (
+                    <div className="truncate" title={(quote as any).gclid}>
+                      GCLID: {(quote as any).gclid}
+                    </div>
+                  )}
+                  {(quote as any).landingPageUrl && (
+                    <div className="truncate" title={(quote as any).landingPageUrl}>
+                      Landing: {(quote as any).landingPageUrl}
+                    </div>
+                  )}
+                  {(quote as any).whatsappClickId != null && (
+                    <div>WA click #{(quote as any).whatsappClickId}</div>
+                  )}
+                </div>
+              )}
               {quote.status === "rejected" &&
                 ((quote as any).rejectedReason ||
                   (quote as any).rejectedBudgetMax != null ||

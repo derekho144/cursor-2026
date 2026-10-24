@@ -12,7 +12,13 @@ import {
   upsertClientFromQuote,
   searchClients,
   backfillEmailInquiryLeadSources,
+  listRecentAdsWhatsappClicks,
+  linkWhatsappClickToQuote,
 } from "../db";
+import {
+  adsAttributionInputSchema,
+  normalizeAttributionForDb,
+} from "../_core/adsAttribution";
 import { invokeLLM, extractLLMText } from "../_core/llm";
 import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
@@ -378,6 +384,13 @@ export const quotesRouter = router({
       return quote;
     }),
 
+  /** Recent Ads-attributed WhatsApp clicks for staff to attach on quote create/edit */
+  recentAdsWaClicks: protectedProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).default(30) }).optional())
+    .query(async ({ input }) => {
+      return listRecentAdsWhatsappClicks(input?.limit ?? 30);
+    }),
+
   create: protectedProcedure
     .input(
       z.object({
@@ -415,10 +428,46 @@ export const quotesRouter = router({
         items: z.array(quoteItemSchema),
         syncToClients: z.boolean().default(true),
         emailInquiryId: z.number().optional(),
-      })
+      }).merge(adsAttributionInputSchema)
     )
     .mutation(async ({ input }) => {
-      const { items, syncToClients, depositPercent: _dp, depositMode: _dm, depositFixedAmount: _dfa, shootHours, shotCount, durationPackage, ...quoteDataRest } = input;
+      const {
+        items,
+        syncToClients,
+        depositPercent: _dp,
+        depositMode: _dm,
+        depositFixedAmount: _dfa,
+        shootHours,
+        shotCount,
+        durationPackage,
+        gclid,
+        gbraid,
+        wbraid,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
+        adsCampaignId,
+        adsCampaignName,
+        landingPageUrl,
+        whatsappClickId,
+        ...quoteDataRest
+      } = input;
+      const attribution = normalizeAttributionForDb({
+        gclid,
+        gbraid,
+        wbraid,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
+        adsCampaignId,
+        adsCampaignName,
+        landingPageUrl,
+        whatsappClickId,
+      });
       const reconciled = reconcileQuoteItemsAndTotals(input.serviceType, items, {
         subtotal: input.subtotal,
         discountPercent: input.discountPercent ?? 0,
@@ -469,6 +518,7 @@ export const quotesRouter = router({
 
       const newQuote = await createQuote({
         ...quoteData,
+        ...attribution,
         clientId: clientId ?? null,
         emailInquiryId: quoteData.emailInquiryId ?? null,
         subtotal: String(quoteData.subtotal),
@@ -487,6 +537,13 @@ export const quotesRouter = router({
           category: normalizeQuoteItemCategory(item.category),
         })),
       });
+      if (attribution.whatsappClickId) {
+        try {
+          await linkWhatsappClickToQuote(attribution.whatsappClickId, newQuote.id);
+        } catch (err) {
+          console.error("[Quote] Failed to link WA click:", err);
+        }
+      }
       // Fire-and-forget: pre-generate PDF in background
       triggerBackgroundPdfGeneration(newQuote.id);
       return newQuote;
@@ -544,7 +601,7 @@ export const quotesRouter = router({
           .optional(),
         items: z.array(quoteItemSchema).optional(),
         emailInquiryId: z.number().nullable().optional(),
-      })
+      }).merge(adsAttributionInputSchema)
     )
     .mutation(async ({ input }) => {
       console.log('[Quotes.update] Input received:', JSON.stringify(input, null, 2));
@@ -563,8 +620,51 @@ export const quotesRouter = router({
         durationPackage,
         rejectedBudgetMax,
         rejectedCompetitorPrice,
+        gclid,
+        gbraid,
+        wbraid,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm,
+        adsCampaignId,
+        adsCampaignName,
+        landingPageUrl,
+        whatsappClickId,
         ...rest
       } = input;
+      const attributionKeys = [
+        "gclid",
+        "gbraid",
+        "wbraid",
+        "utmSource",
+        "utmMedium",
+        "utmCampaign",
+        "utmContent",
+        "utmTerm",
+        "adsCampaignId",
+        "adsCampaignName",
+        "landingPageUrl",
+        "whatsappClickId",
+      ] as const;
+      const hasAttributionPatch = attributionKeys.some((k) => k in input);
+      const attribution = hasAttributionPatch
+        ? normalizeAttributionForDb({
+            gclid,
+            gbraid,
+            wbraid,
+            utmSource,
+            utmMedium,
+            utmCampaign,
+            utmContent,
+            utmTerm,
+            adsCampaignId,
+            adsCampaignName,
+            landingPageUrl,
+            whatsappClickId,
+          })
+        : null;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
       const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
@@ -635,6 +735,7 @@ export const quotesRouter = router({
       const result = await updateQuote(id, {
         ...rest,
         ...enrichedPatch,
+        ...(attribution ? attribution : {}),
         ...(shootHours !== undefined &&
           !("shootHours" in enrichedPatch) && {
             shootHours: shootHours != null ? String(shootHours) : null,
@@ -682,6 +783,14 @@ export const quotesRouter = router({
         // Auto-invalidate cached PDF when content changes
         ...(hasContentChange && { pdfUrl: null, pdfKey: null }),
       });
+
+      if (attribution?.whatsappClickId) {
+        try {
+          await linkWhatsappClickToQuote(attribution.whatsappClickId, id);
+        } catch (err) {
+          console.error("[Quote] Failed to link WA click on update:", err);
+        }
+      }
 
       // 當狀態改為 accepted 時，自動同步會員等級（本年累計；會員制按年度）
       if (input.status === "accepted") {

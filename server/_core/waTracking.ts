@@ -33,18 +33,53 @@ export function waMeUrlWithPrefill(kind: WaPrefillKind): string {
 /** Tracked redirect URL → logs click then redirects to WhatsApp. */
 export function buildWaTrackUrl(
   src: string,
-  opts?: { inq?: number | null; fhj?: number | null }
+  opts?: {
+    inq?: number | null;
+    fhj?: number | null;
+    q?: number | null;
+    gclid?: string | null;
+    gbraid?: string | null;
+    wbraid?: string | null;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    utmContent?: string | null;
+    utmTerm?: string | null;
+    adsCampaignId?: string | null;
+    adsCampaignName?: string | null;
+    landingPageUrl?: string | null;
+  }
 ): string {
   const q = new URLSearchParams({ src });
   if (opts?.inq != null) q.set("inq", String(opts.inq));
   if (opts?.fhj != null) q.set("fhj", String(opts.fhj));
+  if (opts?.q != null) q.set("q", String(opts.q));
+  if (opts?.gclid) q.set("gclid", opts.gclid);
+  if (opts?.gbraid) q.set("gbraid", opts.gbraid);
+  if (opts?.wbraid) q.set("wbraid", opts.wbraid);
+  if (opts?.utmSource) q.set("utm_source", opts.utmSource);
+  if (opts?.utmMedium) q.set("utm_medium", opts.utmMedium);
+  if (opts?.utmCampaign) q.set("utm_campaign", opts.utmCampaign);
+  if (opts?.utmContent) q.set("utm_content", opts.utmContent);
+  if (opts?.utmTerm) q.set("utm_term", opts.utmTerm);
+  if (opts?.adsCampaignId) q.set("campaign_id", opts.adsCampaignId);
+  if (opts?.adsCampaignName) q.set("campaign", opts.adsCampaignName);
+  if (opts?.landingPageUrl) q.set("lp", opts.landingPageUrl);
   return `${appBaseUrl()}/api/track/wa?${q.toString()}`;
 }
 
 /** HTML anchor that looks like wa.me but clicks go through tracking. */
 export function waTrackAnchor(
   src: string,
-  opts?: { inq?: number | null; fhj?: number | null; style?: string }
+  opts?: {
+    inq?: number | null;
+    fhj?: number | null;
+    q?: number | null;
+    style?: string;
+    gclid?: string | null;
+    adsCampaignId?: string | null;
+    landingPageUrl?: string | null;
+  }
 ): string {
   const href = buildWaTrackUrl(src, opts);
   const style = opts?.style ?? "color:#25D366;font-weight:bold";
