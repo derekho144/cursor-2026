@@ -150,20 +150,31 @@ export type AdsClickMatchCandidate = {
  * Auto-match rule (last-click): among unmatched Ads clicks in the lookback
  * window ending at message time, pick the most recent click at/before the
  * message (5m clock skew). Multiple concurrent clicks no longer block matching.
+ *
+ * `allowMatchedPhone`: when re-resolving attribution for a known inbound phone,
+ * keep clicks already stamped with that same phone (they are not "open" for a
+ * different number, but are valid for this number).
  */
 export function pickAdsClickForInbound(
   candidates: AdsClickMatchCandidate[],
   messageAt: Date,
-  lookbackMs = 48 * 60 * 60 * 1000
+  lookbackMs = 48 * 60 * 60 * 1000,
+  opts?: { allowMatchedPhone?: string | null }
 ):
   | { clickId: number; reason: "single_recent" | "last_click" }
   | { clickId: null; reason: "none" } {
   const end = messageAt.getTime();
   const start = end - lookbackMs;
+  const allowPhone = opts?.allowMatchedPhone
+    ? String(opts.allowMatchedPhone).replace(/\D/g, "")
+    : "";
   const open = candidates
     .map((c) => {
       if (c.quoteId != null) return null;
-      if (c.matchedPhone) return null;
+      if (c.matchedPhone) {
+        const mp = String(c.matchedPhone).replace(/\D/g, "");
+        if (!allowPhone || mp !== allowPhone) return null;
+      }
       const t = c.clickedAt ? new Date(c.clickedAt).getTime() : NaN;
       if (!Number.isFinite(t)) return null;
       if (t < start || t > end + 5 * 60 * 1000) return null; // allow 5m clock skew
@@ -178,6 +189,18 @@ export function pickAdsClickForInbound(
     return { clickId: open[0]!.id, reason: "single_recent" };
   }
   return { clickId: open[0]!.id, reason: "last_click" };
+}
+
+/**
+ * Prefer an inbound that already carries Ads click attribution.
+ * Recent chat spam (later messages with null match) must not hide the first
+ * matched message — callers previously only scanned the newest N rows.
+ */
+export function preferInboundWithAdsMatch<
+  T extends { matchedClickId?: number | null },
+>(withMatchNewestFirst: T[], recentNewestFirst: T[] = []): T | null {
+  if (withMatchNewestFirst[0]) return withMatchNewestFirst[0];
+  return recentNewestFirst.find((m) => m.matchedClickId != null) ?? null;
 }
 
 /** Graph API send text (optional staff reply path). */

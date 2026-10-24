@@ -3277,11 +3277,29 @@ export async function getAdsAttributionForPhone(phone: string) {
   const db = await getDb();
   if (!db) return null;
   await ensureAdsQuoteAttributionSchema();
-  const { normalizeWaPhone } = await import("./_core/whatsappCloud");
+  const { normalizeWaPhone, preferInboundWithAdsMatch, pickAdsClickForInbound } =
+    await import("./_core/whatsappCloud");
   const normalized = normalizeWaPhone(phone);
   if (!normalized) return null;
 
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  // Explicitly load inbounds that already have a click match. Later chat
+  // messages keep matched_click_id NULL; scanning only the newest 5 rows
+  // previously hid the first matched message (e.g. 5303 1277 / click 4110001).
+  const matchedInbounds = await db
+    .select()
+    .from(whatsappInboundMessages)
+    .where(
+      and(
+        eq(whatsappInboundMessages.fromPhone, normalized),
+        sql`${whatsappInboundMessages.createdAt} >= ${since}`,
+        sql`${whatsappInboundMessages.matchedClickId} IS NOT NULL`
+      )
+    )
+    .orderBy(desc(whatsappInboundMessages.createdAt))
+    .limit(5);
+
   const inbounds = await db
     .select()
     .from(whatsappInboundMessages)
@@ -3292,18 +3310,61 @@ export async function getAdsAttributionForPhone(phone: string) {
       )
     )
     .orderBy(desc(whatsappInboundMessages.createdAt))
-    .limit(5);
+    .limit(20);
 
-  let withClick = inbounds.find((m) => m.matchedClickId != null) ?? null;
+  let withClick = preferInboundWithAdsMatch(matchedInbounds, inbounds);
+
+  // Fallback: click already stamped with this phone (inbound match may be on
+  // an older row; or match lived only on whatsapp_click_events.matched_phone).
+  if (!withClick?.matchedClickId) {
+    const byPhone = await db
+      .select(adsWaClickSelect)
+      .from(whatsappClickEvents)
+      .where(
+        and(
+          eq(whatsappClickEvents.matchedPhone, normalized),
+          sql`${whatsappClickEvents.clickedAt} >= ${since}`,
+          sql`${whatsappClickEvents.quoteId} IS NULL`
+        )
+      )
+      .orderBy(desc(whatsappClickEvents.clickedAt))
+      .limit(1);
+    const clickByPhone = byPhone[0];
+    if (clickByPhone) {
+      return {
+        phone: normalized,
+        inboundId: inbounds[0]?.id ?? null,
+        contactName: inbounds[0]?.contactName ?? null,
+        matched: true as const,
+        attribution: {
+          whatsappClickId: clickByPhone.id,
+          gclid: clickByPhone.gclid,
+          gbraid: clickByPhone.gbraid,
+          wbraid: clickByPhone.wbraid,
+          utmSource: clickByPhone.utmSource,
+          utmMedium: clickByPhone.utmMedium,
+          utmCampaign: clickByPhone.utmCampaign,
+          utmContent: clickByPhone.utmContent,
+          utmTerm: clickByPhone.utmTerm,
+          adsCampaignId: clickByPhone.adsCampaignId,
+          adsCampaignName: clickByPhone.adsCampaignName,
+          landingPageUrl: clickByPhone.landingPageUrl,
+          refCode: clickByPhone.refCode,
+        },
+      };
+    }
+  }
 
   // Retroactive last-click match for inbounds that arrived while multiple
-  // unmatched Ads clicks blocked the old "exactly one" rule.
+  // unmatched Ads clicks blocked the old "exactly one" rule. Allow clicks
+  // already stamped with this same phone.
   if (!withClick?.matchedClickId && inbounds[0]) {
-    const { pickAdsClickForInbound } = await import("./_core/whatsappCloud");
     const messageAt =
       inbounds[0].waTimestamp ?? inbounds[0].createdAt ?? new Date();
     const candidates = await listUnmatchedAdsWhatsappClicks(40);
-    const match = pickAdsClickForInbound(candidates, new Date(messageAt));
+    const match = pickAdsClickForInbound(candidates, new Date(messageAt), undefined, {
+      allowMatchedPhone: normalized,
+    });
     if (match.clickId) {
       await db
         .update(whatsappInboundMessages)

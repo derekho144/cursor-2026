@@ -745,9 +745,14 @@ export default function QuoteForm() {
   }, []);
 
   const utils = trpc.useUtils();
+  const phoneForAds = (form.clientPhone || "").replace(/\D/g, "");
   const { data: recentAdsWaClicks } = trpc.quotes.recentAdsWaClicks.useQuery(
     { limit: 30 },
-    { enabled: form.leadSource === "Google", refetchOnWindowFocus: false }
+    {
+      // Load when Google is selected OR staff typed a phone (auto-match by matchedPhone)
+      enabled: form.leadSource === "Google" || phoneForAds.length >= 8,
+      refetchOnWindowFocus: false,
+    }
   );
   const adsAutoAttachedRef = useRef(false);
 
@@ -855,7 +860,6 @@ export default function QuoteForm() {
   ]);
 
   // Full automation path: WhatsApp Cloud API inbound matched this phone → Ads click.
-  const phoneForAds = (form.clientPhone || "").replace(/\D/g, "");
   const { data: phoneAdsAttr } = trpc.whatsapp.attributionForPhone.useQuery(
     { phone: form.clientPhone },
     {
@@ -897,6 +901,42 @@ export default function QuoteForm() {
     phoneAdsAttr,
     form.whatsappClickId,
     form.clientName,
+    applyAdsWaClickRow,
+  ]);
+
+  // Client fallback: match recent Ads WA click by matchedPhone when API
+  // attribution is slow/misses (e.g. older first-message match outside limit).
+  useEffect(() => {
+    if (isEdit) return;
+    if (form.whatsappClickId != null) return;
+    if (phoneAdsAttr?.matched) return;
+    if (phoneForAds.length < 8) return;
+    if (!recentAdsWaClicks?.length) return;
+    const normalized =
+      phoneForAds.length === 8 && /^[4-9]/.test(phoneForAds)
+        ? `852${phoneForAds}`
+        : phoneForAds;
+    const hit = recentAdsWaClicks.find((c) => {
+      if (c.quoteId != null) return false;
+      const mp = (c.matchedPhone || "").replace(/\D/g, "");
+      if (!mp) return false;
+      return mp === normalized || mp.endsWith(phoneForAds) || normalized.endsWith(mp);
+    });
+    if (!hit) return;
+    const key = `matchedPhone:${normalized}:${hit.id}`;
+    if (phoneAdsAttachedRef.current === key) return;
+    phoneAdsAttachedRef.current = key;
+    applyAdsWaClickRow(hit, {
+      toastMsg: `已按電話自動帶入 Ads WA 點擊 #${hit.id}${
+        hit.refCode ? `（${hit.refCode}）` : ""
+      }`,
+    });
+  }, [
+    isEdit,
+    form.whatsappClickId,
+    phoneAdsAttr?.matched,
+    phoneForAds,
+    recentAdsWaClicks,
     applyAdsWaClickRow,
   ]);
 
