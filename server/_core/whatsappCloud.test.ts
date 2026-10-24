@@ -3,6 +3,7 @@ import {
   normalizeWaPhone,
   parseWhatsappWebhookPayload,
   pickAdsClickForInbound,
+  preferInboundWithAdsMatch,
   verifyWhatsappSignature,
   verifyWhatsappWebhookChallenge,
 } from "./whatsappCloud";
@@ -88,6 +89,39 @@ describe("pickAdsClickForInbound", () => {
       t0
     );
     expect(result.reason).toBe("none");
+  });
+
+  it("reuses click already matched to the same phone when allowMatchedPhone set", () => {
+    const result = pickAdsClickForInbound(
+      [
+        {
+          id: 4110001,
+          clickedAt: new Date("2026-10-24T04:00:00Z"),
+          quoteId: null,
+          matchedPhone: "85253031277",
+        },
+      ],
+      t0,
+      undefined,
+      { allowMatchedPhone: "85253031277" }
+    );
+    expect(result).toEqual({ clickId: 4110001, reason: "single_recent" });
+  });
+});
+
+describe("preferInboundWithAdsMatch", () => {
+  it("does not let later unmatched chat hide the first matched inbound", () => {
+    const matched = [{ id: 420001, matchedClickId: 4110001 }];
+    const recent = [
+      { id: 450002, matchedClickId: null },
+      { id: 450001, matchedClickId: null },
+      { id: 420005, matchedClickId: null },
+      { id: 420004, matchedClickId: null },
+      { id: 420003, matchedClickId: null },
+    ];
+    expect(preferInboundWithAdsMatch(matched, recent)).toEqual(matched[0]);
+    // Old buggy path: only scanning newest 5 → miss
+    expect(recent.find((m) => m.matchedClickId != null)).toBeUndefined();
   });
 });
 
