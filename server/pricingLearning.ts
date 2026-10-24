@@ -211,6 +211,8 @@ async function loadLearningQuotesWithItems(opts?: {
     const quoteTotal = Number(q.total);
     const features = extractQuoteShootFeatures({
       shootHours: q.shootHours,
+      /** Explicit multi_day only — shootHours is day count. */
+      durationPackage: q.durationPackage,
       shotCount: q.shotCount,
       crewPhotographers: q.crewPhotographers,
       crewAssistants: q.crewAssistants,
@@ -745,6 +747,7 @@ export async function getPricingLearningByServiceType(serviceType: string) {
       quoteTotal: r.quoteTotal,
       shootingDate: r.shootingDate,
       hours: r.features.hours,
+      durationDays: r.features.durationDays,
       hoursLabel: hoursBucketLabel(r.features.hoursBucket),
       hoursSource: r.features.hoursSource,
       durationPackage: r.durationPackage,
@@ -830,6 +833,7 @@ export async function suggestPriceFromLearning(input: {
     input.hours != null && input.hours > 0
       ? extractQuoteShootFeatures({
           shootHours: input.hours,
+          durationPackage: input.durationPackage,
         }).hoursBucket
       : null;
   const targetCrew =
@@ -1256,10 +1260,8 @@ export async function backfillStructuredShootFields(opts?: {
             : q.shootHours != null
               ? Number(q.shootHours)
               : null;
-        const pkg = resolveDurationPackage({
-          durationPackage: null,
-          shootHours: hoursForPkg,
-        });
+        // Never auto-set multi_day: that package stores day count in shootHours
+        const pkg = inferDurationPackageFromHours(hoursForPkg);
         if (pkg !== "unknown") {
           patch.durationPackage = pkg;
           fields.push("durationPackage");
@@ -1375,6 +1377,11 @@ export async function refreshDurationPackageBackfill(opts?: {
         ? Number(q.shootHours)
         : null;
     const beforePkg = (q.durationPackage ?? "").trim() || null;
+
+    // multi_day stores day count in shootHours — never re-infer from that value
+    if (beforePkg === "multi_day") {
+      continue;
+    }
 
     const nextPkg =
       beforeHours != null

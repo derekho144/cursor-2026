@@ -16,7 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { QUOTE_REJECT_REASONS } from "@shared/quoteRejectReasons";
-import { durationPackageLabel, resolveDurationPackage } from "@shared/quoteDurationPackage";
+import {
+  durationPackageLabel,
+  formatShootDurationZh,
+  resolveDurationPackage,
+} from "@shared/quoteDurationPackage";
 
 const DEFAULT_EMAIL_BODY = `Hello,
 
@@ -567,9 +571,15 @@ export default function QuoteDetail() {
                   ) : (
                     <>
                       <div className="text-sm text-muted-foreground mt-1">
-                        拍攝時數：
-                        {(quote as any).shootHours != null && Number((quote as any).shootHours) > 0
-                          ? `${Number((quote as any).shootHours)} 小時`
+                        {(quote as any).durationPackage === "multi_day"
+                          ? "拍攝日數："
+                          : "拍攝時數："}
+                        {(quote as any).shootHours != null &&
+                        Number((quote as any).shootHours) > 0
+                          ? formatShootDurationZh(
+                              (quote as any).shootHours,
+                              (quote as any).durationPackage
+                            )
                           : "未填"}
                       </div>
                       {(() => {

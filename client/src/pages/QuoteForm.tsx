@@ -36,6 +36,7 @@ import {
 import {
   DURATION_PACKAGE_OPTIONS,
   inferDurationPackageFromHours,
+  isMultiDayDurationPackage,
   type DurationPackage,
 } from "@shared/quoteDurationPackage";
 import {
@@ -1343,7 +1344,11 @@ export default function QuoteForm() {
 
     if (pricingMode === "time_crew") {
       if (shootHours == null) {
-        toast.error("請填寫拍攝時數（服務資料）");
+        toast.error(
+          isMultiDayDurationPackage(form.durationPackage)
+            ? "請填寫拍攝日數（服務資料；多日套餐數量＝日數）"
+            : "請填寫拍攝時數（服務資料）"
+        );
         return;
       }
       if (crewHeadcount(crew) <= 0) {
@@ -1809,30 +1814,46 @@ export default function QuoteForm() {
               </FormField>
             )}
             {quotePricingMode(form.serviceType) === "time_crew" && (
-              <FormField label={<span>拍攝時數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
+              <FormField
+                label={
+                  <span>
+                    {isMultiDayDurationPackage(form.durationPackage)
+                      ? "拍攝日數"
+                      : "拍攝時數"}{" "}
+                    <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span>
+                  </span>
+                }
+              >
                 <Input
                   type="number"
-                  min={0.5}
-                  max={72}
-                  step={0.5}
+                  min={isMultiDayDurationPackage(form.durationPackage) ? 1 : 0.5}
+                  max={isMultiDayDurationPackage(form.durationPackage) ? 30 : 72}
+                  step={isMultiDayDurationPackage(form.durationPackage) ? 1 : 0.5}
                   value={form.shootHours ?? ""}
                   onChange={(e) => {
                     const v = e.target.value;
                     setForm((p) => {
+                      // multi_day already chosen: value is day count — don't re-infer
+                      if (isMultiDayDurationPackage(p.durationPackage)) {
+                        return { ...p, shootHours: v };
+                      }
                       const n = v.trim() ? Number(v) : null;
                       const inferred =
                         n != null && Number.isFinite(n)
                           ? inferDurationPackageFromHours(n)
                           : "unknown";
                       const nextPkg =
-                        !p.durationPackage &&
-                        inferred !== "unknown"
+                        !p.durationPackage && inferred !== "unknown"
                           ? (inferred as FormData["durationPackage"])
                           : p.durationPackage;
                       return { ...p, shootHours: v, durationPackage: nextPkg };
                     });
                   }}
-                  placeholder="例如 4"
+                  placeholder={
+                    isMultiDayDurationPackage(form.durationPackage)
+                      ? "例如 2（＝2 日）"
+                      : "例如 4"
+                  }
                   style={{
                     ...inputStyle,
                     borderColor: !(form.shootHours ?? "").trim()
@@ -1865,7 +1886,9 @@ export default function QuoteForm() {
                   </SelectContent>
                 </Select>
                 <div className="text-[11px] text-muted-foreground mt-1">
-                  半日／全日／多日成功率較低；用套餐標記方便學習勝率
+                  {isMultiDayDurationPackage(form.durationPackage)
+                    ? "多日／N 日：上方數量＝拍攝日數（1＝一日），唔係鐘點時數"
+                    : "半日／全日／多日成功率較低；用套餐標記方便學習勝率"}
                 </div>
               </FormField>
             )}

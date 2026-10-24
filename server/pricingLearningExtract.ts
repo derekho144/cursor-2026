@@ -8,6 +8,10 @@ import {
   shotCountBucket,
   type ShotCountBucket,
 } from "../shared/quotePricingMode";
+import {
+  isMultiDayDurationPackage,
+  shootValueAsLearningHours,
+} from "../shared/quoteDurationPackage";
 
 export { extractHoursFromText };
 import { resolveLearningTotal } from "../shared/quoteLineItemKind";
@@ -26,7 +30,13 @@ export interface CrewBreakdown {
 }
 
 export interface QuoteShootFeatures {
+  /** Clock hours for learning (multi_day day-count is expanded × 8). */
   hours: number | null;
+  /**
+   * When durationPackage is multi_day and structured value set: day count
+   * (1 = 一日). Null otherwise.
+   */
+  durationDays: number | null;
   hoursBucket: HoursBucket;
   hoursSource: "structured" | "items" | "notes" | "team" | "inferred" | null;
   crew: CrewBreakdown;
@@ -368,6 +378,8 @@ export function extractShotCountFromText(text: string): number | null {
  */
 export function extractQuoteShootFeatures(input: {
   shootHours?: number | string | null;
+  /** When multi_day, shootHours is day count (1 = 一日). */
+  durationPackage?: string | null;
   shotCount?: number | string | null;
   crewPhotographers?: number | null;
   crewAssistants?: number | null;
@@ -391,9 +403,16 @@ export function extractQuoteShootFeatures(input: {
   const team = input.team ?? "";
   const notes = input.notes ?? "";
   const equipment = input.equipment ?? "";
+  const multiDay = isMultiDayDurationPackage(input.durationPackage);
 
-  // Hours: prefer structured column
-  let hours = parseStructuredHours(input.shootHours);
+  // Hours: prefer structured column (multi_day → day count, expand for learning)
+  let structuredRaw = parseStructuredHours(input.shootHours);
+  let durationDays: number | null =
+    multiDay && structuredRaw != null ? structuredRaw : null;
+  let hours =
+    multiDay && structuredRaw != null
+      ? shootValueAsLearningHours(structuredRaw, "multi_day")
+      : structuredRaw;
   let hoursSource: QuoteShootFeatures["hoursSource"] = hours != null ? "structured" : null;
   if (hours == null) {
     hours = extractHoursFromText(itemText);
@@ -468,6 +487,7 @@ export function extractQuoteShootFeatures(input: {
 
   return {
     hours,
+    durationDays,
     hoursBucket: hoursBucket(hours),
     hoursSource,
     crew,

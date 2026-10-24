@@ -37,7 +37,11 @@ import {
   isPricingLearningServiceType,
   quotePricingMode,
 } from "@shared/quotePricingMode";
-import { DURATION_PACKAGE_OPTIONS } from "@shared/quoteDurationPackage";
+import {
+  DURATION_PACKAGE_OPTIONS,
+  formatShootDurationDisplay,
+  isMultiDayDurationPackage,
+} from "@shared/quoteDurationPackage";
 
 function money(n: number) {
   return `HK$ ${n.toLocaleString("en-HK")}`;
@@ -686,12 +690,20 @@ export default function PricingLearning() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="text-xs text-muted-foreground mb-1.5 mt-2">時數（可選）</div>
+                  <div className="text-xs text-muted-foreground mb-1.5 mt-2">
+                    {isMultiDayDurationPackage(durationPackage)
+                      ? "日數（可選）"
+                      : "時數（可選）"}
+                  </div>
                   <Input
                     type="number"
-                    min={0.5}
-                    step={0.5}
-                    placeholder="例如 4"
+                    min={isMultiDayDurationPackage(durationPackage) ? 1 : 0.5}
+                    step={isMultiDayDurationPackage(durationPackage) ? 1 : 0.5}
+                    placeholder={
+                      isMultiDayDurationPackage(durationPackage)
+                        ? "例如 2（＝2 日）"
+                        : "例如 4"
+                    }
                     value={hours}
                     onChange={(e) => setHours(e.target.value)}
                   />
@@ -927,7 +939,7 @@ export default function PricingLearning() {
                     <th className="text-left px-4 py-2 font-normal">狀態</th>
                     <th className="text-left px-4 py-2 font-normal">客戶</th>
                     <th className="text-right px-4 py-2 font-normal">金額</th>
-                    <th className="text-left px-4 py-2 font-normal">時數</th>
+                    <th className="text-left px-4 py-2 font-normal">時長</th>
                     <th className="text-left px-4 py-2 font-normal">人手</th>
                     <th className="text-right px-4 py-2 font-normal">AI 偏差</th>
                   </tr>
@@ -979,7 +991,22 @@ export default function PricingLearning() {
                             )}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                          {r.hours != null ? `${r.hours}h` : r.hoursLabel}
+                          {(() => {
+                            const pkg = (r as { durationPackage?: string })
+                              .durationPackage;
+                            const days = (r as { durationDays?: number | null })
+                              .durationDays;
+                            if (
+                              isMultiDayDurationPackage(pkg) &&
+                              days != null
+                            ) {
+                              return formatShootDurationDisplay(days, pkg);
+                            }
+                            if (r.hours != null) {
+                              return formatShootDurationDisplay(r.hours, pkg);
+                            }
+                            return r.hoursLabel;
+                          })()}
                           {r.hoursSource === "structured" ? " ★" : ""}
                         </td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
