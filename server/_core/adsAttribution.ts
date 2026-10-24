@@ -89,6 +89,33 @@ export function hasAdsAttribution(a: AdsAttribution | null | undefined): boolean
   );
 }
 
+/**
+ * When `lp` is missing on /api/track/wa, use the browser Referer as the landing
+ * page (marketing site → track redirect). Skip WA / track / blank referers.
+ */
+export function landingPageFromReferer(referer: string | null | undefined): string | null {
+  const raw = (referer || "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    const host = u.hostname.toLowerCase();
+    if (
+      host === "wa.me" ||
+      host.endsWith(".whatsapp.com") ||
+      host === "api.whatsapp.com" ||
+      host === "web.whatsapp.com"
+    ) {
+      return null;
+    }
+    // Ignore self-hits on the track endpoint
+    if (u.pathname.includes("/api/track/wa")) return null;
+    return u.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+}
+
 /** Append attribution query params onto a track URL. */
 export function appendAttributionParams(
   url: string,

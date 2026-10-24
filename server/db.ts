@@ -3117,6 +3117,7 @@ const adsWaClickSelect = {
   adsCampaignId: whatsappClickEvents.adsCampaignId,
   adsCampaignName: whatsappClickEvents.adsCampaignName,
   landingPageUrl: whatsappClickEvents.landingPageUrl,
+  matchedPhone: whatsappClickEvents.matchedPhone,
   clickedAt: whatsappClickEvents.clickedAt,
   quoteId: whatsappClickEvents.quoteId,
 } as const;
