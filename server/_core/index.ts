@@ -292,13 +292,15 @@ async function startServer() {
     const userAgent = req.headers["user-agent"] ?? "";
     // Prefer website prefill when traffic is from the marketing site / Ads
     const prefill = source === "google_ads" || source === "website" ? "website" : "email";
+    // Staff-only match label in quote form dropdown — never shown in customer WA text.
     const wantsRef =
       source === "google_ads" ||
       (source === "website" && hasAdsAttribution(attr)) ||
       Boolean(attr.gclid || attr.adsCampaignId);
     const refCode = wantsRef ? generateWaRefCode() : null;
 
-    const clickPayload = {
+    // Fire-and-forget: record click (+ Ads attribution / staff ref) then redirect
+    recordWhatsappClick({
       inquiryId: inquiryId && !isNaN(inquiryId) ? inquiryId : undefined,
       fhJobId: fhJobId && !isNaN(fhJobId) ? fhJobId : undefined,
       quoteId: quoteId && !isNaN(quoteId) ? quoteId : undefined,
@@ -307,26 +309,13 @@ async function startServer() {
       userAgent,
       refCode,
       ...attr,
-    };
-
-    // Ads / attributed website: await insert so prefill can carry the match code.
-    if (wantsRef) {
-      try {
-        await recordWhatsappClick(clickPayload);
-      } catch (err) {
-        console.error("[WA Track] Failed:", err);
-      }
-      if (hasAdsAttribution(attr) || refCode) {
-        console.log(
-          `[WA Track] Ads attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
-        );
-      }
-      res.redirect(waMeUrlWithPrefill(prefill, { refCode }));
-      return;
+    }).catch((err) => console.error("[WA Track] Failed:", err));
+    if (hasAdsAttribution(attr) || refCode) {
+      console.log(
+        `[WA Track] Ads attribution src=${source} ref=${refCode || "-"} gclid=${attr.gclid ? "yes" : "no"} campaign=${attr.adsCampaignId || attr.utmCampaign || "-"}`
+      );
     }
-
-    // Other sources: fire-and-forget (email / FH latency matters less for ref matching)
-    recordWhatsappClick(clickPayload).catch((err) => console.error("[WA Track] Failed:", err));
+    // Clean opener only — same as Squarespace button (no weird codes for the customer)
     res.redirect(waMeUrlWithPrefill(prefill));
   });
 

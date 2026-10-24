@@ -19,11 +19,11 @@ describe("WA ref codes", () => {
     expect(extractWaRefCode("no code here")).toBeNull();
   });
 
-  it("appends ref to website prefill URL", () => {
+  it("never appends staff ref codes to customer-visible prefill", () => {
     const url = waMeUrlWithPrefill("website", { refCode: "W7K3M" });
     const text = decodeURIComponent(new URL(url).searchParams.get("text") || "");
-    expect(text).toContain("你好，我想查詢JD Studio的攝影服務");
-    expect(text).toContain("（W7K3M）");
+    expect(text).toBe("你好，我想查詢JD Studio的攝影服務");
+    expect(text).not.toContain("W7K3M");
     expect(text.toLowerCase()).not.toContain("google");
   });
 });

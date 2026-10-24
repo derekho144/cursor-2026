@@ -747,7 +747,6 @@ export default function QuoteForm() {
     { limit: 30 },
     { enabled: form.leadSource === "Google", refetchOnWindowFocus: false }
   );
-  const [waRefInput, setWaRefInput] = useState("");
   const adsAutoAttachedRef = useRef(false);
 
   type AdsWaClickRow = {
@@ -785,39 +784,17 @@ export default function QuoteForm() {
       adsCampaignName: strOrEmpty(click.adsCampaignName) || p.adsCampaignName,
       landingPageUrl: strOrEmpty(click.landingPageUrl) || p.landingPageUrl,
     }));
-    if (click.refCode) setWaRefInput(click.refCode);
     if (opts?.toastMsg) toast.success(opts.toastMsg);
   }, []);
 
   const applyAdsWaClick = (clickId: string) => {
     if (clickId === "__none__") {
       setForm((p) => ({ ...p, whatsappClickId: undefined }));
-      setWaRefInput("");
       return;
     }
     const click = recentAdsWaClicks?.find((c) => String(c.id) === clickId);
     if (!click) return;
     applyAdsWaClickRow(click);
-  };
-
-  const handleLookupWaRef = async () => {
-    const raw = waRefInput.trim();
-    if (!raw) {
-      toast.error("請貼上 WhatsApp 開場白入面嘅短碼（例如 W7K3M）");
-      return;
-    }
-    try {
-      const click = await utils.quotes.lookupAdsWaClickByRef.fetch({ ref: raw });
-      if (!click) {
-        toast.error("搵唔到呢個短碼對應嘅 Ads WA 點擊");
-        return;
-      }
-      applyAdsWaClickRow(click, {
-        toastMsg: `已對上 Ads WA 點擊 #${click.id}${click.refCode ? `（${click.refCode}）` : ""}`,
-      });
-    } catch (e: any) {
-      toast.error(`對碼失敗：${e?.message || "unknown"}`);
-    }
   };
 
   // Auto-attach: when staff picks Google Ads and there is exactly one unmatched
@@ -1875,40 +1852,8 @@ export default function QuoteForm() {
                   className="text-xs"
                   style={{ color: "rgba(212,168,67,0.9)", letterSpacing: "0.06em" }}
                 >
-                  Google Ads 歸因（唔使讀 WhatsApp 對話）
+                  Google Ads 歸因（客人開場白唔會見到短碼）
                 </div>
-                <FormField label="WhatsApp 開場白短碼">
-                  <div className="flex gap-2">
-                    <Input
-                      value={waRefInput}
-                      onChange={(e) => setWaRefInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleLookupWaRef();
-                        }
-                      }}
-                      placeholder="貼上 W7K3M 或成句開場白"
-                      style={inputStyle}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void handleLookupWaRef()}
-                      className="px-3 text-xs shrink-0"
-                      style={{
-                        background: "rgba(212,168,67,0.15)",
-                        color: "#d4a843",
-                        border: "1px solid rgba(212,168,67,0.35)",
-                        borderRadius: 4,
-                      }}
-                    >
-                      對碼
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-1">
-                    客人由 Ads 撳入黎，開場白會帶（Wxxxx）。抄短碼撳「對碼」即知係 Google。
-                  </div>
-                </FormField>
                 <FormField label="從最近 Ads WA 點擊選擇">
                   <Select
                     value={
@@ -1922,7 +1867,7 @@ export default function QuoteForm() {
                       <SelectValue placeholder="選擇近期追蹤點擊（可選）" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">不連結 WA 點擊</SelectItem>
+                      <SelectItem value="__none__">不連結 WA 點擊（淨係 click 冇傾就唔好綁）</SelectItem>
                       {(recentAdsWaClicks ?? []).map((c) => {
                         const when = c.clickedAt
                           ? new Date(c.clickedAt).toLocaleString("zh-HK", {
@@ -1951,7 +1896,7 @@ export default function QuoteForm() {
                     </SelectContent>
                   </Select>
                   <div className="text-[11px] text-muted-foreground mt-1">
-                    過去 48 小時若只有 1 次未用 Ads WA 點擊，揀 Google Ads 會自動帶入
+                    撳咗連結 ≠ 有搵你。得真係傾完、時間對得上先揀；48 小時內只有 1 次未用 click 會自動帶入。唔肯定就揀「不連結」。
                   </div>
                 </FormField>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -5,7 +5,7 @@
  * Prefills (same intent, different wording) — staff can tell source from the first line:
  *   官網：「你好，我想查詢JD Studio的攝影服務」
  *   Email／系統追蹤：「您好，想了解一下你們的攝影服務」
- * Ads／官網追蹤可加短碼：（W7K3M）— 唔寫 Google／Email／FH 字眼。
+ * Ads 短碼只存 DB／後台下拉，唔好寫入客人開場白（客人見到怪碼會刪／唔送）。
  * Do NOT put the words Email / Google / FH in the customer-visible text.
  */
 import { ENV } from "./env";
@@ -50,11 +50,10 @@ export function appBaseUrl(): string {
 
 export function waMeUrlWithPrefill(
   kind: WaPrefillKind,
-  opts?: { refCode?: string | null }
+  _opts?: { refCode?: string | null }
 ): string {
-  let text = WA_PREFILL[kind];
-  const ref = opts?.refCode ? extractWaRefCode(opts.refCode) : null;
-  if (ref) text = `${text}（${ref}）`;
+  // Never append staff/ref codes to customer-visible prefill.
+  const text = WA_PREFILL[kind];
   return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(text)}`;
 }
 
