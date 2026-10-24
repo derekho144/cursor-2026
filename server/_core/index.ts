@@ -8,7 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startScheduler } from "../scheduler";
-import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources } from "../db";
+import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources, ensureAdsQuoteAttributionSchema } from "../db";
 import { ENV } from "./env";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -621,6 +621,9 @@ async function startServer() {
           }
         })
         .catch((err) => console.error("[Startup] leadSource backfill failed:", err));
+      ensureAdsQuoteAttributionSchema()
+        .then(() => console.log("[Startup] ads quote attribution schema OK"))
+        .catch((err) => console.error("[Startup] ads attribution schema failed:", err));
     });
   });
 }

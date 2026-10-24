@@ -299,6 +299,7 @@ export async function createQuote(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  await ensureAdsQuoteAttributionSchema();
   const quoteNumber = await generateQuoteNumber();
   const { items, ...quoteData } = data;
 
@@ -2940,6 +2941,74 @@ export async function getClientsForWinbackEmail() {
 
 // ─── WhatsApp Click Tracking ──────────────────────────────────────────────
 
+let adsQuoteAttributionSchemaReady = false;
+
+/**
+ * Apply drizzle/0066_ads_quote_attribution.sql idempotently (ADD COLUMN / ENUM).
+ * Production Manus may not run drizzle-kit migrate; startup self-heal covers that.
+ */
+export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
+  if (adsQuoteAttributionSchemaReady) return;
+  const db = await getDb();
+  if (!db) return;
+
+  const addCol = async (table: string, col: string, ddl: string) => {
+    try {
+      await db.execute(sql.raw(`ALTER TABLE \`${table}\` ADD \`${col}\` ${ddl}`));
+    } catch (err) {
+      const msg = String((err as any)?.message || err);
+      if (!/Duplicate column|already exists/i.test(msg)) {
+        console.warn(`[ads-attribution] ADD ${table}.${col}:`, msg.slice(0, 200));
+      }
+    }
+  };
+
+  await addCol("quotes", "gclid", "varchar(255)");
+  await addCol("quotes", "gbraid", "varchar(255)");
+  await addCol("quotes", "wbraid", "varchar(255)");
+  await addCol("quotes", "utm_source", "varchar(128)");
+  await addCol("quotes", "utm_medium", "varchar(128)");
+  await addCol("quotes", "utm_campaign", "varchar(255)");
+  await addCol("quotes", "utm_content", "varchar(255)");
+  await addCol("quotes", "utm_term", "varchar(255)");
+  await addCol("quotes", "ads_campaign_id", "varchar(64)");
+  await addCol("quotes", "ads_campaign_name", "varchar(255)");
+  await addCol("quotes", "landing_page_url", "text");
+  await addCol("quotes", "whatsapp_click_id", "int");
+
+  try {
+    await db.execute(sql.raw(`ALTER TABLE \`whatsapp_click_events\` MODIFY COLUMN \`source\` ENUM(
+      'fh_first_email',
+      'fh_follow_up',
+      'quote_email',
+      'review_invite',
+      'google_ads',
+      'website',
+      'other'
+    ) NOT NULL DEFAULT 'other'`));
+  } catch (err) {
+    console.warn(
+      "[ads-attribution] MODIFY whatsapp_click_events.source:",
+      String((err as any)?.message || err).slice(0, 200)
+    );
+  }
+
+  await addCol("whatsapp_click_events", "gclid", "varchar(255)");
+  await addCol("whatsapp_click_events", "gbraid", "varchar(255)");
+  await addCol("whatsapp_click_events", "wbraid", "varchar(255)");
+  await addCol("whatsapp_click_events", "utm_source", "varchar(128)");
+  await addCol("whatsapp_click_events", "utm_medium", "varchar(128)");
+  await addCol("whatsapp_click_events", "utm_campaign", "varchar(255)");
+  await addCol("whatsapp_click_events", "utm_content", "varchar(255)");
+  await addCol("whatsapp_click_events", "utm_term", "varchar(255)");
+  await addCol("whatsapp_click_events", "ads_campaign_id", "varchar(64)");
+  await addCol("whatsapp_click_events", "ads_campaign_name", "varchar(255)");
+  await addCol("whatsapp_click_events", "landing_page_url", "text");
+
+  adsQuoteAttributionSchemaReady = true;
+  console.log("[ads-attribution] schema 0066 ensured");
+}
+
 /** 記錄一次 WhatsApp 點擊事件；回傳 insert id（若 DB 可用） */
 export async function recordWhatsappClick(opts: {
   inquiryId?: number;
@@ -2969,6 +3038,7 @@ export async function recordWhatsappClick(opts: {
 }): Promise<number | undefined> {
   const db = await getDb();
   if (!db) return undefined;
+  await ensureAdsQuoteAttributionSchema();
   const result = await db.insert(whatsappClickEvents).values({
     inquiryId: opts.inquiryId ?? null,
     fhJobId: opts.fhJobId ?? null,
