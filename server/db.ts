@@ -2977,6 +2977,9 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
   await addCol("quotes", "ads_campaign_name", "varchar(255)");
   await addCol("quotes", "landing_page_url", "text");
   await addCol("quotes", "whatsapp_click_id", "int");
+  await addCol("quotes", "ads_offline_inquiry_uploaded_at", "timestamp NULL");
+  await addCol("quotes", "ads_offline_accepted_uploaded_at", "timestamp NULL");
+  await addCol("quotes", "ads_offline_last_error", "varchar(512)");
 
   try {
     await db.execute(sql.raw(`ALTER TABLE \`whatsapp_click_events\` MODIFY COLUMN \`source\` ENUM(
@@ -3044,7 +3047,7 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
   }
 
   adsQuoteAttributionSchemaReady = true;
-  console.log("[ads-attribution] schema 0066/0067/0068 ensured");
+  console.log("[ads-attribution] schema 0066/0067/0068/0069 ensured");
 }
 
 /** 記錄一次 WhatsApp 點擊事件；回傳 insert id（若 DB 可用） */

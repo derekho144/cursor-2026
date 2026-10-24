@@ -484,6 +484,13 @@
       "when": 1789600000000,
       "tag": "0068_whatsapp_inbound",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "5",
+      "when": 1789700000000,
+      "tag": "0069_ads_offline_conversions",
+      "breakpoints": true
     }
   ]
 }

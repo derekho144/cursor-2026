@@ -552,6 +552,21 @@ export const quotesRouter = router({
           console.error("[Quote] Failed to link WA click:", err);
         }
       }
+      // Offline conversion → Google Ads (GCLID / gbraid / wbraid)
+      try {
+        const { scheduleQuoteInquiryConversionUpload } = await import("../adsOfflineConversions");
+        scheduleQuoteInquiryConversionUpload({
+          id: newQuote.id,
+          gclid: attribution.gclid,
+          gbraid: attribution.gbraid,
+          wbraid: attribution.wbraid,
+          total: newQuote.total as any,
+          currency: (newQuote as any).currency ?? "HKD",
+          createdAt: (newQuote as any).createdAt ?? new Date(),
+        });
+      } catch (err) {
+        console.warn("[Quote] Ads offline inquiry schedule failed:", err);
+      }
       // Fire-and-forget: pre-generate PDF in background
       triggerBackgroundPdfGeneration(newQuote.id);
       return newQuote;
@@ -812,6 +827,24 @@ export const quotesRouter = router({
             );
           } catch (err) {
             console.error("[Loyalty] Auto-sync failed:", err);
+          }
+        }
+        // Offline conversion → Google Ads (accepted value)
+        if (quote) {
+          try {
+            const { scheduleQuoteAcceptedConversionUpload } = await import("../adsOfflineConversions");
+            scheduleQuoteAcceptedConversionUpload({
+              id: quote.id,
+              gclid: (quote as any).gclid,
+              gbraid: (quote as any).gbraid,
+              wbraid: (quote as any).wbraid,
+              total: quote.total as any,
+              currency: (quote as any).currency ?? "HKD",
+              createdAt: (quote as any).createdAt,
+              adsOfflineAcceptedUploadedAt: (quote as any).adsOfflineAcceptedUploadedAt,
+            });
+          } catch (err) {
+            console.warn("[Quote] Ads offline accepted schedule failed:", err);
           }
         }
       }

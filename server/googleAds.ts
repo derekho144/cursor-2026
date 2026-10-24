@@ -209,6 +209,162 @@ export async function mutateGoogleAdsService(
   return { partialFailure: Boolean(json.partialFailureError), results: Array.isArray(json.results) ? json.results : [] };
 }
 
+export type ClickConversionUpload = {
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  conversionAction: string;
+  conversionDateTime: string;
+  conversionValue?: number;
+  currencyCode?: string;
+  orderId?: string;
+  consent?: { adUserData?: "GRANTED" | "DENIED" | "UNKNOWN" };
+};
+
+/** Format Date as Google Ads conversion_date_time in HKT (+08:00). */
+export function formatAdsConversionDateTime(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}+08:00`;
+}
+
+/**
+ * Upload offline click conversions (UPLOAD_CLICKS actions).
+ * partialFailure is always true so valid rows still import.
+ */
+export async function uploadClickConversions(
+  conversions: ClickConversionUpload[],
+  opts?: { validateOnly?: boolean }
+): Promise<{ partialFailure: boolean; results: any[]; errorMessage?: string }> {
+  checkEnvVars();
+  if (!conversions.length) return { partialFailure: false, results: [] };
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${AD_ACCOUNT_ID}:uploadClickConversions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": DEVELOPER_TOKEN,
+        "login-customer-id": MANAGER_CUSTOMER_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        conversions,
+        partialFailure: true,
+        validateOnly: Boolean(opts?.validateOnly),
+      }),
+    }
+  );
+  const json = (await res.json()) as any;
+  if (!res.ok) {
+    const errMsg =
+      json?.error?.details?.[0]?.errors?.[0]?.message ??
+      json?.error?.message ??
+      JSON.stringify(json);
+    throw new Error(`Google Ads uploadClickConversions error (${res.status}): ${errMsg}`);
+  }
+  const pf = json.partialFailureError;
+  let errorMessage: string | undefined;
+  if (pf) {
+    errorMessage =
+      pf.message ||
+      pf.details?.[0]?.errors?.[0]?.message ||
+      JSON.stringify(pf).slice(0, 400);
+  }
+  return {
+    partialFailure: Boolean(pf),
+    results: Array.isArray(json.results) ? json.results : [],
+    errorMessage,
+  };
+}
+
+const conversionActionCache = new Map<string, string>();
+
+/**
+ * Find or create an ENABLED UPLOAD_CLICKS conversion action by name.
+ * Returns resource name: customers/{id}/conversionActions/{actionId}
+ */
+export async function ensureUploadClickConversionAction(
+  name: string,
+  category: "SUBMIT_LEAD_FORM" | "PURCHASE" | "CONTACT" | "DEFAULT" = "SUBMIT_LEAD_FORM"
+): Promise<string> {
+  const cached = conversionActionCache.get(name);
+  if (cached) return cached;
+
+  checkEnvVars();
+  const rows = await executeGaqlQuery(`
+    SELECT
+      conversion_action.resource_name,
+      conversion_action.name,
+      conversion_action.type,
+      conversion_action.status
+    FROM conversion_action
+    WHERE conversion_action.name = '${name.replace(/'/g, "\\'")}'
+      AND conversion_action.type = 'UPLOAD_CLICKS'
+    LIMIT 1
+  `);
+  const existing = rows[0]?.conversionAction?.resourceName || rows[0]?.conversion_action?.resource_name;
+  if (existing) {
+    conversionActionCache.set(name, String(existing));
+    return String(existing);
+  }
+
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${AD_ACCOUNT_ID}/conversionActions:mutate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": DEVELOPER_TOKEN,
+        "login-customer-id": MANAGER_CUSTOMER_ID,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        operations: [
+          {
+            create: {
+              name,
+              type: "UPLOAD_CLICKS",
+              category,
+              status: "ENABLED",
+              viewThroughLookbackWindowDays: 1,
+              clickThroughLookbackWindowDays: 90,
+            },
+          },
+        ],
+        partialFailure: true,
+      }),
+    }
+  );
+  const json = (await res.json()) as any;
+  if (!res.ok) {
+    const errMsg =
+      json?.error?.details?.[0]?.errors?.[0]?.message ??
+      json?.error?.message ??
+      JSON.stringify(json);
+    throw new Error(`Google Ads create conversionAction error (${res.status}): ${errMsg}`);
+  }
+  const resourceName =
+    json?.results?.[0]?.resourceName ||
+    json?.results?.[0]?.conversionAction?.resourceName;
+  if (!resourceName) {
+    throw new Error(`Google Ads create conversionAction returned no resource: ${JSON.stringify(json).slice(0, 400)}`);
+  }
+  conversionActionCache.set(name, String(resourceName));
+  return String(resourceName);
+}
+
 export async function fetchGoogleAdsCosts(
   startDate: string, // YYYY-MM-DD
   endDate: string    // YYYY-MM-DD

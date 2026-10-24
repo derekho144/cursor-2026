@@ -69,6 +69,13 @@ vi.mock("./db", () => ({
     return null;
   }),
   linkWhatsappClickToQuote: vi.fn().mockResolvedValue(undefined),
+  getDb: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("./adsOfflineConversions", () => ({
+  scheduleQuoteInquiryConversionUpload: vi.fn(),
+  scheduleQuoteAcceptedConversionUpload: vi.fn(),
+  ensureAdsOfflineConversionSchema: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock scheduler
@@ -189,6 +196,10 @@ describe("quotes router", () => {
     expect(arg.landingPageUrl).toBe("https://jdstudiohk.com/food-photography");
     expect(arg.whatsappClickId).toBe(9);
     expect(db.linkWhatsappClickToQuote).toHaveBeenCalledWith(9, 1);
+    const oci = await import("./adsOfflineConversions");
+    expect(oci.scheduleQuoteInquiryConversionUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, gclid: "test-gclid" })
+    );
   });
 
   it("recentAdsWaClicks returns attributed clicks", async () => {

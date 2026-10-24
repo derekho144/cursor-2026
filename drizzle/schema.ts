@@ -113,6 +113,10 @@ export const quotes = mysqlTable("quotes", {
   landingPageUrl: text("landing_page_url"),
   /** Link to whatsapp_click_events.id when quote came from a tracked WA click */
   whatsappClickId: int("whatsapp_click_id"),
+  /** Google Ads offline conversion upload markers */
+  adsOfflineInquiryUploadedAt: timestamp("ads_offline_inquiry_uploaded_at"),
+  adsOfflineAcceptedUploadedAt: timestamp("ads_offline_accepted_uploaded_at"),
+  adsOfflineLastError: varchar("ads_offline_last_error", { length: 512 }),
   receiptUrl: text("receiptUrl"),
   receiptKey: varchar("receiptKey", { length: 512 }),
   // Signing
