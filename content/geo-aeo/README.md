@@ -2,6 +2,17 @@
 
 Interior photography pack is the gold template (already live).
 
+## WhatsApp tracking (required)
+
+Do **not** use raw `https://wa.me/85291531976` in codeblocks.
+
+Use:
+`https://jdsys.biz/api/track/wa?src=website&lp=<encoded page URL>`
+
+Sitewide fallback (covers header/footer buttons not in these packs):
+paste `sitewide-wa-track-rewrite.html` into Squarespace → Settings → Advanced → Code Injection → Footer
+(loads `https://jdsys.biz/wa-track-rewrite.js`).
+
 ## Remaining service packs (2026-10-01)
 
 | Page | Paste file |
