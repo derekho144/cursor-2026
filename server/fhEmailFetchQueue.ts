@@ -26,16 +26,28 @@ let chain: Promise<void> = Promise.resolve();
 
 const MAX_TRACKED = 50;
 const STALE_MS = 15 * 60 * 1000;
+/** Running longer than this is treated as dead (fetch itself caps at ~90s). */
+const STALE_RUNNING_MS = 110_000;
 
 function prune(): void {
   const now = Date.now();
-  for (const [id, j] of jobs) {
+  for (const [id, j] of Array.from(jobs.entries())) {
+    if (j.status === "running" && now - j.startedAt > STALE_RUNNING_MS) {
+      jobs.set(id, {
+        jobId: id,
+        status: "error",
+        error: "取得電郵逾時（背景工作無回應），請再試一次",
+        startedAt: j.startedAt,
+        finishedAt: now,
+      });
+      continue;
+    }
     if (j.status !== "running" && j.finishedAt && now - j.finishedAt > STALE_MS) {
       jobs.delete(id);
     }
   }
   if (jobs.size <= MAX_TRACKED) return;
-  const finished = [...jobs.entries()]
+  const finished = Array.from(jobs.entries())
     .filter(([, j]) => j.status !== "running")
     .sort((a, b) => (a[1].finishedAt ?? 0) - (b[1].finishedAt ?? 0));
   while (jobs.size > MAX_TRACKED && finished.length) {
@@ -45,11 +57,15 @@ function prune(): void {
 }
 
 export function getFhEmailFetchStatus(jobId: string): FhEmailFetchJobStatus | null {
+  prune();
   return jobs.get(jobId) ?? null;
 }
 
 export function listRunningFhEmailFetches(): string[] {
-  return [...jobs.values()].filter((j) => j.status === "running").map((j) => j.jobId);
+  prune();
+  return Array.from(jobs.values())
+    .filter((j) => j.status === "running")
+    .map((j) => j.jobId);
 }
 
 /**
@@ -64,22 +80,27 @@ export function startFhEmailFetch(jobId: string): {
     return { started: false, alreadyRunning: false };
   }
 
+  prune();
   const existing = jobs.get(id);
   if (existing?.status === "running") {
     return { started: false, alreadyRunning: true };
   }
 
-  prune();
   const startedAt = Date.now();
   jobs.set(id, { jobId: id, status: "running", startedAt });
 
   chain = chain
     .then(async () => {
       const current = jobs.get(id);
-      if (!current || current.status !== "running") return;
+      // Skip if a newer kick replaced this run, or prune already finalized it.
+      if (!current || current.status !== "running" || current.startedAt !== startedAt) {
+        return;
+      }
       try {
         console.log(`[FH EmailFetch] Starting background fetch for job ${id}`);
         const result = await fetchEmailForJob(id);
+        const still = jobs.get(id);
+        if (!still || still.startedAt !== startedAt) return;
         if (result.email) {
           jobs.set(id, {
             jobId: id,
@@ -103,6 +124,8 @@ export function startFhEmailFetch(jobId: string): {
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        const still = jobs.get(id);
+        if (!still || still.startedAt !== startedAt) return;
         jobs.set(id, {
           jobId: id,
           status: "error",

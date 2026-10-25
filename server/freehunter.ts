@@ -646,9 +646,6 @@ export async function fetchFreehunterJobContact(
     if (btnVisible) {
       await applyBtn.click({ force: true });
       console.log(`[Freehunter] Clicked 立即接JOB button for job ${jobId}`);
-
-      // Wait for the email to appear in the DOM
-      await page.waitForTimeout(2000);
     } else {
       // Button might already show 電郵已複製 (already applied)
       const copiedBtn = page.locator('button:has-text("電郵已複製")').first();
@@ -660,69 +657,96 @@ export async function fetchFreehunterJobContact(
       }
     }
 
-    // Extract email from DOM
-    // NOTE: page.evaluate serializes the function to a string and runs it in the browser.
-    // tsx (esbuild keepNames:true) injects __name() for ANY named binding (function decl OR
-    // const arrow = ...). To avoid ReferenceError: __name is not defined in the browser,
-    // we must NOT define any named function/variable inside page.evaluate.
-    // Instead, inline all logic directly.
-    const emailFromDom = await page.evaluate(() => {
-      // Inline blacklist check: domains whose emails we never want
-      // (freehunter.hk, freehunter.com.hk, freehunter.com)
-      const allText = document.body.innerText;
-      const emailMatch = allText.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g);
-      if (emailMatch) {
-        for (let i = 0; i < emailMatch.length; i++) {
-          const lower = emailMatch[i].toLowerCase();
-          if (!lower.endsWith("@freehunter.hk") && !lower.endsWith("@freehunter.com.hk") && !lower.endsWith("@freehunter.com")) {
-            return emailMatch[i];
+    // Poll API + DOM for up to ~25s — Freehunter often needs a few seconds
+    // after 立即接JOB before getClientEmail / DOM expose the address.
+    // A single 2s wait was a common cause of false "no email" / long hangs.
+    const pollDeadline = Date.now() + 25_000;
+    let polledEmail: string | null = null;
+    let pollAttempt = 0;
+    while (Date.now() < pollDeadline) {
+      pollAttempt += 1;
+      await page.waitForTimeout(pollAttempt === 1 ? 1500 : 2000);
+
+      const pollApi = await page.evaluate(async (jId: number) => {
+        try {
+          const resp = await fetch("/apis/jobs/getClientEmail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: jId }),
+            credentials: "include",
+          });
+          return await resp.json();
+        } catch (e) {
+          return { error: String(e) };
+        }
+      }, jobId);
+      const fromApi =
+        typeof pollApi?.result === "string" ? pollApi.result.trim() : "";
+      if (fromApi) {
+        console.log(
+          `[Freehunter] getClientEmail (poll #${pollAttempt}) OK: ${fromApi}`
+        );
+        polledEmail = fromApi;
+        break;
+      }
+
+      // Extract email from DOM
+      // NOTE: page.evaluate serializes the function to a string and runs it in the browser.
+      // tsx (esbuild keepNames:true) injects __name() for ANY named binding (function decl OR
+      // const arrow = ...). To avoid ReferenceError: __name is not defined in the browser,
+      // we must NOT define any named function/variable inside page.evaluate.
+      // Instead, inline all logic directly.
+      const emailFromDom = await page.evaluate(() => {
+        const allText = document.body.innerText;
+        const emailMatch = allText.match(
+          /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g
+        );
+        if (emailMatch) {
+          for (let i = 0; i < emailMatch.length; i++) {
+            const lower = emailMatch[i].toLowerCase();
+            if (
+              !lower.endsWith("@freehunter.hk") &&
+              !lower.endsWith("@freehunter.com.hk") &&
+              !lower.endsWith("@freehunter.com")
+            ) {
+              return emailMatch[i];
+            }
           }
         }
-      }
-      // Also check mailto links
-      const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
-      for (let i = 0; i < mailtoLinks.length; i++) {
-        const email = (mailtoLinks[i] as HTMLAnchorElement).href.replace("mailto:", "").split("?")[0].trim();
-        const lower = email.toLowerCase();
-        if (email && !lower.endsWith("@freehunter.hk") && !lower.endsWith("@freehunter.com.hk") && !lower.endsWith("@freehunter.com")) {
-          return email;
+        const mailtoLinks = document.querySelectorAll('a[href^="mailto:"]');
+        for (let i = 0; i < mailtoLinks.length; i++) {
+          const email = (mailtoLinks[i] as HTMLAnchorElement).href
+            .replace("mailto:", "")
+            .split("?")[0]
+            .trim();
+          const lower = email.toLowerCase();
+          if (
+            email &&
+            !lower.endsWith("@freehunter.hk") &&
+            !lower.endsWith("@freehunter.com.hk") &&
+            !lower.endsWith("@freehunter.com")
+          ) {
+            return email;
+          }
         }
+        return null;
+      });
+
+      if (emailFromDom) {
+        console.log(
+          `[Freehunter] Email from DOM (poll #${pollAttempt}): ${emailFromDom}`
+        );
+        polledEmail = emailFromDom;
+        break;
       }
-      return null;
-    });
+    }
 
-    console.log(`[Freehunter] Email from DOM: ${emailFromDom}`);
-
-    if (emailFromDom) {
-      // Refresh storageState after successful operation
+    if (polledEmail) {
       await refreshStorageState(context, session.email, session.userId);
-      return { email: emailFromDom, jobId, jobTitle, clientName };
+      return { email: polledEmail, jobId, jobTitle, clientName };
     }
 
-    // Last resort: try getClientEmail API again after clicking button
-    const emailData2 = await page.evaluate(async (jId: number) => {
-      try {
-        const resp = await fetch("/apis/jobs/getClientEmail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: jId }),
-          credentials: "include",
-        });
-        return await resp.json();
-      } catch (e) {
-        return { error: String(e) };
-      }
-    }, jobId);
-
-    console.log("[Freehunter] getClientEmail (after click) response:", JSON.stringify(emailData2));
-    const email2 = typeof emailData2?.result === "string" ? emailData2.result : "";
-
-    if (!email2) {
-      throw new Error(`無法取得客戶電郵。請確認帳號已登入並有 Premium 權限。`);
-    }
-
-    await refreshStorageState(context, session.email, session.userId);
-    return { email: email2, jobId, jobTitle, clientName };
+    throw new Error(`無法取得客戶電郵。請確認帳號已登入並有 Premium 權限。`);
   } catch (e) {
     // If browser session failed, invalidate it so next call will re-login
     if (_browserSession) {
