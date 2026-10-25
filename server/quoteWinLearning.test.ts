@@ -40,9 +40,11 @@ describe("reject reasons", () => {
 });
 
 describe("pricing learning exclusions", () => {
-  it("excludes other service type", () => {
+  it("excludes other and graphic_design (平面設計)", () => {
     expect(isPricingLearningServiceType("other")).toBe(false);
+    expect(isPricingLearningServiceType("graphic_design")).toBe(false);
     expect(isPricingLearningServiceType("corporate_event")).toBe(true);
     expect(isPricingLearningServiceType("product")).toBe(true);
+    expect(isPricingLearningServiceType("menu_design")).toBe(true);
   });
 });
