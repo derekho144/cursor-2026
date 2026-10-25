@@ -16,3 +16,4 @@ wa-ads-auto-no-picker-v1
 wa-ads-auto-no-picker-v1-force
 manus-stale-version-retry-v1
 fh-get-email-stuck-v1
+pricing-exclude-graphic-design-v1

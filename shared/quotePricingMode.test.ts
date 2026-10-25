@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DESIGN_SERVICE_TYPES,
+  isPricingLearningServiceType,
   quotePricingMode,
 } from "./quotePricingMode";
 
@@ -13,6 +14,11 @@ describe("quotePricingMode", () => {
   it("keeps event shoots on time_crew and product on shot_count", () => {
     expect(quotePricingMode("corporate_event")).toBe("time_crew");
     expect(quotePricingMode("product")).toBe("shot_count");
+    expect(quotePricingMode("graphic_design")).toBe("design");
+  });
+
+  it("excludes 平面設計 from pricing learning while keeping design pricing mode", () => {
+    expect(isPricingLearningServiceType("graphic_design")).toBe(false);
     expect(quotePricingMode("graphic_design")).toBe("design");
   });
 });

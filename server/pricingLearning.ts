@@ -3,7 +3,7 @@
  * Price mids / suggestions use accepted only; rejected are backfilled for learning features.
  * Accuracy focus: prefer structured fields, trim outliers, time-weight, coverage quality.
  */
-import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { emailInquiries, quoteItems, quotes } from "../drizzle/schema";
 import {
@@ -23,6 +23,7 @@ import {
 } from "./pricingLearningExtract";
 import {
   isPricingLearningServiceType,
+  PRICING_LEARNING_EXCLUDED_TYPES,
   quotePricingMode,
   shotCountBucketLabel,
   SHOT_COUNT_SERVICE_TYPES,
@@ -119,16 +120,17 @@ async function loadLearningQuotesWithItems(opts?: {
   const db = await getDb();
   if (!db) return [];
 
-  // "其他" and other excluded types are too mixed — never learn from them.
+  // Excluded types (其他、平面設計, …) — never learn from them.
   if (opts?.serviceType && !isPricingLearningServiceType(opts.serviceType)) {
     return [];
   }
 
   const statuses = opts?.statuses ?? (["accepted", "rejected"] as const);
+  const excludedTypes = Array.from(PRICING_LEARNING_EXCLUDED_TYPES);
   const conditions = [
     inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
-    ne(quotes.serviceType, "other"),
+    notInArray(quotes.serviceType, excludedTypes as any),
     pricingLearningStartCondition(),
   ];
   if (opts?.serviceType) {
@@ -400,6 +402,7 @@ export async function getPricingLearningOverview() {
   }
 
   const byServiceType = Array.from(byTypeMap.entries())
+    .filter(([serviceType]) => isPricingLearningServiceType(serviceType))
     .map(([serviceType, totals]) => {
       const typeRows = rows.filter((r) => r.serviceType === serviceType);
       return {
