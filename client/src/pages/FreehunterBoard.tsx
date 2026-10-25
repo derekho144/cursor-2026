@@ -480,6 +480,7 @@ export default function FreehunterBoard() {
   /** Background email fetch — poll until ok/error (avoids Safari long-request false failures). */
   const [pendingFetchJobId, setPendingFetchJobId] = useState<string | null>(null);
   const fetchPollStartedAt = useRef<number>(0);
+  const fetchRekickedRef = useRef(false);
 
   const { data, isLoading, refetch } = trpc.freehunterBoard.getStatus.useQuery(undefined, {
     refetchInterval: pendingFetchJobId ? 4_000 : 60_000,
@@ -493,8 +494,51 @@ export default function FreehunterBoard() {
     }
   );
 
+  const fetchEmail = trpc.freehunterBoard.fetchEmail.useMutation({
+    onSuccess: (result) => {
+      if (result.alreadyRunning) {
+        toast.message("正在取得電郵，請稍候…");
+      } else {
+        toast.message("已開始取得電郵（約 30–90 秒），請稍候…");
+      }
+      fetchPollStartedAt.current = Date.now();
+      // pendingFetchJobId already set in handleFetchEmail
+      utils.freehunterBoard.fetchEmailStatus.invalidate();
+    },
+    onError: (e) => {
+      const msg = e.message || "";
+      if (
+        msg.includes("expected pattern") ||
+        msg.includes("not valid JSON") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed") ||
+        msg.includes("network connection was lost") ||
+        msg.includes("The request timed out")
+      ) {
+        toast.error("連線中斷或逾時，請再按一次「取得電郵」");
+      } else {
+        toast.error(`無法取得電郵：${msg}`);
+      }
+      setPendingFetchJobId(null);
+      setActionJobId(null);
+    },
+  });
+
   useEffect(() => {
     if (!pendingFetchJobId) return;
+
+    // DB already has the email (multi-instance / status Map lost after restart).
+    const boardJob = ((data?.jobs as FreehunterJob[]) || []).find(
+      (j) => j.jobId === pendingFetchJobId
+    );
+    if (boardJob?.clientEmail) {
+      toast.success(`成功取得電郵：${boardJob.clientEmail}`);
+      utils.freehunterBoard.getStatus.invalidate();
+      setPendingFetchJobId(null);
+      setActionJobId(null);
+      return;
+    }
+
     const st = fetchEmailStatus.data;
     if (!st) return;
 
@@ -511,13 +555,35 @@ export default function FreehunterBoard() {
       setActionJobId(null);
       return;
     }
+
+    const elapsed = Date.now() - fetchPollStartedAt.current;
+    // In-memory queue miss (other instance / restart): re-kick once after a short wait.
+    if (
+      st.status === "idle" &&
+      elapsed > 12_000 &&
+      !fetchRekickedRef.current &&
+      !fetchEmail.isPending
+    ) {
+      fetchRekickedRef.current = true;
+      fetchPollStartedAt.current = Date.now();
+      toast.message("重新嘗試取得電郵…");
+      fetchEmail.mutate({ jobId: pendingFetchJobId });
+      return;
+    }
+
     // Hard stop after 2.5 min so the button does not spin forever
-    if (Date.now() - fetchPollStartedAt.current > 150_000) {
+    if (elapsed > 150_000) {
       toast.error("取得電郵逾時，請稍後再試一次");
       setPendingFetchJobId(null);
       setActionJobId(null);
     }
-  }, [fetchEmailStatus.data, pendingFetchJobId, utils.freehunterBoard.getStatus]);
+  }, [
+    data?.jobs,
+    fetchEmail,
+    fetchEmailStatus.data,
+    pendingFetchJobId,
+    utils.freehunterBoard.getStatus,
+  ]);
 
   const backfill = trpc.freehunterBoard.backfillHighConfidenceEmails.useMutation({
     onSuccess: (result) => {
@@ -549,36 +615,6 @@ export default function FreehunterBoard() {
     },
     onError: (e) => {
       toast.error(`爬取失敗：${e.message}`);
-    },
-  });
-
-  const fetchEmail = trpc.freehunterBoard.fetchEmail.useMutation({
-    onSuccess: (result) => {
-      if (result.alreadyRunning) {
-        toast.message("正在取得電郵，請稍候…");
-      } else {
-        toast.message("已開始取得電郵（約 30–90 秒），請稍候…");
-      }
-      fetchPollStartedAt.current = Date.now();
-      // pendingFetchJobId already set in handleFetchEmail
-      utils.freehunterBoard.fetchEmailStatus.invalidate();
-    },
-    onError: (e) => {
-      const msg = e.message || "";
-      if (
-        msg.includes("expected pattern") ||
-        msg.includes("not valid JSON") ||
-        msg.includes("Failed to fetch") ||
-        msg.includes("Load failed") ||
-        msg.includes("network connection was lost") ||
-        msg.includes("The request timed out")
-      ) {
-        toast.error("連線中斷或逾時，請再按一次「取得電郵」");
-      } else {
-        toast.error(`無法取得電郵：${msg}`);
-      }
-      setPendingFetchJobId(null);
-      setActionJobId(null);
     },
   });
 
@@ -670,6 +706,7 @@ export default function FreehunterBoard() {
     setActionJobId(jobId);
     setPendingFetchJobId(jobId);
     fetchPollStartedAt.current = Date.now();
+    fetchRekickedRef.current = false;
     fetchEmail.mutate({ jobId });
   };
 

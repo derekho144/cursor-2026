@@ -720,6 +720,22 @@ export async function fetchEmailForJob(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[FreehunterBoard] fetchEmailForJob(${jobId}) error:`, e);
+    // Timeout / wedge: drop the shared Playwright session so the next attempt
+    // does not fight a stuck page (Promise.race does not cancel the orphan).
+    if (msg.includes("逾時") || /timeout/i.test(msg)) {
+      try {
+        const { closeFreehunterBrowserSession } = await import("../freehunter");
+        await closeFreehunterBrowserSession();
+        console.warn(
+          `[FreehunterBoard] Closed browser session after email-fetch failure for job ${jobId}`
+        );
+      } catch (closeErr) {
+        console.warn(
+          `[FreehunterBoard] Failed to close browser after timeout:`,
+          closeErr
+        );
+      }
+    }
     return { email: null, error: msg };
   }
 }

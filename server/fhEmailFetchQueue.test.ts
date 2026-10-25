@@ -42,4 +42,18 @@ describe("fhEmailFetchQueue", () => {
     expect(st?.status).toBe("error");
     expect(st?.error).toContain("no email");
   });
+
+  it("reclaims stale running jobs so a retry can start", async () => {
+    const kick = startFhEmailFetch("slow");
+    expect(kick.started).toBe(true);
+    const running = getFhEmailFetchStatus("slow");
+    expect(running?.status).toBe("running");
+    // Force startedAt into the past beyond STALE_RUNNING_MS (110s)
+    (running as { startedAt: number }).startedAt = Date.now() - 120_000;
+
+    const again = startFhEmailFetch("slow");
+    expect(again.started).toBe(true);
+    expect(again.alreadyRunning).toBe(false);
+    expect(getFhEmailFetchStatus("slow")?.status).toBe("running");
+  });
 });
