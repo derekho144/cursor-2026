@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   appendAttributionParams,
+  enrichAdsAttribution,
   hasAdsAttribution,
   landingPageFromReferer,
   normalizeAttributionForDb,
   parseAdsAttribution,
+  parseAdsAttributionFromUrl,
 } from "./adsAttribution";
 
 describe("parseAdsAttribution", () => {
@@ -62,6 +64,61 @@ describe("parseAdsAttribution", () => {
       lp: "https://jdstudiohk.com/",
     });
     expect(a.pageReferrer).toContain("google.com");
+  });
+
+  it("reads gad_campaignid as adsCampaignId", () => {
+    const a = parseAdsAttribution({ gad_campaignid: "24002224927" });
+    expect(a.adsCampaignId).toBe("24002224927");
+  });
+});
+
+describe("enrichAdsAttribution", () => {
+  it("pulls gclid and gad_campaignid from pageReferrer when lp was stripped", () => {
+    const enriched = enrichAdsAttribution({
+      gclid: null,
+      gbraid: null,
+      wbraid: null,
+      utmSource: null,
+      utmMedium: null,
+      utmCampaign: null,
+      utmContent: null,
+      utmTerm: null,
+      adsCampaignId: null,
+      adsCampaignName: null,
+      landingPageUrl: "https://www.jdstudiohk.com/services/corporate-event",
+      pageReferrer:
+        "https://www.jdstudiohk.com/services/corporate-event?gad_source=1&gad_campaignid=24002224927&gclid=Cj0TEST&gbraid=GBRAID1",
+    });
+    expect(enriched.gclid).toBe("Cj0TEST");
+    expect(enriched.gbraid).toBe("GBRAID1");
+    expect(enriched.adsCampaignId).toBe("24002224927");
+    expect(hasAdsAttribution(enriched)).toBe(true);
+  });
+
+  it("does not overwrite an existing gclid", () => {
+    const enriched = enrichAdsAttribution({
+      gclid: "KEEP",
+      gbraid: null,
+      wbraid: null,
+      utmSource: null,
+      utmMedium: null,
+      utmCampaign: null,
+      utmContent: null,
+      utmTerm: null,
+      adsCampaignId: null,
+      adsCampaignName: null,
+      landingPageUrl: "https://www.jdstudiohk.com/?gclid=OTHER",
+      pageReferrer: null,
+    });
+    expect(enriched.gclid).toBe("KEEP");
+  });
+
+  it("parses attribution from a URL string", () => {
+    const a = parseAdsAttributionFromUrl(
+      "https://www.jdstudiohk.com/x?gclid=ABC&gad_campaignid=24002224927"
+    );
+    expect(a.gclid).toBe("ABC");
+    expect(a.adsCampaignId).toBe("24002224927");
   });
 });
 

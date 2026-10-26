@@ -71,7 +71,11 @@ export function parseAdsAttribution(
     utmContent: clip(get("utm_content") ?? get("utmContent"), 255),
     utmTerm: clip(get("utm_term") ?? get("utmTerm"), 255),
     adsCampaignId: clip(
-      get("campaign_id") ?? get("campaignId") ?? get("adsCampaignId"),
+      get("campaign_id") ??
+        get("campaignId") ??
+        get("adsCampaignId") ??
+        get("gad_campaignid") ??
+        get("campaignid"),
       64
     ),
     adsCampaignName: clip(
@@ -83,6 +87,69 @@ export function parseAdsAttribution(
       get("ref") ?? get("referrer") ?? get("pageReferrer") ?? get("page_referrer"),
       2048
     ),
+  };
+}
+
+/** Parse Ads / UTM query params out of a full URL (landing or document.referrer). */
+export function parseAdsAttributionFromUrl(
+  url: string | null | undefined
+): AdsAttribution {
+  const raw = (url || "").trim();
+  if (!raw) return { ...EMPTY };
+  try {
+    const u = new URL(raw, "https://www.jdstudiohk.com");
+    return parseAdsAttribution(u.searchParams);
+  } catch {
+    return { ...EMPTY };
+  }
+}
+
+function firstNonEmpty(
+  ...vals: Array<string | null | undefined>
+): string | null {
+  for (const v of vals) {
+    const s = (v ?? "").trim();
+    if (s) return s;
+  }
+  return null;
+}
+
+/**
+ * Fill missing gclid / campaign / UTM from landing URL and pageReferrer.
+ * Common when Squarespace (or SPA) strips Ads params from the visible URL but
+ * document.referrer still holds the tagged landing (Ads → page → clean URL → WA).
+ */
+export function enrichAdsAttribution(
+  attr: AdsAttribution | null | undefined
+): AdsAttribution {
+  const base: AdsAttribution = { ...(attr ?? EMPTY) };
+  const fromLp = parseAdsAttributionFromUrl(base.landingPageUrl);
+  const fromRef = parseAdsAttributionFromUrl(base.pageReferrer);
+  return {
+    gclid: firstNonEmpty(base.gclid, fromLp.gclid, fromRef.gclid),
+    gbraid: firstNonEmpty(base.gbraid, fromLp.gbraid, fromRef.gbraid),
+    wbraid: firstNonEmpty(base.wbraid, fromLp.wbraid, fromRef.wbraid),
+    utmSource: firstNonEmpty(base.utmSource, fromLp.utmSource, fromRef.utmSource),
+    utmMedium: firstNonEmpty(base.utmMedium, fromLp.utmMedium, fromRef.utmMedium),
+    utmCampaign: firstNonEmpty(
+      base.utmCampaign,
+      fromLp.utmCampaign,
+      fromRef.utmCampaign
+    ),
+    utmContent: firstNonEmpty(base.utmContent, fromLp.utmContent, fromRef.utmContent),
+    utmTerm: firstNonEmpty(base.utmTerm, fromLp.utmTerm, fromRef.utmTerm),
+    adsCampaignId: firstNonEmpty(
+      base.adsCampaignId,
+      fromLp.adsCampaignId,
+      fromRef.adsCampaignId
+    ),
+    adsCampaignName: firstNonEmpty(
+      base.adsCampaignName,
+      fromLp.adsCampaignName,
+      fromRef.adsCampaignName
+    ),
+    landingPageUrl: base.landingPageUrl,
+    pageReferrer: base.pageReferrer,
   };
 }
 

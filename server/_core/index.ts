@@ -359,6 +359,7 @@ async function startServer() {
     const { waMeUrlWithPrefill, generateWaRefCode } = await import("./waTracking");
     const {
       parseAdsAttribution,
+      enrichAdsAttribution,
       hasAdsAttribution,
       hasMarketingAttribution,
       landingPageFromReferer,
@@ -368,7 +369,7 @@ async function startServer() {
     const inquiryId = req.query.inq ? parseInt(req.query.inq as string, 10) : undefined;
     const fhJobId = req.query.fhj ? parseInt(req.query.fhj as string, 10) : undefined;
     const quoteId = req.query.q ? parseInt(req.query.q as string, 10) : undefined;
-    const attr = parseAdsAttribution(req.query as Record<string, unknown>);
+    let attr = parseAdsAttribution(req.query as Record<string, unknown>);
     const headerReferer =
       typeof req.headers.referer === "string"
         ? req.headers.referer
@@ -382,6 +383,8 @@ async function startServer() {
       // Prefer explicit ?ref= from site script; header is fallback when not noreferrer
       attr.pageReferrer = landingPageFromReferer(headerReferer);
     }
+    // Pull gclid / gad_campaignid buried in lp or document.referrer (SPA URL cleanup).
+    attr = enrichAdsAttribution(attr);
     // Prefer explicit src; re-classify from UTM / referrer / gclid when src is generic
     const allowed = [
       "fh_first_email",
@@ -406,7 +409,12 @@ async function startServer() {
         source = inferred;
       }
     }
-    if (source === "other" && hasAdsAttribution(attr)) source = "google_ads";
+    if (
+      (source === "other" || source === "website") &&
+      hasAdsAttribution(attr)
+    ) {
+      source = "google_ads";
+    }
     const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
     const userAgent = req.headers["user-agent"] ?? "";
     // Prefer website prefill when traffic is from the marketing site / Ads / organic / AI
