@@ -18,6 +18,60 @@ describe("classifyQuoteLineItem", () => {
     expect(classifyQuoteLineItem("Transportation Fee")).toBe("transport");
     expect(classifyQuoteLineItem("Team 2P")).toBe("included_meta");
   });
+
+  it("treats priced Retouch product lines as photographer_crew, not included_meta", () => {
+    expect(
+      classifyQuoteLineItem(
+        "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)"
+      )
+    ).toBe("photographer_crew");
+    expect(classifyQuoteLineItem("Retouching included")).toBe("included_meta");
+  });
+});
+
+describe("WF3J-style money split", () => {
+  it("adds priced retouch into photographer subtotal so UI adds up to grand total", () => {
+    const split = splitQuoteLineItemMoney([
+      {
+        description: "Architecture & Interior Photography (4 hour)",
+        quantity: 4,
+        unitPrice: 1000,
+        amount: 4000,
+      },
+      {
+        description: "extra hours",
+        quantity: 0,
+        unitPrice: 1000,
+        amount: 0,
+      },
+      {
+        description:
+          "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)",
+        quantity: 10,
+        unitPrice: 250,
+        amount: 2500,
+      },
+      {
+        description: "extra photos",
+        quantity: 20,
+        unitPrice: 200,
+        amount: 4000,
+      },
+      {
+        description: "Transportation Fee",
+        quantity: 1,
+        unitPrice: 320,
+        amount: 320,
+      },
+    ]);
+    expect(split.photographerCrewSubtotal).toBe(10500);
+    expect(split.transportSubtotal).toBe(320);
+    expect(split.includedMetaSubtotal).toBe(0);
+    expect(split.itemsTotal).toBe(10820);
+    expect(
+      split.photographerCrewSubtotal + split.transportSubtotal
+    ).toBe(split.itemsTotal);
+  });
 });
 
 describe("resolveQuoteLineItemKind", () => {
