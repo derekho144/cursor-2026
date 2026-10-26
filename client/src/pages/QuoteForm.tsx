@@ -1156,6 +1156,7 @@ export default function QuoteForm() {
 
   const updateMutation = trpc.quotes.update.useMutation({
     onSuccess: async (updatedQuote) => {
+      clearDraft(); // Same as create — avoid stale localStorage overwriting next edit
       toast.success("報價單已更新");
       // 直接將更新結果寫入 getById 快取，避免跟轉頁面時讀到舊資料
       if (quoteId && updatedQuote) {
@@ -2459,8 +2460,24 @@ export default function QuoteForm() {
                     </span>
                   </div>
                 )}
+                {moneySplit.otherBillableSubtotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>其他服務（另計）</span>
+                    <span>
+                      HKD {moneySplit.otherBillableSubtotal.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {moneySplit.includedMetaSubtotal > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>附註項目</span>
+                    <span>
+                      HKD {moneySplit.includedMetaSubtotal.toLocaleString()}
+                    </span>
+                  </div>
+                )}
                 <div className="text-muted-foreground leading-snug pt-0.5">
-                  定價學習用攝影師小計，唔會同 Photobooth／其他服務混合。
+                  定價學習用攝影師小計，唔會同 Photobooth／其他服務混合。小計／總計仍以全部項目為準。
                 </div>
               </div>
             )}

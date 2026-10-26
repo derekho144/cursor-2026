@@ -111,19 +111,24 @@ export function classifyQuoteLineItem(
     return "video";
   }
 
+  // Free note only: "Retouching included" — NOT priced product lines like
+  // "Retouch (Post image editing included fine retouch …)" (JD202610-WF3J).
+  if (/^retouch(?:ing)?\s+included\b/.test(d)) {
+    return "included_meta";
+  }
+
   if (
     /^team\s*\d*\s*p\b/.test(d) ||
     /^team\s+\d+p\b/.test(d) ||
     /lighting\s*&?\s*equipment|camera\/|delivery method|first cut delivery|by links/.test(
       d
-    ) ||
-    (/^retouch\b/.test(d) && /included/.test(d))
+    )
   ) {
     return "included_meta";
   }
 
   if (
-    /event\s*photoshoot|photoshoot|photo\s*shoot|photography|photographer|extra\s*photographer|additional\s*photographer|攝影師|攝影服務|活動攝影|跟拍|extra\s*hour|extra\s*photos?|合照|細節圖/.test(
+    /event\s*photoshoot|photoshoot|photo\s*shoot|photography|photographer|extra\s*photographer|additional\s*photographer|攝影師|攝影服務|活動攝影|跟拍|extra\s*hour|extra\s*photos?|\bretouch|合照|細節圖/.test(
       d
     )
   ) {

@@ -18,3 +18,4 @@ manus-stale-version-retry-v1
 fh-get-email-stuck-v1
 pricing-exclude-graphic-design-v1
 wa-referrer-gclid-extract-v1
+fix-quote-total-split-display-v1
