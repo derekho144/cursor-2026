@@ -3175,10 +3175,117 @@ export async function findAdsWhatsappClickByRef(refCode: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Repair website/other WA clicks that buried gclid / gad_campaignid inside
+ * landing_page_url or page_referrer (SPA stripped visible URL). Promotes them
+ * to google_ads so auto-match can see them.
+ */
+export async function backfillBuriedAdsParamsOnWhatsappClicks(limit = 80): Promise<{
+  scanned: number;
+  updated: number;
+}> {
+  const db = await getDb();
+  if (!db) return { scanned: 0, updated: 0 };
+  await ensureAdsQuoteAttributionSchema();
+  const { enrichAdsAttribution, hasAdsAttribution } = await import(
+    "./_core/adsAttribution"
+  );
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      id: whatsappClickEvents.id,
+      source: whatsappClickEvents.source,
+      gclid: whatsappClickEvents.gclid,
+      gbraid: whatsappClickEvents.gbraid,
+      wbraid: whatsappClickEvents.wbraid,
+      utmSource: whatsappClickEvents.utmSource,
+      utmMedium: whatsappClickEvents.utmMedium,
+      utmCampaign: whatsappClickEvents.utmCampaign,
+      utmContent: whatsappClickEvents.utmContent,
+      utmTerm: whatsappClickEvents.utmTerm,
+      adsCampaignId: whatsappClickEvents.adsCampaignId,
+      adsCampaignName: whatsappClickEvents.adsCampaignName,
+      landingPageUrl: whatsappClickEvents.landingPageUrl,
+      pageReferrer: whatsappClickEvents.pageReferrer,
+    })
+    .from(whatsappClickEvents)
+    .where(
+      and(
+        sql`${whatsappClickEvents.clickedAt} >= ${since}`,
+        sql`(
+          (${whatsappClickEvents.gclid} IS NULL OR ${whatsappClickEvents.gclid} = '')
+          AND (${whatsappClickEvents.adsCampaignId} IS NULL OR ${whatsappClickEvents.adsCampaignId} = '')
+          AND (
+            ${whatsappClickEvents.landingPageUrl} LIKE '%gclid=%'
+            OR ${whatsappClickEvents.landingPageUrl} LIKE '%gbraid=%'
+            OR ${whatsappClickEvents.landingPageUrl} LIKE '%gad_campaignid=%'
+            OR ${whatsappClickEvents.pageReferrer} LIKE '%gclid=%'
+            OR ${whatsappClickEvents.pageReferrer} LIKE '%gbraid=%'
+            OR ${whatsappClickEvents.pageReferrer} LIKE '%gad_campaignid=%'
+          )
+        )`
+      )
+    )
+    .orderBy(desc(whatsappClickEvents.clickedAt))
+    .limit(Math.min(Math.max(limit, 1), 200));
+
+  let updated = 0;
+  for (const row of rows) {
+    const enriched = enrichAdsAttribution({
+      gclid: row.gclid,
+      gbraid: row.gbraid,
+      wbraid: row.wbraid,
+      utmSource: row.utmSource,
+      utmMedium: row.utmMedium,
+      utmCampaign: row.utmCampaign,
+      utmContent: row.utmContent,
+      utmTerm: row.utmTerm,
+      adsCampaignId: row.adsCampaignId,
+      adsCampaignName: row.adsCampaignName,
+      landingPageUrl: row.landingPageUrl,
+      pageReferrer: row.pageReferrer,
+    });
+    if (!hasAdsAttribution(enriched)) continue;
+    const nextSource =
+      row.source === "website" || row.source === "other" || !row.source
+        ? "google_ads"
+        : row.source;
+    await db
+      .update(whatsappClickEvents)
+      .set({
+        gclid: enriched.gclid,
+        gbraid: enriched.gbraid,
+        wbraid: enriched.wbraid,
+        utmSource: enriched.utmSource,
+        utmMedium: enriched.utmMedium,
+        utmCampaign: enriched.utmCampaign,
+        utmContent: enriched.utmContent,
+        utmTerm: enriched.utmTerm,
+        adsCampaignId: enriched.adsCampaignId,
+        adsCampaignName: enriched.adsCampaignName,
+        source: nextSource as typeof row.source,
+      })
+      .where(eq(whatsappClickEvents.id, row.id));
+    updated += 1;
+  }
+  if (updated > 0) {
+    console.log(
+      `[WA Track] backfillBuriedAdsParams scanned=${rows.length} updated=${updated}`
+    );
+  }
+  return { scanned: rows.length, updated };
+}
+
 export async function listUnmatchedAdsWhatsappClicks(limit = 50) {
   const db = await getDb();
   if (!db) return [];
   await ensureAdsQuoteAttributionSchema();
+  // Repair buried Ads params before candidate select (Belle / SPA strip cases).
+  try {
+    await backfillBuriedAdsParamsOnWhatsappClicks(80);
+  } catch (e) {
+    console.warn("[WA Track] backfillBuriedAdsParams failed:", e);
+  }
   return db
     .select({
       id: whatsappClickEvents.id,

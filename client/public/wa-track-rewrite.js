@@ -42,15 +42,47 @@
     }
   }
 
+  function paidParamsFromUrl(urlObj) {
+    if (!urlObj || !urlObj.searchParams) {
+      return { gclid: "", gbraid: "", wbraid: "", cid: "", gadSource: "" };
+    }
+    var sp = urlObj.searchParams;
+    return {
+      gclid: sp.get("gclid") || "",
+      gbraid: sp.get("gbraid") || "",
+      wbraid: sp.get("wbraid") || "",
+      cid:
+        sp.get("campaign_id") ||
+        sp.get("campaignid") ||
+        sp.get("gad_campaignid") ||
+        "",
+      gadSource: sp.get("gad_source") || "",
+    };
+  }
+
   function classifySrc(cur, referrer) {
-    var gclid = cur && cur.searchParams.get("gclid");
-    var gbraid = cur && cur.searchParams.get("gbraid");
-    var wbraid = cur && cur.searchParams.get("wbraid");
-    var cid =
-      (cur && (cur.searchParams.get("campaign_id") || cur.searchParams.get("campaignid"))) || "";
+    var paid = paidParamsFromUrl(cur);
+    var refPaid = { gclid: "", gbraid: "", wbraid: "", cid: "", gadSource: "" };
+    try {
+      if (referrer) refPaid = paidParamsFromUrl(new URL(referrer));
+    } catch (e) {}
     var utmSource = ((cur && cur.searchParams.get("utm_source")) || "").toLowerCase();
     var utmMedium = ((cur && cur.searchParams.get("utm_medium")) || "").toLowerCase();
-    if (gclid || gbraid || wbraid || cid || PAID_MEDIA[utmMedium]) return "google_ads";
+    if (
+      paid.gclid ||
+      paid.gbraid ||
+      paid.wbraid ||
+      paid.cid ||
+      paid.gadSource === "1" ||
+      refPaid.gclid ||
+      refPaid.gbraid ||
+      refPaid.wbraid ||
+      refPaid.cid ||
+      refPaid.gadSource === "1" ||
+      PAID_MEDIA[utmMedium]
+    ) {
+      return "google_ads";
+    }
     if (utmMedium === "ai" || utmMedium === "llm" || utmMedium === "aeo" || AI_SOURCES.test(utmSource)) {
       return "ai";
     }
@@ -76,6 +108,10 @@
       cur = new URL(location.href);
     } catch (e) {}
     var referrer = pageReferrer();
+    var refUrl = null;
+    try {
+      if (referrer) refUrl = new URL(referrer);
+    } catch (e) {}
     if (cur) {
       ["gclid", "gbraid", "wbraid", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].forEach(
         function (k) {
@@ -83,8 +119,27 @@
           if (v) u.searchParams.set(k, v);
         }
       );
-      var cid = cur.searchParams.get("campaign_id") || cur.searchParams.get("campaignid");
+      var cid =
+        cur.searchParams.get("campaign_id") ||
+        cur.searchParams.get("campaignid") ||
+        cur.searchParams.get("gad_campaignid");
       if (cid) u.searchParams.set("campaign_id", cid);
+    }
+    // If SPA stripped Ads params from the visible URL, recover from document.referrer.
+    if (refUrl) {
+      ["gclid", "gbraid", "wbraid"].forEach(function (k) {
+        if (!u.searchParams.get(k)) {
+          var v = refUrl.searchParams.get(k);
+          if (v) u.searchParams.set(k, v);
+        }
+      });
+      if (!u.searchParams.get("campaign_id")) {
+        var rcid =
+          refUrl.searchParams.get("campaign_id") ||
+          refUrl.searchParams.get("campaignid") ||
+          refUrl.searchParams.get("gad_campaignid");
+        if (rcid) u.searchParams.set("campaign_id", rcid);
+      }
     }
     var src = classifySrc(cur, referrer);
     u.searchParams.set("src", src);
