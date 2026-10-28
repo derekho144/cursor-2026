@@ -22,6 +22,7 @@ import {
   computeQuoteTotalsFromItems,
   quoteMoneyDiffers,
 } from "@shared/quoteTotals";
+import { QuoteMoneySummary } from "@/components/QuoteMoneySummary";
 
 const DEFAULT_EMAIL_BODY = `Hello,
 
@@ -796,63 +797,74 @@ export default function QuoteDetail() {
             </div>
           </div>
 
-          {/* Totals */}
+          {/* Totals — shared with edit form so headline total never disagrees */}
           <div style={{ padding: "24px", background: "#111111", display: "flex", justifyContent: "flex-end" }}>
-            <div className="w-56 space-y-2">
+            <div className="space-y-2">
               {totalsHealed && (
-                <div className="text-[10px] leading-snug pb-1" style={{ color: "#64b5f6" }}>
+                <div className="text-[10px] leading-snug" style={{ color: "#64b5f6", maxWidth: 256 }}>
                   已按項目金額重算（資料庫總計曾為 HKD {storedTotal.toLocaleString()}）。編輯儲存後會永久對齊。
                 </div>
               )}
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">小計</span>
-                <span>HKD {displaySubtotal.toLocaleString()}</span>
-              </div>
-              {displayDiscountAmount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    折扣{Number((quote as any).discountPercent) > 0 ? ` (${Number((quote as any).discountPercent)}%)` : ""}
-                  </span>
-                  <span>- HKD {displayDiscountAmount.toLocaleString()}</span>
-                </div>
-              )}
-              <div
-                className="flex justify-between text-base font-semibold pt-3"
-                style={{ borderTop: "1px solid #d4a843", color: "#d4a843" }}
-              >
-                <span>總計 ({quote.currency})</span>
-                <span>HKD {displayTotal.toLocaleString()}</span>
-              </div>
-              {/* Deposit — supports both percent and fixed amount modes */}
-              {(() => {
-                const depositMode = (quote as any).depositMode ?? "percent";
-                const depositPct = Number((quote as any).depositPercent ?? 0);
-                const depositFixedAmt = Number((quote as any).depositFixedAmount ?? 0);
-                const hasDeposit = depositMode === "fixed" ? depositFixedAmt > 0 : depositPct > 0;
-                if (!hasDeposit) return null;
-                const depositAmt = depositMode === "fixed"
-                  ? depositFixedAmt
-                  : displayTotal * depositPct / 100;
-                const netAmt = displayTotal - depositAmt;
-                const isFullPayment = depositAmt >= displayTotal;
-                const depositLabel = depositMode === "fixed"
-                  ? `訂金 (HKD ${depositAmt.toLocaleString('en-HK')})`
-                  : `訂金 (${depositPct}%)`;
-                return (
-                  <>
-                    <div className="flex justify-between text-sm pt-1">
-                      <span className="text-muted-foreground">{depositLabel}</span>
-                      <span style={{ color: "#d4a843" }}>HKD {depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    {!isFullPayment && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Net Payment</span>
-                        <span className="text-muted-foreground">HKD {netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+              <QuoteMoneySummary
+                items={quote.items ?? []}
+                currency={quote.currency}
+                subtotal={displaySubtotal}
+                discountPercent={Number((quote as any).discountPercent) || 0}
+                discountAmount={displayDiscountAmount}
+                total={displayTotal}
+                depositSlot={(() => {
+                  const depositMode = (quote as any).depositMode ?? "percent";
+                  const depositPct = Number((quote as any).depositPercent ?? 0);
+                  const depositFixedAmt = Number(
+                    (quote as any).depositFixedAmount ?? 0
+                  );
+                  const hasDeposit =
+                    depositMode === "fixed"
+                      ? depositFixedAmt > 0
+                      : depositPct > 0;
+                  if (!hasDeposit) return null;
+                  const depositAmt =
+                    depositMode === "fixed"
+                      ? depositFixedAmt
+                      : (displayTotal * depositPct) / 100;
+                  const netAmt = displayTotal - depositAmt;
+                  const isFullPayment = depositAmt >= displayTotal;
+                  const depositLabel =
+                    depositMode === "fixed"
+                      ? `訂金 (HKD ${depositAmt.toLocaleString("en-HK")})`
+                      : `訂金 (${depositPct}%)`;
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm pt-1">
+                        <span className="text-muted-foreground">
+                          {depositLabel}
+                        </span>
+                        <span style={{ color: "#d4a843" }}>
+                          HKD{" "}
+                          {depositAmt.toLocaleString("en-HK", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
                       </div>
-                    )}
-                  </>
-                );
-              })()}
+                      {!isFullPayment && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Net Payment
+                          </span>
+                          <span className="text-muted-foreground">
+                            HKD{" "}
+                            {netAmt.toLocaleString("en-HK", {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              />
             </div>
           </div>
 

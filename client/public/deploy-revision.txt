@@ -21,3 +21,5 @@ wa-referrer-gclid-extract-v1
 fix-quote-total-split-display-v1
 quote-client-choice-qty0-option
 quote-detail-edit-total-sync-v1
+
+quote-money-summary-unify-v1

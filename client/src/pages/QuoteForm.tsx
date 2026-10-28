@@ -47,13 +47,10 @@ import {
   classifyQuoteLineItem,
   isQuoteLineItemCategory,
   QUOTE_LINE_ITEM_CATEGORY_OPTIONS,
-  splitQuoteLineItemMoney,
   type QuoteLineItemCategory,
 } from "@shared/quoteLineItemKind";
-import {
-  computeQuoteDiscountAmount,
-  discountableQuoteSubtotal,
-} from "@shared/quoteDiscount";
+import { QuoteMoneySummary } from "@/components/QuoteMoneySummary";
+import { computeQuoteDiscountAmount } from "@shared/quoteDiscount";
 import {
   computeQuoteTotalsFromItems,
   quoteMoneyDiffers,
@@ -1258,15 +1255,6 @@ export default function QuoteForm() {
 
   const subtotal = useMemo(
     () => form.items.reduce((sum, item) => sum + item.amount, 0),
-    [form.items]
-  );
-  const moneySplit = useMemo(
-    () => splitQuoteLineItemMoney(form.items),
-    [form.items]
-  );
-  // Membership % discount excludes transportation / 車費 and rush / 加急 fees
-  const discountableSubtotal = useMemo(
-    () => discountableQuoteSubtotal(form.items),
     [form.items]
   );
   const discountAmount = computeQuoteDiscountAmount(
@@ -2521,189 +2509,207 @@ export default function QuoteForm() {
             </button>
           </div>
 
-          {/* Totals */}
-          <div className="mt-6 ml-auto w-full sm:w-64 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">小計</span>
-              <span>HKD {subtotal.toLocaleString()}</span>
-            </div>
-            {moneySplit.hasPhotographerCrewLines && (
-              <div
-                className="rounded px-2 py-1.5 space-y-1 text-xs"
-                style={{
-                  background: "rgba(212,168,67,0.08)",
-                  border: "1px solid rgba(212,168,67,0.25)",
-                }}
-              >
-                <div className="flex justify-between" style={{ color: "#d4a843" }}>
-                  <span>攝影師項目小計</span>
-                  <span>
-                    HKD {moneySplit.photographerCrewSubtotal.toLocaleString()}
-                  </span>
+          {/* Totals — same component as Quote Detail (總計 is the only gold headline) */}
+          <div className="mt-6 ml-auto">
+            <QuoteMoneySummary
+              items={form.items}
+              currency={form.currency}
+              subtotal={subtotal}
+              discountPercent={form.discountPercent}
+              discountAmount={discountAmount}
+              total={total}
+              discountSlot={
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">折扣</span>
+                    {clientDiscount && clientDiscount.discount > 0 && (
+                      <span className="text-xs" style={{ color: "#d4a843" }}>
+                        {clientDiscount.tierLabel} {clientDiscount.discount}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-20">
+                      <Input
+                        type="number"
+                        value={form.discountPercent}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            discountPercent: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        min={0}
+                        max={100}
+                        step={1}
+                        style={{
+                          ...inputStyle,
+                          textAlign: "right",
+                          padding: "4px 8px",
+                          height: "32px",
+                        }}
+                      />
+                    </div>
+                    <span className="text-sm text-muted-foreground">%</span>
+                    {discountAmount > 0 && (
+                      <span
+                        className="text-xs"
+                        style={{ color: "rgba(212,168,67,0.7)" }}
+                      >
+                        - HKD {discountAmount.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {moneySplit.photoboothSubtotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Photobooth（另計）</span>
-                    <span>
-                      HKD {moneySplit.photoboothSubtotal.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                {moneySplit.videoSubtotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>錄影項目（另計）</span>
-                    <span>HKD {moneySplit.videoSubtotal.toLocaleString()}</span>
-                  </div>
-                )}
-                {moneySplit.transportSubtotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>交通（另計）</span>
-                    <span>
-                      HKD {moneySplit.transportSubtotal.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                {moneySplit.otherBillableSubtotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>其他服務（另計）</span>
-                    <span>
-                      HKD {moneySplit.otherBillableSubtotal.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                {moneySplit.includedMetaSubtotal > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>附註項目</span>
-                    <span>
-                      HKD {moneySplit.includedMetaSubtotal.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                <div className="text-muted-foreground leading-snug pt-0.5">
-                  定價學習用攝影師小計，唔會同 Photobooth／其他服務混合。小計／總計仍以全部項目為準。
-                </div>
-              </div>
-            )}
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-muted-foreground">折扣</span>
-                {clientDiscount && clientDiscount.discount > 0 && (
-                  <span className="text-xs" style={{ color: "#d4a843" }}>
-                    {clientDiscount.tierLabel} {clientDiscount.discount}%
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-20">
-                  <Input
-                    type="number"
-                    value={form.discountPercent}
-                    onChange={(e) => setForm((p) => ({ ...p, discountPercent: parseFloat(e.target.value) || 0 }))}
-                    min={0}
-                    max={100}
-                    step={1}
-                    style={{ ...inputStyle, textAlign: "right", padding: "4px 8px", height: "32px" }}
-                  />
-                </div>
-                <span className="text-sm text-muted-foreground">%</span>
-                {discountAmount > 0 && (
-                  <span className="text-xs" style={{ color: "rgba(212,168,67,0.7)" }}>
-                    - HKD {discountAmount.toLocaleString()}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div
-              className="flex justify-between text-base font-medium pt-2"
-              style={{ borderTop: "1px solid #d4a843", color: "#d4a843" }}
-            >
-              <span>總計 ({form.currency})</span>
-              <span>HKD {total.toLocaleString()}</span>
-            </div>
-            {/* Deposit */}
-            {(() => {
-              // 計算訂金金額
-              const depositAmt = form.depositMode === "fixed"
-                ? form.depositFixedAmount
-                : total * (form.depositPercent / 100);
-              const netAmt = total - depositAmt;
-              const hasDeposit = depositAmt > 0 && depositAmt < total;
-              return (
-                <>
-                  <div className="flex justify-between items-center text-sm pt-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">訂金</span>
-                      {/* 模式切換按鈕 */}
-                      <div className="flex rounded overflow-hidden" style={{ border: "1px solid rgba(212,168,67,0.3)", height: "22px" }}>
-                        <button
-                          type="button"
-                          onClick={() => setForm(p => ({ ...p, depositMode: "percent" }))}
-                          className="px-2 text-xs transition-colors"
+              }
+              depositSlot={(() => {
+                const depositAmt =
+                  form.depositMode === "fixed"
+                    ? form.depositFixedAmount
+                    : total * (form.depositPercent / 100);
+                const netAmt = total - depositAmt;
+                const hasDeposit = depositAmt > 0 && depositAmt < total;
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-sm pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">訂金</span>
+                        <div
+                          className="flex rounded overflow-hidden"
                           style={{
-                            background: form.depositMode === "percent" ? "rgba(212,168,67,0.25)" : "transparent",
-                            color: form.depositMode === "percent" ? "#d4a843" : "rgba(212,168,67,0.5)",
-                            borderRight: "1px solid rgba(212,168,67,0.3)",
+                            border: "1px solid rgba(212,168,67,0.3)",
+                            height: "22px",
                           }}
-                        >%</button>
-                        <button
-                          type="button"
-                          onClick={() => setForm(p => ({ ...p, depositMode: "fixed", depositFixedAmount: p.depositFixedAmount || Math.round(total * p.depositPercent / 100) }))}
-                          className="px-2 text-xs transition-colors"
-                          style={{
-                            background: form.depositMode === "fixed" ? "rgba(212,168,67,0.25)" : "transparent",
-                            color: form.depositMode === "fixed" ? "#d4a843" : "rgba(212,168,67,0.5)",
-                          }}
-                        >HKD</button>
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((p) => ({ ...p, depositMode: "percent" }))
+                            }
+                            className="px-2 text-xs transition-colors"
+                            style={{
+                              background:
+                                form.depositMode === "percent"
+                                  ? "rgba(212,168,67,0.25)"
+                                  : "transparent",
+                              color:
+                                form.depositMode === "percent"
+                                  ? "#d4a843"
+                                  : "rgba(212,168,67,0.5)",
+                              borderRight: "1px solid rgba(212,168,67,0.3)",
+                            }}
+                          >
+                            %
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((p) => ({
+                                ...p,
+                                depositMode: "fixed",
+                                depositFixedAmount:
+                                  p.depositFixedAmount ||
+                                  Math.round((total * p.depositPercent) / 100),
+                              }))
+                            }
+                            className="px-2 text-xs transition-colors"
+                            style={{
+                              background:
+                                form.depositMode === "fixed"
+                                  ? "rgba(212,168,67,0.25)"
+                                  : "transparent",
+                              color:
+                                form.depositMode === "fixed"
+                                  ? "#d4a843"
+                                  : "rgba(212,168,67,0.5)",
+                            }}
+                          >
+                            HKD
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {form.depositMode === "percent" ? (
+                          <>
+                            <div className="w-16">
+                              <Input
+                                type="number"
+                                value={form.depositPercent}
+                                onChange={(e) =>
+                                  setForm((p) => ({
+                                    ...p,
+                                    depositPercent:
+                                      parseFloat(e.target.value) || 0,
+                                  }))
+                                }
+                                min={0}
+                                max={100}
+                                step={5}
+                                style={{
+                                  ...inputStyle,
+                                  textAlign: "right",
+                                  padding: "4px 8px",
+                                  height: "32px",
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              %
+                            </span>
+                            <span className="text-xs" style={{ color: "#d4a843" }}>
+                              = HKD{" "}
+                              {depositAmt.toLocaleString("en-HK", {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-sm text-muted-foreground">
+                              HKD
+                            </span>
+                            <div className="w-28">
+                              <Input
+                                type="number"
+                                value={form.depositFixedAmount}
+                                onChange={(e) =>
+                                  setForm((p) => ({
+                                    ...p,
+                                    depositFixedAmount:
+                                      parseFloat(e.target.value) || 0,
+                                  }))
+                                }
+                                min={0}
+                                step={100}
+                                style={{
+                                  ...inputStyle,
+                                  textAlign: "right",
+                                  padding: "4px 8px",
+                                  height: "32px",
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {form.depositMode === "percent" ? (
-                        <>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              value={form.depositPercent}
-                              onChange={(e) => setForm((p) => ({ ...p, depositPercent: parseFloat(e.target.value) || 0 }))}
-                              min={0}
-                              max={100}
-                              step={5}
-                              style={{ ...inputStyle, textAlign: "right", padding: "4px 8px", height: "32px" }}
-                            />
-                          </div>
-                          <span className="text-sm text-muted-foreground">%</span>
-                          <span className="text-xs" style={{ color: "#d4a843" }}>
-                            = HKD {depositAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-sm text-muted-foreground">HKD</span>
-                          <div className="w-28">
-                            <Input
-                              type="number"
-                              value={form.depositFixedAmount}
-                              onChange={(e) => setForm((p) => ({ ...p, depositFixedAmount: parseFloat(e.target.value) || 0 }))}
-                              min={0}
-                              step={100}
-                              style={{ ...inputStyle, textAlign: "right", padding: "4px 8px", height: "32px" }}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {/* Net (餘款) */}
-                  {hasDeposit && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Net（餘款）</span>
-                      <span style={{ color: "rgba(212,168,67,0.7)" }}>
-                        HKD {netAmt.toLocaleString('en-HK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </span>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+                    {hasDeposit && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Net（餘款）</span>
+                        <span style={{ color: "rgba(212,168,67,0.7)" }}>
+                          HKD{" "}
+                          {netAmt.toLocaleString("en-HK", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            />
           </div>
         </Section>
 
