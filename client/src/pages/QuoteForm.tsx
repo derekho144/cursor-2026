@@ -2321,7 +2321,7 @@ export default function QuoteForm() {
                 )}
                 {!form.leadSource && (
                   <div className="text-[11px]" style={{ color: "#fbbf24" }}>
-                    請先選「詢價來源」：HelloToby／PRO360 偏低預算；Google 偏中上，建議價會跟住調。
+                    請先選「詢價來源」：建議價會跟該平台已接受成交中位（唔係人工打折）。
                   </div>
                 )}
                 {priceSuggest.confidence === "advisory" && (

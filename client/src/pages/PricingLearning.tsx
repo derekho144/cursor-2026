@@ -256,7 +256,7 @@ export default function PricingLearning() {
             {overview?.learningScopeNote ??
               "只計指定日期起：開單日或拍攝日任一達標即納入；兩者都早過起點嘅舊單唔作學習參考。"}
             「其他」服務類型不計入學習。新單請填齊時長套餐、時數／張數、人手；拒絕時填原因＋預算。
-            出價亦會視乎詢價來源：HelloToby／PRO360 偏低預算；Google 偏中上。
+            出價會視乎詢價來源：優先用該平台（或 HelloToby＋PRO360 同層）已接受成交中位；樣本不足則用整體，唔做無證據折扣。
           </p>
         </div>
 
@@ -666,9 +666,9 @@ export default function PricingLearning() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">不指定（整體）</SelectItem>
-                  <SelectItem value="HelloToby">HelloToby（偏低預算）</SelectItem>
-                  <SelectItem value="PRO360">PRO360（偏低預算）</SelectItem>
-                  <SelectItem value="Google">Google（中上預算）</SelectItem>
+                  <SelectItem value="HelloToby">HelloToby</SelectItem>
+                  <SelectItem value="PRO360">PRO360</SelectItem>
+                  <SelectItem value="Google">Google</SelectItem>
                   <SelectItem value="FreelanceHunter">FreelanceHunter</SelectItem>
                   <SelectItem value="Organic">Organic</SelectItem>
                   <SelectItem value="AI">AI</SelectItem>
