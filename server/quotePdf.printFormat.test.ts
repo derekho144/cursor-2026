@@ -37,6 +37,8 @@ describe("generateQuotePdfHtml print-format template", () => {
     expect(html).toContain("padding:0 40px 32px 40px");
     expect(html).toContain("linear-gradient(to right,#d4a843");
     expect(html).toContain("#c9a84c");
+    // Issue / created-at DATE omitted on quotation sheet (shoot date may still show)
+    expect(html).not.toMatch(/DATE\s*&nbsp;\s*\d{2}\s+[A-Z]{3}\s+\d{4}/);
     expect(html).not.toContain("d2xsxph8kpxj0f.cloudfront.net/310519663457748523/VbnWSJV6UQ79sGuykqPPae/%E8%9E%A2");
   });
 

@@ -544,10 +544,6 @@ export default function QuoteDetail() {
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: "8.5px", letterSpacing: "0.25em", textTransform: "uppercase" as const, color: "#888888", marginBottom: "8px" }}>QUOTATION</div>
               <div style={{ fontSize: "36px", fontWeight: 300, color: "#ffffff", lineHeight: 1 }}>{quote.quoteNumber}</div>
-              <div style={{ width: "100%", height: "1px", background: "#444444", margin: "14px 0 10px" }}></div>
-              <div style={{ fontSize: "10px", color: "#888888", letterSpacing: "0.12em", textTransform: "uppercase" as const }}>
-                DATE &nbsp; {new Date(quote.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}
-              </div>
             </div>
           </div>
 

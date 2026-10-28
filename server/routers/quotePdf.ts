@@ -138,13 +138,6 @@ export function generateQuotePdfHtml(
   const items = quote.items || [];
   const { pageWidthPx, contentHorizontalPaddingPx, fontFamily } = QUOTE_PRINT_DESIGN;
 
-  const formatDate = (d: string | Date) => {
-    const dt = new Date(d);
-    return dt
-      .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-      .toUpperCase();
-  };
-
   const money = (n: number) =>
     n.toLocaleString("en-US", {
       minimumFractionDigits: 2,
@@ -362,8 +355,6 @@ export function generateQuotePdfHtml(
       <td style="vertical-align:top;text-align:right;width:45%;">
         <div style="font-size:7.5px;letter-spacing:0.25em;text-transform:uppercase;color:#888888;margin-bottom:5px;">${docType}</div>
         <div style="font-size:28px;font-weight:300;letter-spacing:0.01em;color:#ffffff;line-height:1;">${quote.quoteNumber}</div>
-        <div style="width:100%;height:1px;background:#444444;margin:14px 0 10px;"></div>
-        <div style="font-size:9px;color:#888888;letter-spacing:0.12em;text-transform:uppercase;">DATE &nbsp; ${formatDate(quote.createdAt)}</div>
       </td>
     </tr>
   </table>

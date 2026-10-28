@@ -90,13 +90,6 @@ const C = {
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────
-function formatDate(d: string | Date): string {
-  const dt = new Date(d);
-  return dt
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-    .toUpperCase();
-}
-
 function formatMoney(v: number | string): string {
   const n = Number(v);
   const s = n % 1 === 0
@@ -191,12 +184,6 @@ export async function generateQuotePdfBuffer(
 
     doc.fontSize(22).font("NotoSans").fillColor(C.white);
     doc.text(quote.quoteNumber, PW - MR - 180, 34, { width: 180, align: "right", lineBreak: false });
-
-    // Divider line
-    doc.rect(PW - MR - 150, 62, 150, 0.5).fill("#444444");
-
-    doc.fontSize(7).font("NotoSans").fillColor("#888888");
-    doc.text(`DATE   ${formatDate(quote.createdAt)}`, PW - MR - 150, 68, { width: 150, align: "right", lineBreak: false });
 
     let y = headerH;
 

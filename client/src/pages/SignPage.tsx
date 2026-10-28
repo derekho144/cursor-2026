@@ -246,16 +246,13 @@ export default function SignPage() {
               <div style={{ fontSize: 9, letterSpacing: "0.28em", color: ACCENT_LOW, textTransform: "uppercase", marginBottom: 4, fontFamily: SANS }}>{t("sign.quotation.label")}</div>
               <div style={{ fontFamily: SERIF, color: ACCENT, fontSize: 28, fontWeight: 300, letterSpacing: "0.05em" }}>{quote.quoteNumber}</div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: SANS, color: ACCENT_LOW, fontSize: 11, letterSpacing: "0.1em" }}>
-                DATE {new Date(quote.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}
-              </div>
-              {quote.validUntil && (
-                <div style={{ fontFamily: SANS, color: ACCENT_MED, fontSize: 11, marginTop: 4, letterSpacing: "0.08em" }}>
+            {quote.validUntil && (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontFamily: SANS, color: ACCENT_MED, fontSize: 11, letterSpacing: "0.08em" }}>
                   VALID UNTIL {quote.validUntil}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div style={{ padding: "24px 28px" }}>

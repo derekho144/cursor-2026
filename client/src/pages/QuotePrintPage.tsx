@@ -307,14 +307,10 @@ export default function QuotePrintPage() {
               </div>
             </div>
           </div>
-          {/* Right: Doc type + number + date */}
+          {/* Right: Doc type + number (issue date omitted on quotation sheet) */}
           <div style={S.headerRight}>
             <div style={S.docLabel}>{docLabel}</div>
             <div style={S.quoteNumber}>{quote.quoteNumber}</div>
-            <div className="header-divider" />
-            <div style={S.dateLine}>
-              DATE &nbsp; {formatDate(quote.createdAt)}
-            </div>
           </div>
         </div>
         {/* Gold gradient divider below header */}
