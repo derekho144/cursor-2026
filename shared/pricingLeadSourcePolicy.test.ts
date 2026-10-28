@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  applySoftFactorToAmount,
   leadBudgetTier,
   PLATFORM_SUGGEST_MIN_SAMPLES,
   resolvePlatformSuggestRows,
-  softFactorForTier,
 } from "./pricingLeadSourcePolicy";
 
 describe("pricingLeadSourcePolicy", () => {
@@ -34,7 +32,7 @@ describe("pricingLeadSourcePolicy", () => {
     expect(pick.scope).toBe("exact");
     expect(pick.rows).toHaveLength(6);
     expect(pick.softFactor).toBe(1);
-    expect(pick.note).toContain("Google");
+    expect(pick.note).toContain("已接受成交");
   });
 
   it("falls back to low-budget tier when exact sample thin", () => {
@@ -47,7 +45,6 @@ describe("pricingLeadSourcePolicy", () => {
       { leadSource: "Google", total: 9000 },
       { leadSource: "Google", total: 9500 },
     ];
-    // Only 2 HelloToby — below min — should use HelloToby+PRO360 tier (5)
     const pick = resolvePlatformSuggestRows({
       matchedAccepted: matched,
       leadSource: "HelloToby",
@@ -59,7 +56,7 @@ describe("pricingLeadSourcePolicy", () => {
     expect(pick.softFactor).toBe(1);
   });
 
-  it("soft-adjusts global mid for low / mid_high when samples thin", () => {
+  it("keeps global mid with no invented soft factor when samples thin", () => {
     const matched = [
       { leadSource: "Organic", total: 5000 },
       { leadSource: "Organic", total: 5500 },
@@ -70,22 +67,16 @@ describe("pricingLeadSourcePolicy", () => {
       matchedAccepted: matched,
       leadSource: "PRO360",
     });
-    expect(low.scope).toBe("global_adjusted");
-    expect(low.softFactor).toBe(softFactorForTier("low"));
-    expect(low.softFactor).toBeLessThan(1);
+    expect(low.scope).toBe("global");
+    expect(low.softFactor).toBe(1);
+    expect(low.rows).toHaveLength(matched.length);
+    expect(low.note).toMatch(/唔會用無證據|整體成交/);
 
     const hi = resolvePlatformSuggestRows({
       matchedAccepted: matched,
       leadSource: "Google",
     });
-    expect(hi.scope).toBe("global_adjusted");
-    expect(hi.softFactor).toBeGreaterThan(1);
-  });
-
-  it("applies soft factor to amounts", () => {
-    expect(applySoftFactorToAmount(10000, 0.9)).toBe(9000);
-    expect(applySoftFactorToAmount(10000, 1.08)).toBe(10800);
-    expect(applySoftFactorToAmount(10000, 1)).toBe(10000);
-    expect(applySoftFactorToAmount(null, 0.9)).toBeNull();
+    expect(hi.scope).toBe("global");
+    expect(hi.softFactor).toBe(1);
   });
 });

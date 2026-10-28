@@ -49,7 +49,7 @@ export const pricingLearningRouter = router({
           .enum(["hours", "half_day", "full_day", "multi_day"])
           .optional()
           .nullable(),
-        /** Quote 詢價來源 — HelloToby/PRO360 偏低預算；Google 偏中上 */
+        /** Quote 詢價來源 — prefer that platform's accepted-quote mid */
         leadSource: z.string().max(64).optional().nullable(),
       })
     )

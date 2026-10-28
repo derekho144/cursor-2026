@@ -47,10 +47,7 @@ import {
   pricingLearningStartAtIso,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
-import {
-  applySoftFactorToAmount,
-  resolvePlatformSuggestRows,
-} from "../shared/pricingLeadSourcePolicy";
+import { resolvePlatformSuggestRows } from "../shared/pricingLeadSourcePolicy";
 
 const MIN_BUCKET_SAMPLES = 2;
 
@@ -905,7 +902,6 @@ export async function suggestPriceFromLearning(input: {
     leadSource: input.leadSource,
   });
   const useRows = platformPick.rows;
-  const softFactor = platformPick.softFactor;
 
   const summary = summarizeTotals(useRows.map((r) => r.total));
   const weightedMid = timeWeightedMedian(
@@ -916,7 +912,7 @@ export async function suggestPriceFromLearning(input: {
     .map((r) => r.features.pricePerHour)
     .filter((n): n is number => n != null && n > 0);
   const perHour = summarizeTotals(perHourVals);
-  const hoursHintRaw =
+  const hoursHint =
     input.hours != null && input.hours > 0 && perHour.count >= MIN_BUCKET_SAMPLES
       ? Math.round(perHour.p50 * input.hours)
       : null;
@@ -925,19 +921,17 @@ export async function suggestPriceFromLearning(input: {
     .map((r) => r.features.pricePerShot)
     .filter((n): n is number => n != null && n > 0);
   const perShot = summarizeTotals(perShotVals);
-  const shotsHintRaw =
+  const shotsHint =
     input.shotCount != null &&
     input.shotCount > 0 &&
     perShot.count >= MIN_BUCKET_SAMPLES
       ? Math.round(perShot.p50 * input.shotCount)
       : null;
 
-  const midRaw = weightedMid ?? summary.p50;
-  const mid = applySoftFactorToAmount(midRaw, softFactor) ?? midRaw;
-  const low = applySoftFactorToAmount(summary.p25, softFactor) ?? summary.p25;
-  const high = applySoftFactorToAmount(summary.p75, softFactor) ?? summary.p75;
-  const hoursHint = applySoftFactorToAmount(hoursHintRaw, softFactor);
-  const shotsHint = applySoftFactorToAmount(shotsHintRaw, softFactor);
+  // Mid/packages come only from accepted history in the chosen scope — no soft ×factor.
+  const mid = weightedMid ?? summary.p50;
+  const low = summary.p25;
+  const high = summary.p75;
 
   // Trust uses fundamentals sample size so platform filter doesn't hide suggestions.
   const fundamentalsSummary = summarizeTotals(
@@ -955,16 +949,12 @@ export async function suggestPriceFromLearning(input: {
 
   const standardNote =
     platformPick.scope === "exact"
-      ? `對齊「${platformPick.leadSource}」成交中位`
+      ? `對齊「${platformPick.leadSource}」已接受成交中位`
       : platformPick.scope === "tier"
         ? platformPick.tier === "low"
-          ? "對齊低預算平台成交中位（HelloToby／PRO360）"
-          : "對齊中上預算平台成交中位（Google）"
-        : platformPick.scope === "global_adjusted"
-          ? platformPick.tier === "low"
-            ? "整體中位再按低預算平台微調偏低"
-            : "整體中位再按 Google 中上預算微調偏高"
-          : "對齊歷史成交中位";
+          ? "對齊 HelloToby／PRO360 合併已接受成交中位"
+          : "對齊 Google 已接受成交中位"
+        : "對齊整體已接受成交中位（平台樣本未夠）";
 
   const packages =
     trust.showSuggestion &&
@@ -974,8 +964,8 @@ export async function suggestPriceFromLearning(input: {
             label: "Essential（減範圍保質素）",
             mid: low,
             note:
-              platformPick.tier === "low"
-                ? "低預算平台優先：縮範圍保質素，唔好死跟高檔"
+              platformPick.scope !== "global" && platformPick.tier === "low"
+                ? "該平台成交偏下四分位：縮範圍保質素，唔好盲減時薪"
                 : "縮時數／張數／人手，唔減每小時質素標價",
           },
           standard: {
@@ -987,8 +977,9 @@ export async function suggestPriceFromLearning(input: {
             label: "Coverage（完整覆蓋）",
             mid: high,
             note:
+              platformPick.scope !== "global" &&
               platformPick.tier === "mid_high"
-                ? "Google 客較能接受完整覆蓋；仍要對成本底線"
+                ? "該平台成交偏上四分位；仍要對成本底線"
                 : durationPkg === "half_day" ||
                     durationPkg === "full_day" ||
                     durationPkg === "multi_day"
@@ -1069,7 +1060,7 @@ export async function suggestPriceFromLearning(input: {
             low,
             mid,
             high,
-            avg: applySoftFactorToAmount(summary.avg, softFactor) ?? summary.avg,
+            avg: summary.avg,
             fromPerHour: hoursHint,
             fromPerShot: shotsHint,
           }
@@ -1085,7 +1076,7 @@ export async function suggestPriceFromLearning(input: {
       tier: platformPick.tier,
       scope: platformPick.scope,
       platformAcceptedCount: platformPick.platformAcceptedCount,
-      softFactor,
+      softFactor: 1,
       note: platformPick.note,
     },
     costFloorNote:

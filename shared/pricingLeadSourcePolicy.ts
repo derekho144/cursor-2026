@@ -1,29 +1,20 @@
 /**
- * Platform / lead-source budget priors for pricing learning suggestions.
+ * Platform / lead-source matching for pricing learning suggestions.
  *
- * Marketplace RFQs (HelloToby, PRO360) skew low-budget.
- * Google Ads leads skew mid–upper. When the quote form picks a lead source,
- * suggested packages should prefer same-platform (or same-tier) history, or
- * softly adjust the global mid when samples are thin.
+ * Goal: raise win rate by aligning suggested price with what *actually closed*
+ * on that platform (accepted quote history) — not invented discount priors.
+ *
+ * HelloToby / PRO360 often close lower than Google in the data; we surface that
+ * only when we have enough accepted samples. If samples are thin we keep the
+ * global mid unchanged (no ×0.9 / ×1.08 soft factor — those were unverified).
  */
 
 export type LeadBudgetTier = "low" | "mid_high" | "neutral";
 
-export type PlatformSuggestScope =
-  | "exact"
-  | "tier"
-  | "global"
-  | "global_adjusted";
+export type PlatformSuggestScope = "exact" | "tier" | "global";
 
-/** Minimum accepted samples to prefer exact / tier history over a soft prior. */
+/** Minimum accepted samples to prefer exact / tier history over global. */
 export const PLATFORM_SUGGEST_MIN_SAMPLES = 5;
-
-/** Soft multipliers when falling back to global history (clamped elsewhere). */
-export const LEAD_TIER_SOFT_FACTOR: Record<LeadBudgetTier, number> = {
-  low: 0.9,
-  mid_high: 1.08,
-  neutral: 1,
-};
 
 const LOW_BUDGET_SOURCES = new Set(["HelloToby", "PRO360"]);
 const MID_HIGH_SOURCES = new Set(["Google"]);
@@ -55,59 +46,34 @@ export function sameLeadBudgetTier(
   return ta === tb;
 }
 
-export function softFactorForTier(tier: LeadBudgetTier): number {
-  return LEAD_TIER_SOFT_FACTOR[tier] ?? 1;
-}
-
-export function applySoftFactorToAmount(
-  amount: number | null | undefined,
-  factor: number
-): number | null {
-  if (amount == null || !Number.isFinite(amount) || amount <= 0) return null;
-  if (!Number.isFinite(factor) || factor <= 0 || factor === 1) {
-    return Math.round(amount);
-  }
-  return Math.round(amount * factor);
-}
-
 export function platformSuggestNote(input: {
   leadSource: string | null;
   tier: LeadBudgetTier;
   scope: PlatformSuggestScope;
   platformAcceptedCount: number;
-  softFactor: number;
 }): string {
-  const { leadSource, tier, scope, platformAcceptedCount, softFactor } = input;
+  const { leadSource, tier, scope, platformAcceptedCount } = input;
   if (!leadSource) {
-    return "未選詢價來源：建議價用整體成交；選好平台後會按來源再調。";
+    return "未選詢價來源：建議價用整體已接受成交；選好平台後會改用該來源歷史成交。";
   }
   if (scope === "exact") {
-    return `已按「${leadSource}」歷史成交（${platformAcceptedCount} 筆）調整建議價。`;
+    return `已按「${leadSource}」已接受成交中位（${platformAcceptedCount} 筆）——唔係人工折扣。`;
   }
   if (scope === "tier") {
     const tierLabel =
       tier === "low"
-        ? "低預算平台（HelloToby／PRO360）"
+        ? "低預算平台層（HelloToby／PRO360 合併）"
         : tier === "mid_high"
-          ? "中上預算平台（Google）"
+          ? "中上預算平台層（Google）"
           : "同類平台";
-    return `「${leadSource}」樣本不足，改用${tierLabel}成交（${platformAcceptedCount} 筆）。`;
+    return `「${leadSource}」單平台樣本不足，改用${tierLabel}已接受成交（${platformAcceptedCount} 筆）。`;
   }
-  if (scope === "global_adjusted") {
-    const bias =
-      softFactor < 1
-        ? `偏低預算客（×${softFactor}）`
-        : softFactor > 1
-          ? `中上預算客（×${softFactor}）`
-          : "中性";
-    return `「${leadSource}」同層樣本仍少，用整體成交再按平台預算取向微調（${bias}）。`;
-  }
-  return `「${leadSource}」暫未有足夠平台樣本，建議價用整體成交（未做平台微調）。`;
+  return `「${leadSource}」同層已接受樣本仍少（${platformAcceptedCount} 筆），暫時用整體成交中位；唔會用無證據嘅 ×0.9／×1.08 微調。累積夠 ${PLATFORM_SUGGEST_MIN_SAMPLES} 筆先跟平台價。`;
 }
 
 /**
  * Pick which accepted rows drive the mid / packages, given a lead source.
- * Returns softFactor ≠ 1 only for global_adjusted.
+ * Soft invented multipliers are intentionally not applied.
  */
 export function resolvePlatformSuggestRows<
   T extends { leadSource: string | null },
@@ -142,7 +108,6 @@ export function resolvePlatformSuggestRows<
         tier: "neutral",
         scope: "global",
         platformAcceptedCount: 0,
-        softFactor: 1,
       }),
     };
   }
@@ -161,7 +126,6 @@ export function resolvePlatformSuggestRows<
         tier,
         scope: "exact",
         platformAcceptedCount: exact.length,
-        softFactor: 1,
       }),
     };
   }
@@ -183,28 +147,23 @@ export function resolvePlatformSuggestRows<
           tier,
           scope: "tier",
           platformAcceptedCount: tierRows.length,
-          softFactor: 1,
         }),
       };
     }
   }
 
-  const softFactor = softFactorForTier(tier);
-  const scope: PlatformSuggestScope =
-    softFactor !== 1 ? "global_adjusted" : "global";
   return {
     rows: matched,
-    scope,
+    scope: "global",
     tier,
     leadSource,
     platformAcceptedCount: exact.length,
-    softFactor,
+    softFactor: 1,
     note: platformSuggestNote({
       leadSource,
       tier,
-      scope,
+      scope: "global",
       platformAcceptedCount: exact.length,
-      softFactor,
     }),
   };
 }
