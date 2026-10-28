@@ -812,6 +812,7 @@ export default function QuoteForm() {
           ? suggestShots
           : null,
       durationPackage: form.durationPackage || null,
+      leadSource: form.leadSource || null,
     },
     {
       enabled: !!form.serviceType && isPricingLearningServiceType(form.serviceType),
@@ -2303,7 +2304,26 @@ export default function QuoteForm() {
                   {priceSuggest.winRate?.winPct != null
                     ? ` · 同類勝率 ${priceSuggest.winRate.winPct}%（${priceSuggest.winRate.accepted}/${priceSuggest.winRate.decided}）`
                     : ""}
+                  {form.leadSource
+                    ? ` · 來源 ${form.leadSource}`
+                    : " · 未選來源"}
                 </div>
+                {priceSuggest.leadSourceContext?.note && (
+                  <div className="text-[11px]" style={{ color: "rgba(232,224,208,0.75)" }}>
+                    {priceSuggest.leadSourceContext.note}
+                    {priceSuggest.platformWinRate?.winPct != null
+                      ? ` 該平台勝率 ${priceSuggest.platformWinRate.winPct}%（${priceSuggest.platformWinRate.accepted}/${priceSuggest.platformWinRate.decided}）。`
+                      : ""}
+                    {priceSuggest.platformAvgOverBudgetOnPriceRejects != null
+                      ? ` 該平台價拒平均高出預算約 HK$${priceSuggest.platformAvgOverBudgetOnPriceRejects.toLocaleString("en-HK")}。`
+                      : ""}
+                  </div>
+                )}
+                {!form.leadSource && (
+                  <div className="text-[11px]" style={{ color: "#fbbf24" }}>
+                    請先選「詢價來源」：HelloToby／PRO360 偏低預算；Google 偏中上，建議價會跟住調。
+                  </div>
+                )}
                 {priceSuggest.confidence === "advisory" && (
                   <div className="text-[11px]" style={{ color: "#fbbf24" }}>
                     僅供參考 — 樣本仍少，唔好直接當開價。

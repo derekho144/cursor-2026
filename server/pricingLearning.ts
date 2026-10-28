@@ -47,6 +47,10 @@ import {
   pricingLearningStartAtIso,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
+import {
+  applySoftFactorToAmount,
+  resolvePlatformSuggestRows,
+} from "../shared/pricingLeadSourcePolicy";
 
 const MIN_BUCKET_SAMPLES = 2;
 
@@ -92,6 +96,8 @@ export interface PricingLearningQuoteRow {
   rejectedBudgetMax: number | null;
   rejectedCompetitorPrice: number | null;
   priceRelatedReject: boolean;
+  /** Quote form 詢價來源（HelloToby / PRO360 / Google / …） */
+  leadSource: string | null;
 }
 
 function bucketStats<T extends string>(
@@ -162,6 +168,7 @@ async function loadLearningQuotesWithItems(opts?: {
       rejectedReason: quotes.rejectedReason,
       rejectedBudgetMax: quotes.rejectedBudgetMax,
       rejectedCompetitorPrice: quotes.rejectedCompetitorPrice,
+      leadSource: quotes.leadSource,
     })
     .from(quotes)
     .where(and(...conditions))
@@ -298,6 +305,7 @@ async function loadLearningQuotesWithItems(opts?: {
           ? Number(q.rejectedCompetitorPrice)
           : null,
       priceRelatedReject: !!reasonDef?.priceRelated,
+      leadSource: q.leadSource?.trim() ? q.leadSource.trim() : null,
     } satisfies PricingLearningQuoteRow;
   });
 }
@@ -816,6 +824,8 @@ export async function suggestPriceFromLearning(input: {
   crewSize?: number | null;
   shotCount?: number | null;
   durationPackage?: string | null;
+  /** Quote form 詢價來源 — adjusts mid/packages by platform budget skew */
+  leadSource?: string | null;
 }) {
   const allRows = await loadLearningQuotesWithItems({
     serviceType: input.serviceType,
@@ -886,8 +896,16 @@ export async function suggestPriceFromLearning(input: {
       (targetCrew == null || targetCrew === "unknown" || r.hasStructuredCrew)
     );
   });
-  const useRows =
+  // Confidence / show gate stays on fundamentals slice (hours/crew/shots).
+  const fundamentalsRows =
     structuredMatched.length >= MIN_BUCKET_SAMPLES ? structuredMatched : matched;
+
+  const platformPick = resolvePlatformSuggestRows({
+    matchedAccepted: fundamentalsRows,
+    leadSource: input.leadSource,
+  });
+  const useRows = platformPick.rows;
+  const softFactor = platformPick.softFactor;
 
   const summary = summarizeTotals(useRows.map((r) => r.total));
   const weightedMid = timeWeightedMedian(
@@ -898,7 +916,7 @@ export async function suggestPriceFromLearning(input: {
     .map((r) => r.features.pricePerHour)
     .filter((n): n is number => n != null && n > 0);
   const perHour = summarizeTotals(perHourVals);
-  const hoursHint =
+  const hoursHintRaw =
     input.hours != null && input.hours > 0 && perHour.count >= MIN_BUCKET_SAMPLES
       ? Math.round(perHour.p50 * input.hours)
       : null;
@@ -907,46 +925,75 @@ export async function suggestPriceFromLearning(input: {
     .map((r) => r.features.pricePerShot)
     .filter((n): n is number => n != null && n > 0);
   const perShot = summarizeTotals(perShotVals);
-  const shotsHint =
+  const shotsHintRaw =
     input.shotCount != null &&
     input.shotCount > 0 &&
     perShot.count >= MIN_BUCKET_SAMPLES
       ? Math.round(perShot.p50 * input.shotCount)
       : null;
 
-  const mid = weightedMid ?? summary.p50;
-  const structuredInUse = useRows.filter((r) => {
+  const midRaw = weightedMid ?? summary.p50;
+  const mid = applySoftFactorToAmount(midRaw, softFactor) ?? midRaw;
+  const low = applySoftFactorToAmount(summary.p25, softFactor) ?? summary.p25;
+  const high = applySoftFactorToAmount(summary.p75, softFactor) ?? summary.p75;
+  const hoursHint = applySoftFactorToAmount(hoursHintRaw, softFactor);
+  const shotsHint = applySoftFactorToAmount(shotsHintRaw, softFactor);
+
+  // Trust uses fundamentals sample size so platform filter doesn't hide suggestions.
+  const fundamentalsSummary = summarizeTotals(
+    fundamentalsRows.map((r) => r.total)
+  );
+  const structuredInFundamentals = fundamentalsRows.filter((r) => {
     if (mode === "shot_count") return r.hasStructuredShotCount;
     return r.hasStructuredHours && r.hasStructuredCrew;
   }).length;
 
   const trust = evaluateSuggestConfidence({
-    acceptedCount: summary.count,
-    structuredCount: structuredInUse,
+    acceptedCount: fundamentalsSummary.count,
+    structuredCount: structuredInFundamentals,
   });
 
+  const standardNote =
+    platformPick.scope === "exact"
+      ? `對齊「${platformPick.leadSource}」成交中位`
+      : platformPick.scope === "tier"
+        ? platformPick.tier === "low"
+          ? "對齊低預算平台成交中位（HelloToby／PRO360）"
+          : "對齊中上預算平台成交中位（Google）"
+        : platformPick.scope === "global_adjusted"
+          ? platformPick.tier === "low"
+            ? "整體中位再按低預算平台微調偏低"
+            : "整體中位再按 Google 中上預算微調偏高"
+          : "對齊歷史成交中位";
+
   const packages =
-    trust.showSuggestion && summary.count >= SUGGEST_TRUST.MIN_SHOW_ACCEPTED
+    trust.showSuggestion &&
+    fundamentalsSummary.count >= SUGGEST_TRUST.MIN_SHOW_ACCEPTED
       ? {
           essential: {
             label: "Essential（減範圍保質素）",
-            mid: summary.p25,
-            note: "縮時數／張數／人手，唔減每小時質素標價",
+            mid: low,
+            note:
+              platformPick.tier === "low"
+                ? "低預算平台優先：縮範圍保質素，唔好死跟高檔"
+                : "縮時數／張數／人手，唔減每小時質素標價",
           },
           standard: {
             label: "Standard（成交帶）",
             mid,
-            note: "對齊歷史成交中位",
+            note: standardNote,
           },
           coverage: {
             label: "Coverage（完整覆蓋）",
-            mid: summary.p75,
+            mid: high,
             note:
-              durationPkg === "half_day" ||
-              durationPkg === "full_day" ||
-              durationPkg === "multi_day"
-                ? "長套餐建議日費思維；高檔勝率通常較低"
-                : "加人／加時完整方案",
+              platformPick.tier === "mid_high"
+                ? "Google 客較能接受完整覆蓋；仍要對成本底線"
+                : durationPkg === "half_day" ||
+                    durationPkg === "full_day" ||
+                    durationPkg === "multi_day"
+                  ? "長套餐建議日費思維；高檔勝率通常較低"
+                  : "加人／加時完整方案",
           },
         }
       : null;
@@ -960,12 +1007,30 @@ export async function suggestPriceFromLearning(input: {
   const win = winRateStats(winPool);
   const durationWin = buildWinAnalytics(allRows).byDuration;
 
+  const platformWinPool = platformPick.leadSource
+    ? allRows.filter((r) => r.leadSource === platformPick.leadSource)
+    : [];
+  const platformWin =
+    platformWinPool.length >= 3 ? winRateStats(platformWinPool) : null;
+
   const priceRejects = allRows.filter(
     (r) => r.status === "rejected" && r.priceRelatedReject
   );
   const avgOverBudget =
     (() => {
       const gaps = priceRejects
+        .filter((r) => r.rejectedBudgetMax != null && r.rejectedBudgetMax! > 0)
+        .map((r) => r.total - r.rejectedBudgetMax!);
+      if (gaps.length < 2) return null;
+      return Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+    })();
+
+  const platformRejects = platformPick.leadSource
+    ? priceRejects.filter((r) => r.leadSource === platformPick.leadSource)
+    : [];
+  const platformAvgOverBudget =
+    (() => {
+      const gaps = platformRejects
         .filter((r) => r.rejectedBudgetMax != null && r.rejectedBudgetMax! > 0)
         .map((r) => r.total - r.rejectedBudgetMax!);
       if (gaps.length < 2) return null;
@@ -985,9 +1050,13 @@ export async function suggestPriceFromLearning(input: {
       shotCount: input.shotCount ?? null,
       shotCountBucket: targetShots,
       durationPackage: durationPkg,
+      leadSource: platformPick.leadSource,
+      leadBudgetTier: platformPick.tier,
+      platformScope: platformPick.scope,
     },
-    sampleCount: summary.count,
-    structuredCount: structuredInUse,
+    sampleCount: fundamentalsSummary.count,
+    platformSampleCount: useRows.length,
+    structuredCount: structuredInFundamentals,
     preferredStructured: structuredMatched.length >= MIN_BUCKET_SAMPLES,
     confidence: trust.confidence,
     confidenceLabel: trust.label,
@@ -997,26 +1066,36 @@ export async function suggestPriceFromLearning(input: {
     suggestion:
       trust.showSuggestion
         ? {
-            low: summary.p25,
+            low,
             mid,
-            high: summary.p75,
-            avg: summary.avg,
+            high,
+            avg: applySoftFactorToAmount(summary.avg, softFactor) ?? summary.avg,
             fromPerHour: hoursHint,
             fromPerShot: shotsHint,
           }
         : null,
     packages,
     winRate: win,
+    platformWinRate: platformWin,
     durationWinRates: durationWin,
     avgOverBudgetOnPriceRejects: avgOverBudget,
+    platformAvgOverBudgetOnPriceRejects: platformAvgOverBudget,
+    leadSourceContext: {
+      leadSource: platformPick.leadSource,
+      tier: platformPick.tier,
+      scope: platformPick.scope,
+      platformAcceptedCount: platformPick.platformAcceptedCount,
+      softFactor,
+      note: platformPick.note,
+    },
     costFloorNote:
       "唔好為成交砍穿成本底線；客人嫌貴優先出 Essential（減範圍），唔係減質素時薪。",
     note: trust.showSuggestion
       ? `${trust.note}${
-          useRows.length < rows.length
-            ? ` 已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選至 ${useRows.length} / ${rows.length} 筆。`
+          fundamentalsRows.length < rows.length
+            ? ` 已按${mode === "shot_count" ? "張數" : "時長／時數／人手"}篩選至 ${fundamentalsRows.length} / ${rows.length} 筆。`
             : ""
-        }`
+        } ${platformPick.note}`
       : trust.note,
     comparables: useRows.slice(0, 8).map((r) => ({
       id: r.id,
@@ -1027,6 +1106,7 @@ export async function suggestPriceFromLearning(input: {
       durationPackage: r.durationPackage,
       crewLabel: r.features.crewLabel,
       clientName: r.clientCompany || r.clientName,
+      leadSource: r.leadSource,
       structured:
         r.hasStructuredHours ||
         r.hasStructuredCrew ||

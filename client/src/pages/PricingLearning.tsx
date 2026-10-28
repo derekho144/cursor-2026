@@ -169,6 +169,7 @@ export default function PricingLearning() {
   const [crewSize, setCrewSize] = useState<string>("");
   const [shotCount, setShotCount] = useState<string>("");
   const [durationPackage, setDurationPackage] = useState<string>("");
+  const [leadSource, setLeadSource] = useState<string>("");
 
   const pricingMode = quotePricingMode(serviceType);
 
@@ -212,6 +213,7 @@ export default function PricingLearning() {
         durationPackage === "multi_day"
           ? (durationPackage as any)
           : null,
+      leadSource: leadSource || null,
     },
     { enabled: !!serviceType, refetchOnWindowFocus: false }
   );
@@ -254,6 +256,7 @@ export default function PricingLearning() {
             {overview?.learningScopeNote ??
               "只計指定日期起：開單日或拍攝日任一達標即納入；兩者都早過起點嘅舊單唔作學習參考。"}
             「其他」服務類型不計入學習。新單請填齊時長套餐、時數／張數、人手；拒絕時填原因＋預算。
+            出價亦會視乎詢價來源：HelloToby／PRO360 偏低預算；Google 偏中上。
           </p>
         </div>
 
@@ -636,7 +639,7 @@ export default function PricingLearning() {
           >
             出價建議（依歷史成交）
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <div className="text-xs text-muted-foreground mb-1.5">拍攝類型</div>
               <Select value={serviceType} onValueChange={setServiceType}>
@@ -649,6 +652,28 @@ export default function PricingLearning() {
                       {SERVICE_LABELS[t] ?? t}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1.5">詢價來源</div>
+              <Select
+                value={leadSource || "none"}
+                onValueChange={(v) => setLeadSource(v === "none" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="不指定" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">不指定（整體）</SelectItem>
+                  <SelectItem value="HelloToby">HelloToby（偏低預算）</SelectItem>
+                  <SelectItem value="PRO360">PRO360（偏低預算）</SelectItem>
+                  <SelectItem value="Google">Google（中上預算）</SelectItem>
+                  <SelectItem value="FreelanceHunter">FreelanceHunter</SelectItem>
+                  <SelectItem value="Organic">Organic</SelectItem>
+                  <SelectItem value="AI">AI</SelectItem>
+                  <SelectItem value="Referral">朋友介紹</SelectItem>
+                  <SelectItem value="Website">Website</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -754,6 +779,9 @@ export default function PricingLearning() {
                   {suggestion.winRate?.winPct != null && (
                     <div className="text-xs text-muted-foreground mt-1">
                       勝率約 {suggestion.winRate.winPct}%
+                      {suggestion.platformWinRate?.winPct != null
+                        ? ` · 該平台 ${suggestion.platformWinRate.winPct}%`
+                        : ""}
                     </div>
                   )}
                 </div>
@@ -783,6 +811,11 @@ export default function PricingLearning() {
                   <div className="text-muted-foreground mt-1">{pkg.note}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {suggestion?.leadSourceContext?.note && (
+            <div className="text-xs" style={{ color: "rgba(212,168,67,0.85)" }}>
+              {suggestion.leadSourceContext.note}
             </div>
           )}
           {suggestion?.note && suggestion.suggestion && (
