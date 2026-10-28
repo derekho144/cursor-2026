@@ -50,6 +50,14 @@ describe("quoteTemplates multi-select", () => {
     ]);
   });
 
+  it("seeds selectable package lines at qty 0 / price 0 for client choice", () => {
+    const items = mergeQuoteTemplateItems(["photoshoot"]);
+    const shoot = items.find((i) => i.description === "Event Photoshoot");
+    const transport = items.find((i) => i.description === "Transportation Fee");
+    expect(shoot).toMatchObject({ quantity: 0, unitPrice: 0 });
+    expect(transport).toMatchObject({ quantity: 1, unitPrice: 320 });
+  });
+
   it("picks photo_video extras when both photo templates are on", () => {
     const extras = extrasFromSelectedTemplates(["photoshoot", "photo_video"]);
     expect(extras.primaryTemplateId).toBe("photo_video");

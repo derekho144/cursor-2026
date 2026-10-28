@@ -418,6 +418,9 @@ function SortableQuoteItem({
   const categoryValue = item.category || "auto";
   const isSection = isQuoteSectionHeader(item.description);
   const isSectionBOption = isQuoteSectionBOptionItem(item.description);
+  const isClientChoiceOption =
+    !isSection && !(Number(item.quantity) > 0);
+  const showOptionHint = isSectionBOption || isClientChoiceOption;
   const canWaive = canToggleQuoteWaive(item);
   const isWaived = isQuoteWaivedPrice(
     Number(item.unitPrice),
@@ -446,9 +449,9 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
-          {isSectionBOption && (
+          {showOptionHint && (
             <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-              客戶可見：Option（可選項目，唔係套餐內含）
+              客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
             </div>
           )}
         </div>
@@ -514,9 +517,9 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
-            {isSectionBOption && (
+            {showOptionHint && (
               <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-                客戶可見：Option（可選項目，唔係套餐內含）
+                客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
               </div>
             )}
           </div>
@@ -1377,11 +1380,33 @@ export default function QuoteForm() {
       }
     }
 
-    // Warn if non-included items have $0 price (data quality reminder)
-    const zeroItems = form.items.filter((i) => !i.isIncluded && i.unitPrice === 0 && i.description.trim());
-    if (zeroItems.length > 0) {
-      const names = zeroItems.map((i) => i.description).join('、');
-      toast(`提示：以下項目金額為 $0，已記錄為免費服務：${names}`, { icon: 'ℹ️', duration: 5000 });
+    // Qty 0 + $0 = client-choice Option (not free). Qty > 0 + $0 = included/free reminder.
+    const optionItems = form.items.filter(
+      (i) =>
+        !i.isIncluded &&
+        Number(i.unitPrice) === 0 &&
+        !(Number(i.quantity) > 0) &&
+        i.description.trim() &&
+        !isQuoteSectionHeader(i.description)
+    );
+    const freeItems = form.items.filter(
+      (i) =>
+        !i.isIncluded &&
+        Number(i.unitPrice) === 0 &&
+        Number(i.quantity) > 0 &&
+        i.description.trim()
+    );
+    if (optionItems.length > 0) {
+      toast(
+        `提示：以下項目數量／單價為 0，客戶可見為 Option（待揀）：${optionItems.map((i) => i.description).join("、")}`,
+        { icon: "ℹ️", duration: 5000 }
+      );
+    }
+    if (freeItems.length > 0) {
+      toast(
+        `提示：以下項目金額為 $0，已記錄為免費／套餐內含：${freeItems.map((i) => i.description).join("、")}`,
+        { icon: "ℹ️", duration: 5000 }
+      );
     }
 
     let resolvedClientId = form.clientId;

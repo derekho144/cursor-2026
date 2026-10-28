@@ -121,8 +121,8 @@ export function resolveQuotePriceDisplay(item: {
   const unitPrice = Number(item.unitPrice);
   const amount = Number(item.amount);
 
-  // Unselected Section B option (qty 0): never treat as waived strikethrough
-  if (isQuoteSectionBOptionItem(desc) && !(qty > 0)) {
+  // Any unselected line (qty 0): client-choice menu — never Included / waived
+  if (!(qty > 0) && !isQuoteSectionHeader(desc)) {
     if (isQuoteTbdPrice(desc, unitPrice)) return "tbd";
     if (unitPrice > 0) return "money"; // show list price; amount stays 0
     return "option";

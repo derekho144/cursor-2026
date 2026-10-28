@@ -92,6 +92,22 @@ describe("quoteSectionB", () => {
   it("renders Section B $0 lines as Option, not Included", () => {
     expect(
       resolveQuotePriceDisplay({
+        description: "Event Photoshoot (4 hours) 1p",
+        quantity: 0,
+        unitPrice: 0,
+        amount: 0,
+      })
+    ).toBe("option");
+    expect(
+      resolveQuotePriceDisplay({
+        description: "Event Photoshoot (4 hours) 1p",
+        quantity: 0,
+        unitPrice: 3200,
+        amount: 0,
+      })
+    ).toBe("money");
+    expect(
+      resolveQuotePriceDisplay({
         description: "B1 拍攝前期策劃（Option）",
         quantity: 0,
         unitPrice: 0,

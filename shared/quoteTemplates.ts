@@ -34,11 +34,12 @@ export const QUOTE_TEMPLATES: QuoteTemplateDef[] = [
     equipment: TEMPLATE_DEFAULT_EQUIPMENT,
     deliveryMethod: TEMPLATE_DEFAULT_PHOTO_DELIVERY,
     items: [
-      { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
+      // Qty/price 0 = client-choice menu until operator selects & prices a line
+      { description: "Event Photoshoot", quantity: 0, unitPrice: 0 },
       {
         description:
           "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)",
-        quantity: 1,
+        quantity: 0,
         unitPrice: 0,
       },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
@@ -50,18 +51,18 @@ export const QUOTE_TEMPLATES: QuoteTemplateDef[] = [
     equipment: TEMPLATE_DEFAULT_EQUIPMENT,
     deliveryMethod: `Photo: ${TEMPLATE_DEFAULT_PHOTO_DELIVERY} | ${TEMPLATE_DEFAULT_VIDEO_DELIVERY}`,
     items: [
-      { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
+      { description: "Short Film Video Production", quantity: 0, unitPrice: 0 },
       {
         description:
           "Post-Production (Video Editing 1min, Color Grading, Background Mixing)",
-        quantity: 1,
+        quantity: 0,
         unitPrice: 0,
       },
-      { description: "Event Photoshoot", quantity: 1, unitPrice: 0 },
+      { description: "Event Photoshoot", quantity: 0, unitPrice: 0 },
       {
         description:
           "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)",
-        quantity: 1,
+        quantity: 0,
         unitPrice: 0,
       },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },
@@ -73,11 +74,11 @@ export const QUOTE_TEMPLATES: QuoteTemplateDef[] = [
     equipment: TEMPLATE_DEFAULT_EQUIPMENT,
     deliveryMethod: TEMPLATE_DEFAULT_VIDEO_DELIVERY,
     items: [
-      { description: "Short Film Video Production", quantity: 1, unitPrice: 0 },
+      { description: "Short Film Video Production", quantity: 0, unitPrice: 0 },
       {
         description:
           "Post-Production (Video Editing 1min, Color Grading, Background Mixing)",
-        quantity: 1,
+        quantity: 0,
         unitPrice: 0,
       },
       { description: "Transportation Fee", quantity: 1, unitPrice: 320 },

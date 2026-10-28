@@ -102,6 +102,10 @@ export function reconcileHourlyQuoteItems<T extends QuoteItemQuantityLike>(
     const qty = Number(item.quantity) || 0;
     const unitPrice = Number(item.unitPrice) || 0;
 
+    // Qty 0 = unselected client-choice / menu option — never rewrite to hours.
+    // Unit price 0 = not yet priced for selection — leave qty alone.
+    if (!(qty > 0) || !(unitPrice > 0)) return item;
+
     if (looksLikeFlatPackageLineItem(item, hours)) {
       // Undo mistaken "qty = hours" on package add-ons (e.g. PhotoBooth 2小時).
       if (qty !== 1 && qty === hours) {

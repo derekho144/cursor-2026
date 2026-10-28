@@ -151,6 +151,39 @@ describe("reconcileHourlyQuoteItems", () => {
     expect(items[0].quantity).toBe(0);
   });
 
+  it("preserves qty 0 client-choice lines even when description has hours", () => {
+    const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
+      {
+        description: "Event Photoshoot (4 hours) 1p",
+        quantity: 0,
+        unitPrice: 0,
+        amount: 0,
+      },
+      {
+        description: "Event Photoshoot (4 hours) 1p",
+        quantity: 0,
+        unitPrice: 3200,
+        amount: 0,
+      },
+    ]);
+    expect(adjustments).toHaveLength(0);
+    expect(items[0]).toMatchObject({ quantity: 0, unitPrice: 0, amount: 0 });
+    expect(items[1]).toMatchObject({ quantity: 0, unitPrice: 3200, amount: 0 });
+  });
+
+  it("does not rewrite qty when unit price is still 0", () => {
+    const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
+      {
+        description: "Event Photoshoot (4 hours) 1p",
+        quantity: 1,
+        unitPrice: 0,
+        amount: 0,
+      },
+    ]);
+    expect(adjustments).toHaveLength(0);
+    expect(items[0].quantity).toBe(1);
+  });
+
   it("keeps Section B option quantities at 0 (does not treat 12小時內 as shoot hours)", () => {
     const { items, adjustments } = reconcileHourlyQuoteItems("corporate_event", [
       {
