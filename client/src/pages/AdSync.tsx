@@ -1216,9 +1216,11 @@ export default function AdSync() {
                       <CheckCircle2 className="h-3 w-3" style={{ color: "#4caf50" }} />
                       <span style={{ color: "#4caf50" }}>
                         已授權
-                        {gscConnQuery.data.hasJdstudio
-                          ? "（已見 jdstudiohk.com property）"
-                          : "（請確認 GSC 已加入 jdstudiohk.com）"}
+                        {gscConnQuery.data.siteUrl
+                          ? `（${gscConnQuery.data.siteUrl}${gscConnQuery.data.queryOk === false ? " · 查詢失敗請重新授權" : ""}）`
+                          : gscConnQuery.data.hasJdstudio
+                            ? "（已見 jdstudiohk.com property）"
+                            : "（請確認 GSC 已加入 jdstudiohk.com）"}
                       </span>
                     </>
                   ) : (

@@ -106,23 +106,20 @@ async function main() {
   const afterSpec = args.includes("--after")
     ? args[args.indexOf("--after") + 1]
     : undefined;
-  const before = parseWindow(beforeSpec, ["2026-09-14", "2026-09-20"]);
-  const after = parseWindow(afterSpec, ["2026-09-23", "2026-09-29"]);
+  // Defaults aligned with Oct 2026 AEO/GEO pack wave
+  const before = parseWindow(beforeSpec, ["2026-09-22", "2026-09-28"]);
+  const after = parseWindow(afterSpec, ["2026-10-08", "2026-10-14"]);
 
   const sites = await listGscSites();
   console.log("# GSC sites");
   for (const s of sites) console.log(`- ${s.siteUrl} (${s.permissionLevel ?? "?"})`);
 
-  let siteUrl = DEFAULT_GSC_SITE_URL;
-  const preferred =
-    sites.find((s) => s.siteUrl === "sc-domain:jdstudiohk.com") ||
-    sites.find((s) => s.siteUrl.includes("www.jdstudiohk.com")) ||
-    sites.find((s) => s.siteUrl.includes("jdstudiohk.com"));
-  if (preferred?.siteUrl) siteUrl = preferred.siteUrl;
+  const { resolveGscSiteUrl } = await import("../server/googleSearchConsole");
+  const siteUrl = resolveGscSiteUrl(sites);
   console.log(`\nUsing siteUrl: ${siteUrl}`);
 
-  const a = await windowReport("A before AEO window", before[0], before[1], siteUrl);
-  const b = await windowReport("B after AEO window", after[0], after[1], siteUrl);
+  const a = await windowReport("A before AEO (pre packs)", before[0], before[1], siteUrl);
+  const b = await windowReport("B this week (post AEO)", after[0], after[1], siteUrl);
 
   const dClick = b.site.clicks - a.site.clicks;
   const dImpr = b.site.impressions - a.site.impressions;
