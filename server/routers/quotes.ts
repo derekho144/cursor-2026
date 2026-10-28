@@ -41,7 +41,7 @@ import {
   isQuoteLineItemCategory,
   type QuoteLineItemCategory,
 } from "../../shared/quoteLineItemKind";
-import { computeQuoteDiscountAmount } from "../../shared/quoteDiscount";
+import { computeQuoteTotalsFromItems } from "../../shared/quoteTotals";
 import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
@@ -195,45 +195,46 @@ function reconcileQuoteItemsAndTotals(
   const normalized = items.map((it) => {
     const quantity = Number(it.quantity) || 0;
     const unitPrice = Number(it.unitPrice) || 0;
+    const rawAmount = Number(it.amount);
+    // Keep explicit amount (incl. waived 0) — never force qty×price here.
+    const amount = Number.isFinite(rawAmount)
+      ? rawAmount
+      : quantity * unitPrice;
     return {
       ...it,
       quantity,
       unitPrice,
-      amount: Number(it.amount ?? quantity * unitPrice),
+      amount,
     };
   });
   const { items: reconciled, adjustments } = reconcileHourlyQuoteItems(
     serviceType,
     normalized
   );
-  if (adjustments.length === 0) {
-    return { items: normalized, ...totals, adjustments };
+  if (adjustments.length > 0) {
+    console.log(
+      "[Quotes] Hourly quantity reconcile:",
+      adjustments
+        .map(
+          (a) =>
+            `${a.description.slice(0, 48)}: qty ${a.previousQuantity}→${a.nextQuantity}`
+        )
+        .join("; ")
+    );
   }
 
-  console.log(
-    "[Quotes] Hourly quantity reconcile:",
-    adjustments
-      .map(
-        (a) =>
-          `${a.description.slice(0, 48)}: qty ${a.previousQuantity}→${a.nextQuantity}`
-      )
-      .join("; ")
+  // Always derive money from line amounts (waive-safe). Client totals are hints only.
+  const money = computeQuoteTotalsFromItems(
+    reconciled,
+    totals.discountPercent || 0
   );
-
-  const subtotal =
-    Math.round(
-      reconciled.reduce(
-        (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0),
-        0
-      ) * 100
-    ) / 100;
-  // Same rule as QuoteForm: % discount excludes transport / rush fees
-  const discountAmount =
-    totals.discountPercent > 0
-      ? computeQuoteDiscountAmount(reconciled, totals.discountPercent)
-      : totals.discountAmount;
-  const total = Math.round((subtotal - discountAmount) * 100) / 100;
-  return { items: reconciled, subtotal, discountAmount, total, adjustments };
+  return {
+    items: reconciled,
+    subtotal: money.subtotal,
+    discountAmount: money.discountAmount,
+    total: money.total,
+    adjustments,
+  };
 }
 
 // ─── Background PDF Pre-generation ───────────────────────────────────

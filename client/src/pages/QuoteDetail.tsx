@@ -18,6 +18,10 @@ import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import { QUOTE_REJECT_REASONS } from "@shared/quoteRejectReasons";
 import { durationPackageLabel, resolveDurationPackage } from "@shared/quoteDurationPackage";
 import { leadSourceLabel } from "@shared/leadChannels";
+import {
+  computeQuoteTotalsFromItems,
+  quoteMoneyDiffers,
+} from "@shared/quoteTotals";
 
 const DEFAULT_EMAIL_BODY = `Hello,
 
@@ -394,6 +398,21 @@ export default function QuoteDetail() {
   }
 
   const statusInfo = STATUS_CONFIG[quote.status] ?? { label: quote.status, color: "#888" };
+
+  // Prefer line-item amounts when stored header totals drifted (waive / hourly reconcile bugs).
+  const fromItemsTotals = computeQuoteTotalsFromItems(
+    quote.items ?? [],
+    Number((quote as any).discountPercent) || 0
+  );
+  const storedTotal = Number(quote.total) || 0;
+  const totalsHealed = quoteMoneyDiffers(fromItemsTotals.total, storedTotal);
+  const displaySubtotal = totalsHealed
+    ? fromItemsTotals.subtotal
+    : Number(quote.subtotal) || fromItemsTotals.subtotal;
+  const displayDiscountAmount = totalsHealed
+    ? fromItemsTotals.discountAmount
+    : Number(quote.discountAmount) || 0;
+  const displayTotal = totalsHealed ? fromItemsTotals.total : storedTotal;
 
   return (
     <DashboardLayout>
@@ -780,16 +799,21 @@ export default function QuoteDetail() {
           {/* Totals */}
           <div style={{ padding: "24px", background: "#111111", display: "flex", justifyContent: "flex-end" }}>
             <div className="w-56 space-y-2">
+              {totalsHealed && (
+                <div className="text-[10px] leading-snug pb-1" style={{ color: "#64b5f6" }}>
+                  已按項目金額重算（資料庫總計曾為 HKD {storedTotal.toLocaleString()}）。編輯儲存後會永久對齊。
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">小計</span>
-                <span>HKD {Number(quote.subtotal).toLocaleString()}</span>
+                <span>HKD {displaySubtotal.toLocaleString()}</span>
               </div>
-              {Number(quote.discountAmount) > 0 && (
+              {displayDiscountAmount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
                     折扣{Number((quote as any).discountPercent) > 0 ? ` (${Number((quote as any).discountPercent)}%)` : ""}
                   </span>
-                  <span>- HKD {Number(quote.discountAmount).toLocaleString()}</span>
+                  <span>- HKD {displayDiscountAmount.toLocaleString()}</span>
                 </div>
               )}
               <div
@@ -797,7 +821,7 @@ export default function QuoteDetail() {
                 style={{ borderTop: "1px solid #d4a843", color: "#d4a843" }}
               >
                 <span>總計 ({quote.currency})</span>
-                <span>HKD {Number(quote.total).toLocaleString()}</span>
+                <span>HKD {displayTotal.toLocaleString()}</span>
               </div>
               {/* Deposit — supports both percent and fixed amount modes */}
               {(() => {
@@ -808,9 +832,9 @@ export default function QuoteDetail() {
                 if (!hasDeposit) return null;
                 const depositAmt = depositMode === "fixed"
                   ? depositFixedAmt
-                  : Number(quote.total) * depositPct / 100;
-                const netAmt = Number(quote.total) - depositAmt;
-                const isFullPayment = depositAmt >= Number(quote.total);
+                  : displayTotal * depositPct / 100;
+                const netAmt = displayTotal - depositAmt;
+                const isFullPayment = depositAmt >= displayTotal;
                 const depositLabel = depositMode === "fixed"
                   ? `訂金 (HKD ${depositAmt.toLocaleString('en-HK')})`
                   : `訂金 (${depositPct}%)`;

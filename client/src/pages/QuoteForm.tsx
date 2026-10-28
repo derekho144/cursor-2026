@@ -55,6 +55,10 @@ import {
   discountableQuoteSubtotal,
 } from "@shared/quoteDiscount";
 import {
+  computeQuoteTotalsFromItems,
+  quoteMoneyDiffers,
+} from "@shared/quoteTotals";
+import {
   applySectionBForServiceType,
   canToggleQuoteWaive,
   hasConditionalSectionB,
@@ -233,6 +237,112 @@ const emptyForm: FormData = {
 function strOrEmpty(v: unknown): string {
   if (v == null) return "";
   return String(v);
+}
+
+type EditDraftEnvelope = {
+  v: 1;
+  serverUpdatedAt: string | null;
+  savedAt: string;
+  form: FormData;
+};
+
+function parseEditDraft(raw: string | null): EditDraftEnvelope | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.v === 1 && parsed.form && typeof parsed.form === "object") {
+      return {
+        v: 1,
+        serverUpdatedAt:
+          parsed.serverUpdatedAt != null ? String(parsed.serverUpdatedAt) : null,
+        savedAt: String(parsed.savedAt ?? ""),
+        form: parsed.form as FormData,
+      };
+    }
+    // Legacy: bare FormData blob
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.items)) {
+      return {
+        v: 1,
+        serverUpdatedAt: null,
+        savedAt: "",
+        form: parsed as FormData,
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function formDataFromExistingQuote(existingQuote: any): FormData {
+  return normalizeFormData({
+    clientName: existingQuote.clientName,
+    clientEmail: existingQuote.clientEmail ?? "",
+    clientPhone: existingQuote.clientPhone ?? "",
+    clientCompany: existingQuote.clientCompany ?? "",
+    serviceType: existingQuote.serviceType,
+    shootingDate: existingQuote.shootingDate ?? "",
+    shootingLocation: existingQuote.shootingLocation ?? "",
+    notes: existingQuote.notes ?? "",
+    discountPercent: Number(existingQuote.discountPercent ?? 0),
+    discountAmount: Number(existingQuote.discountAmount),
+    depositPercent: Number(existingQuote.depositPercent ?? 50),
+    depositMode: (existingQuote.depositMode ?? "percent") as "percent" | "fixed",
+    depositFixedAmount: Number(existingQuote.depositFixedAmount ?? 0),
+    currency: existingQuote.currency,
+    validUntil: existingQuote.validUntil ?? "",
+    clientId: existingQuote.clientId ?? undefined,
+    saveAsNewClient: false,
+    equipment: existingQuote.equipment ?? "",
+    team: existingQuote.team ?? "",
+    shootHours:
+      existingQuote.shootHours != null && Number(existingQuote.shootHours) > 0
+        ? String(Number(existingQuote.shootHours))
+        : "",
+    durationPackage:
+      existingQuote.durationPackage === "hours" ||
+      existingQuote.durationPackage === "half_day" ||
+      existingQuote.durationPackage === "full_day" ||
+      existingQuote.durationPackage === "multi_day"
+        ? (existingQuote.durationPackage as FormData["durationPackage"])
+        : "",
+    shotCount:
+      existingQuote.shotCount != null && Number(existingQuote.shotCount) > 0
+        ? String(Number(existingQuote.shotCount))
+        : "",
+    crewPhotographers: Number(existingQuote.crewPhotographers ?? 0),
+    crewAssistants: Number(existingQuote.crewAssistants ?? 0),
+    crewVideographers: Number(existingQuote.crewVideographers ?? 0),
+    crewOthers: Number(existingQuote.crewOthers ?? 0),
+    deliveryMethod: existingQuote.deliveryMethod ?? "",
+    leadSource: normalizeLeadSource(existingQuote.leadSource),
+    gclid: strOrEmpty(existingQuote.gclid),
+    gbraid: strOrEmpty(existingQuote.gbraid),
+    wbraid: strOrEmpty(existingQuote.wbraid),
+    utmSource: strOrEmpty(existingQuote.utmSource),
+    utmMedium: strOrEmpty(existingQuote.utmMedium),
+    utmCampaign: strOrEmpty(existingQuote.utmCampaign),
+    utmContent: strOrEmpty(existingQuote.utmContent),
+    utmTerm: strOrEmpty(existingQuote.utmTerm),
+    adsCampaignId: strOrEmpty(existingQuote.adsCampaignId),
+    adsCampaignName: strOrEmpty(existingQuote.adsCampaignName),
+    landingPageUrl: strOrEmpty(existingQuote.landingPageUrl),
+    whatsappClickId:
+      existingQuote.whatsappClickId != null &&
+      Number(existingQuote.whatsappClickId) > 0
+        ? Number(existingQuote.whatsappClickId)
+        : undefined,
+    items: (existingQuote.items ?? []).map((item: any) => ({
+      id: crypto.randomUUID(),
+      description: item.description,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+      amount: Number(item.amount),
+      category: isQuoteLineItemCategory(item.category)
+        ? (item.category as QuoteLineItemCategory)
+        : ("" as const),
+    })),
+  });
 }
 
 /** Merge saved drafts / partial payloads onto emptyForm so new fields never crash .trim(). */
@@ -647,7 +757,12 @@ export default function QuoteForm() {
   const [selectedTemplates, setSelectedTemplates] = useState<QuoteTemplateId[]>([]);
   // For edit mode: per-quote draft key
   const editDraftKey = isEdit && quoteId ? `quote_draft_edit_${quoteId}` : null;
-  const [hasEditDraft, setHasEditDraft] = useState(() => !!(editDraftKey && safeLSGet(editDraftKey)));
+  const [hasEditDraft, setHasEditDraft] = useState(false);
+  /** Parked local draft that differs from server — never auto-apply (was causing total mismatch). */
+  const [pendingEditDraft, setPendingEditDraft] = useState<EditDraftEnvelope | null>(
+    null
+  );
+  const [savedServerTotal, setSavedServerTotal] = useState<number | null>(null);
   // Track whether server data has been loaded (to avoid saving empty form before data arrives)
   const editFormLoadedRef = useRef(!isEdit);
   // Must wait for hydrate before rendering Selects — Radix Select throws if value="" with no matching item.
@@ -712,31 +827,42 @@ export default function QuoteForm() {
   const [showPhoneSuggestion, setShowPhoneSuggestion] = useState(false);
   const phoneRef = useRef<HTMLDivElement>(null);
 
+  // Stamped when edit form hydrates from server — used for draft envelopes
+  const serverUpdatedAtRef = useRef<string | null>(null);
   // Auto-save draft to localStorage on form change
   const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
     draftSaveTimerRef.current = setTimeout(() => {
       if (!isEdit) {
-        safeLSSet('quote_draft_new', JSON.stringify(form));
+        safeLSSet("quote_draft_new", JSON.stringify(form));
         setHasDraft(true);
       } else if (editDraftKey && editFormLoadedRef.current) {
         // Only save after server data has been loaded into the form
-        safeLSSet(editDraftKey, JSON.stringify(form));
+        const envelope: EditDraftEnvelope = {
+          v: 1,
+          serverUpdatedAt: serverUpdatedAtRef.current,
+          savedAt: new Date().toISOString(),
+          form,
+        };
+        safeLSSet(editDraftKey, JSON.stringify(envelope));
         setHasEditDraft(true);
       }
     }, 500); // debounce 500ms
-    return () => { if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current); };
+    return () => {
+      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
+    };
   }, [form, isEdit, editDraftKey]);
 
   // Clear draft on successful save
   const clearDraft = useCallback(() => {
-    safeLSRemove('quote_draft_new');
+    safeLSRemove("quote_draft_new");
     setHasDraft(false);
     if (editDraftKey) {
       safeLSRemove(editDraftKey);
       setHasEditDraft(false);
     }
+    setPendingEditDraft(null);
   }, [editDraftKey]);
 
   // Read clientId from URL query param (e.g. from ClientDetail page)
@@ -1041,110 +1167,68 @@ export default function QuoteForm() {
   const createClientMutation = trpc.clients.create.useMutation();
 
   useEffect(() => {
-    if (existingQuote) {
-      // Check if there's a saved edit draft for this quote
-      const savedEditDraft = editDraftKey ? safeLSGet(editDraftKey) : null;
-      if (savedEditDraft) {
-        try {
-          setForm(normalizeFormData(JSON.parse(savedEditDraft) as FormData));
-          const parsed = JSON.parse(savedEditDraft) as FormData;
-          if ((parsed as any).clientId && parsed.clientName) {
-            setSelectedClientName(parsed.clientName);
-          }
-          editFormLoadedRef.current = true;
-          setEditHydrated(true);
-          return; // Use saved draft instead of server data
-        } catch { /* fall through to server data */ }
-      }
-      // Load from server
-      setForm(normalizeFormData({
-        clientName: existingQuote.clientName,
-        clientEmail: existingQuote.clientEmail ?? "",
-        clientPhone: existingQuote.clientPhone ?? "",
-        clientCompany: existingQuote.clientCompany ?? "",
-        serviceType: existingQuote.serviceType,
-        shootingDate: existingQuote.shootingDate ?? "",
-        shootingLocation: existingQuote.shootingLocation ?? "",
-        notes: existingQuote.notes ?? "",
-        discountPercent: Number((existingQuote as any).discountPercent ?? 0),
-        discountAmount: Number(existingQuote.discountAmount),
-        depositPercent: Number((existingQuote as any).depositPercent ?? 50),
-        depositMode: ((existingQuote as any).depositMode ?? "percent") as "percent" | "fixed",
-        depositFixedAmount: Number((existingQuote as any).depositFixedAmount ?? 0),
-        currency: existingQuote.currency,
-        validUntil: existingQuote.validUntil ?? "",
-        clientId: (existingQuote as any).clientId ?? undefined,
-        saveAsNewClient: false,
-        equipment: (existingQuote as any).equipment ?? "",
-        team: (existingQuote as any).team ?? "",
-        shootHours:
-          (existingQuote as any).shootHours != null &&
-          Number((existingQuote as any).shootHours) > 0
-            ? String(Number((existingQuote as any).shootHours))
-            : "",
-        durationPackage:
-          (existingQuote as any).durationPackage === "hours" ||
-          (existingQuote as any).durationPackage === "half_day" ||
-          (existingQuote as any).durationPackage === "full_day" ||
-          (existingQuote as any).durationPackage === "multi_day"
-            ? ((existingQuote as any).durationPackage as FormData["durationPackage"])
-            : "",
-        shotCount:
-          (existingQuote as any).shotCount != null &&
-          Number((existingQuote as any).shotCount) > 0
-            ? String(Number((existingQuote as any).shotCount))
-            : "",
-        crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
-        crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
-        crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
-        crewOthers: Number((existingQuote as any).crewOthers ?? 0),
-        deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
-        leadSource: normalizeLeadSource((existingQuote as any).leadSource),
-        gclid: strOrEmpty((existingQuote as any).gclid),
-        gbraid: strOrEmpty((existingQuote as any).gbraid),
-        wbraid: strOrEmpty((existingQuote as any).wbraid),
-        utmSource: strOrEmpty((existingQuote as any).utmSource),
-        utmMedium: strOrEmpty((existingQuote as any).utmMedium),
-        utmCampaign: strOrEmpty((existingQuote as any).utmCampaign),
-        utmContent: strOrEmpty((existingQuote as any).utmContent),
-        utmTerm: strOrEmpty((existingQuote as any).utmTerm),
-        adsCampaignId: strOrEmpty((existingQuote as any).adsCampaignId),
-        adsCampaignName: strOrEmpty((existingQuote as any).adsCampaignName),
-        landingPageUrl: strOrEmpty((existingQuote as any).landingPageUrl),
-        whatsappClickId:
-          (existingQuote as any).whatsappClickId != null &&
-          Number((existingQuote as any).whatsappClickId) > 0
-            ? Number((existingQuote as any).whatsappClickId)
-            : undefined,
-        items: (existingQuote.items ?? []).map((item) => ({
-          id: crypto.randomUUID(),
-          description: item.description,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice),
-          amount: Number(item.amount),
-          category: isQuoteLineItemCategory((item as any).category)
-            ? ((item as any).category as QuoteLineItemCategory)
-            : ("" as const),
-        })),
-      }));
-      // Hydrate structured crew from Team XP line if DB crew empty
-      setForm((p) => {
-        if (crewHeadcount(p) > 0) return p;
-        const fromItems = crewFromTemplateItems(p.items);
-        if (crewHeadcount(fromItems) <= 0) return p;
-        const auto = buildTeamLabel(fromItems);
-        return {
-          ...p,
-          ...fromItems,
-          team: p.team.trim() || auto,
-        };
-      });
-      if ((existingQuote as any).clientId) {
-        setSelectedClientName(existingQuote.clientName);
-      }
-      editFormLoadedRef.current = true;
-      setEditHydrated(true);
+    if (!existingQuote) return;
+
+    // Always hydrate from server first (source of truth for detail ↔ edit totals).
+    const serverForm = formDataFromExistingQuote(existingQuote);
+    serverUpdatedAtRef.current =
+      (existingQuote as any).updatedAt != null
+        ? String((existingQuote as any).updatedAt)
+        : null;
+    setSavedServerTotal(Number(existingQuote.total) || 0);
+    setForm(serverForm);
+    setForm((p) => {
+      if (crewHeadcount(p) > 0) return p;
+      const fromItems = crewFromTemplateItems(p.items);
+      if (crewHeadcount(fromItems) <= 0) return p;
+      const auto = buildTeamLabel(fromItems);
+      return {
+        ...p,
+        ...fromItems,
+        team: p.team.trim() || auto,
+      };
+    });
+    if ((existingQuote as any).clientId) {
+      setSelectedClientName(existingQuote.clientName);
     }
+
+    // Park local draft if it still matches this server version and differs — never auto-apply.
+    const draft = editDraftKey ? parseEditDraft(safeLSGet(editDraftKey)) : null;
+    const serverUpdatedAt = serverUpdatedAtRef.current;
+    if (draft) {
+      const stale =
+        draft.serverUpdatedAt != null &&
+        serverUpdatedAt != null &&
+        draft.serverUpdatedAt !== serverUpdatedAt;
+      if (stale) {
+        safeLSRemove(editDraftKey!);
+        setPendingEditDraft(null);
+        setHasEditDraft(false);
+      } else {
+        const draftTotals = computeQuoteTotalsFromItems(
+          draft.form.items ?? [],
+          Number(draft.form.discountPercent) || 0
+        );
+        const serverTotals = computeQuoteTotalsFromItems(
+          serverForm.items,
+          Number(serverForm.discountPercent) || 0
+        );
+        if (quoteMoneyDiffers(draftTotals.total, serverTotals.total)) {
+          setPendingEditDraft(draft);
+          setHasEditDraft(true);
+        } else {
+          setPendingEditDraft(null);
+          // Keep ls in sync with envelope format; no conflict UI
+          setHasEditDraft(false);
+        }
+      }
+    } else {
+      setPendingEditDraft(null);
+      setHasEditDraft(false);
+    }
+
+    editFormLoadedRef.current = true;
+    setEditHydrated(true);
   }, [existingQuote, editDraftKey]);
 
   const createMutation = trpc.quotes.create.useMutation({
@@ -1557,82 +1641,76 @@ export default function QuoteForm() {
               </button>
             </div>
           )}
-          {isEdit && hasEditDraft && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs" style={{ color: "rgba(212,168,67,0.7)" }}>修改已自動儲存</span>
-              <button
-                onClick={() => {
-                  if (editDraftKey) { safeLSRemove(editDraftKey); setHasEditDraft(false); }
-                  if (existingQuote) {
-                    editFormLoadedRef.current = false;
-                    setForm(normalizeFormData({
-                      clientName: existingQuote.clientName,
-                      clientEmail: existingQuote.clientEmail ?? "",
-                      clientPhone: existingQuote.clientPhone ?? "",
-                      clientCompany: existingQuote.clientCompany ?? "",
-                      serviceType: existingQuote.serviceType,
-                      shootingDate: existingQuote.shootingDate ?? "",
-                      shootingLocation: existingQuote.shootingLocation ?? "",
-                      notes: existingQuote.notes ?? "",
-                      discountPercent: Number((existingQuote as any).discountPercent ?? 0),
-                      discountAmount: Number(existingQuote.discountAmount),
-                      depositPercent: Number((existingQuote as any).depositPercent ?? 50),
-                      depositMode: ((existingQuote as any).depositMode ?? "percent") as "percent" | "fixed",
-                      depositFixedAmount: Number((existingQuote as any).depositFixedAmount ?? 0),
-                      currency: existingQuote.currency,
-                      validUntil: existingQuote.validUntil ?? "",
-                      clientId: (existingQuote as any).clientId ?? undefined,
-                      saveAsNewClient: false,
-                      equipment: (existingQuote as any).equipment ?? "",
-                      team: (existingQuote as any).team ?? "",
-                      shootHours:
-                        (existingQuote as any).shootHours != null &&
-                        Number((existingQuote as any).shootHours) > 0
-                          ? String(Number((existingQuote as any).shootHours))
-                          : "",
-                      durationPackage:
-                        (existingQuote as any).durationPackage === "hours" ||
-                        (existingQuote as any).durationPackage === "half_day" ||
-                        (existingQuote as any).durationPackage === "full_day" ||
-                        (existingQuote as any).durationPackage === "multi_day"
-                          ? ((existingQuote as any)
-                              .durationPackage as FormData["durationPackage"])
-                          : "",
-                      shotCount:
-                        (existingQuote as any).shotCount != null &&
-                        Number((existingQuote as any).shotCount) > 0
-                          ? String(Number((existingQuote as any).shotCount))
-                          : "",
-                      crewPhotographers: Number((existingQuote as any).crewPhotographers ?? 0),
-                      crewAssistants: Number((existingQuote as any).crewAssistants ?? 0),
-                      crewVideographers: Number((existingQuote as any).crewVideographers ?? 0),
-                      crewOthers: Number((existingQuote as any).crewOthers ?? 0),
-                      deliveryMethod: (existingQuote as any).deliveryMethod ?? "",
-                      leadSource: normalizeLeadSource((existingQuote as any).leadSource),
-                      items: (existingQuote.items ?? []).map((item) => ({
-                        id: crypto.randomUUID(),
-                        description: item.description,
-                        quantity: Number(item.quantity),
-                        unitPrice: Number(item.unitPrice),
-                        amount: Number(item.amount),
-                        category: isQuoteLineItemCategory((item as any).category)
-                          ? ((item as any).category as QuoteLineItemCategory)
-                          : ("" as const),
-                      })),
-                    }));
-                    if ((existingQuote as any).clientId) setSelectedClientName(existingQuote.clientName);
-                    editFormLoadedRef.current = true;
-                    setEditHydrated(true);
-                  }
-                }}
-                className="text-xs px-2 py-0.5 rounded hover:opacity-70 transition-opacity"
-                style={{ border: "1px solid rgba(255,255,255,0.15)", color: "#888" }}
-              >
-                還原原始資料
-              </button>
+        </div>
+
+        {isEdit && pendingEditDraft && (
+          <div
+            className="flex flex-wrap items-center gap-2 rounded px-3 py-2 text-xs"
+            style={{
+              background: "rgba(245,166,35,0.1)",
+              border: "1px solid rgba(245,166,35,0.35)",
+              color: "#f5a623",
+            }}
+          >
+            <span>
+              偵測到本機未儲存草稿（草稿總計 HKD{" "}
+              {computeQuoteTotalsFromItems(
+                pendingEditDraft.form.items ?? [],
+                Number(pendingEditDraft.form.discountPercent) || 0
+              ).total.toLocaleString()}
+              ；已儲存 HKD {(savedServerTotal ?? 0).toLocaleString()}
+              ）。而家顯示已儲存版本。
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const draftForm = normalizeFormData(pendingEditDraft.form);
+                setForm(draftForm);
+                if (draftForm.clientId && draftForm.clientName) {
+                  setSelectedClientName(draftForm.clientName);
+                }
+                setPendingEditDraft(null);
+                setHasEditDraft(true);
+                toast("已套用本機草稿 — 記得儲存先會寫入伺服器");
+              }}
+              className="px-2 py-0.5 rounded hover:opacity-80"
+              style={{ border: "1px solid rgba(245,166,35,0.5)", color: "#f5a623" }}
+            >
+              套用草稿
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (editDraftKey) safeLSRemove(editDraftKey);
+                setPendingEditDraft(null);
+                setHasEditDraft(false);
+                toast.success("已丟棄本機草稿");
+              }}
+              className="px-2 py-0.5 rounded hover:opacity-80"
+              style={{ border: "1px solid rgba(255,255,255,0.2)", color: "#aaa" }}
+            >
+              丟棄草稿
+            </button>
+          </div>
+        )}
+
+        {isEdit &&
+          savedServerTotal != null &&
+          quoteMoneyDiffers(total, savedServerTotal) &&
+          !pendingEditDraft && (
+            <div
+              className="rounded px-3 py-2 text-xs"
+              style={{
+                background: "rgba(33,150,243,0.08)",
+                border: "1px solid rgba(33,150,243,0.3)",
+                color: "#64b5f6",
+              }}
+            >
+              項目加總 HKD {total.toLocaleString()} 同詳情頁已儲存總計 HKD{" "}
+              {savedServerTotal.toLocaleString()}{" "}
+              唔一致（常見原因：舊資料用 qty×單價計咗豁免項目）。儲存後會以項目金額對齊。
             </div>
           )}
-        </div>
 
         <div style={{ height: "1px", background: "linear-gradient(to right, #d4a843, rgba(212,168,67,0.1), transparent)" }} />
 
