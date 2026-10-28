@@ -8,6 +8,23 @@
 const DEFAULT_START_AT = "2026-08-25T00:00:00+08:00";
 
 /**
+ * Quote numbers permanently excluded from pricing learning / suggest samples.
+ * (Manual overrides — atypical deals that would skew mid / packages.)
+ */
+export const PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS = new Set([
+  "JD202610-JMQV",
+  "JD202606-3EMN",
+]);
+
+export function isPricingLearningQuoteNumber(
+  quoteNumber: string | null | undefined
+): boolean {
+  const n = (quoteNumber ?? "").trim();
+  if (!n) return true;
+  return !PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS.has(n);
+}
+
+/**
  * When to trust / show suggested prices from learning.
  *
  * Policy (accepted quotes in the matched learning slice):

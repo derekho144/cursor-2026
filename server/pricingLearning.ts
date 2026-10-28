@@ -44,7 +44,9 @@ import {
   getPricingLearningStartAt,
   getPricingLearningStartDateYmd,
   isLearningReadyForAutoDraft,
+  isPricingLearningQuoteNumber,
   pricingLearningStartAtIso,
+  PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
 import { resolvePlatformSuggestRows } from "../shared/pricingLeadSourcePolicy";
@@ -130,12 +132,20 @@ async function loadLearningQuotesWithItems(opts?: {
 
   const statuses = opts?.statuses ?? (["accepted", "rejected"] as const);
   const excludedTypes = Array.from(PRICING_LEARNING_EXCLUDED_TYPES);
+  const excludedQuoteNumbers = Array.from(
+    PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS
+  );
   const conditions = [
     inArray(quotes.status, statuses as any),
     sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
     notInArray(quotes.serviceType, excludedTypes as any),
     pricingLearningStartCondition(),
   ];
+  if (excludedQuoteNumbers.length > 0) {
+    conditions.push(
+      notInArray(quotes.quoteNumber, excludedQuoteNumbers as any)
+    );
+  }
   if (opts?.serviceType) {
     conditions.push(eq(quotes.serviceType, opts.serviceType as any));
   }
@@ -1172,6 +1182,14 @@ export async function backfillStructuredShootFields(opts?: {
         inArray(quotes.status, ["accepted", "rejected"]),
         sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
         pricingLearningStartCondition(),
+        ...(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS.size > 0
+          ? [
+              notInArray(
+                quotes.quoteNumber,
+                Array.from(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS) as any
+              ),
+            ]
+          : []),
         or(
           isNull(quotes.shootHours),
           isNull(quotes.shotCount),
@@ -1231,6 +1249,7 @@ export async function backfillStructuredShootFields(opts?: {
   };
 
   for (const q of candidates) {
+    if (!isPricingLearningQuoteNumber(q.quoteNumber)) continue;
     const mode = quotePricingMode(q.serviceType);
     if (mode === "design" || !isPricingLearningServiceType(q.serviceType)) {
       skippedDesign += 1;
@@ -1427,7 +1446,15 @@ export async function refreshDurationPackageBackfill(opts?: {
       and(
         inArray(quotes.status, ["accepted", "rejected"]),
         sql`CAST(${quotes.total} AS DECIMAL(12,2)) > 0`,
-        pricingLearningStartCondition()
+        pricingLearningStartCondition(),
+        ...(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS.size > 0
+          ? [
+              notInArray(
+                quotes.quoteNumber,
+                Array.from(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS) as any
+              ),
+            ]
+          : [])
       )
     )
     .orderBy(desc(quotes.updatedAt))
@@ -1439,6 +1466,7 @@ export async function refreshDurationPackageBackfill(opts?: {
   const changes: typeof empty.changes = [];
 
   for (const q of rows) {
+    if (!isPricingLearningQuoteNumber(q.quoteNumber)) continue;
     const mode = quotePricingMode(q.serviceType);
     if (mode !== "time_crew" || !isPricingLearningServiceType(q.serviceType)) {
       continue;

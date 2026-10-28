@@ -4,6 +4,7 @@ import {
   formatPricingLearningStartAtLabel,
   getPricingLearningStartAt,
   isLearningReadyForAutoDraft,
+  isPricingLearningQuoteNumber,
   isQuoteEligibleForPricingLearning,
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
@@ -108,5 +109,13 @@ describe("isLearningReadyForAutoDraft", () => {
     expect(isLearningReadyForAutoDraft("advisory")).toBe(false);
     expect(isLearningReadyForAutoDraft("usable")).toBe(true);
     expect(isLearningReadyForAutoDraft("trusted")).toBe(true);
+  });
+});
+
+describe("excluded quote numbers", () => {
+  it("blocks JD202610-JMQV and JD202606-3EMN", () => {
+    expect(isPricingLearningQuoteNumber("JD202610-JMQV")).toBe(false);
+    expect(isPricingLearningQuoteNumber("JD202606-3EMN")).toBe(false);
+    expect(isPricingLearningQuoteNumber("JD202610-ABCD")).toBe(true);
   });
 });

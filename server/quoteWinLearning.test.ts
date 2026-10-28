@@ -5,6 +5,10 @@ import {
 } from "../shared/quoteDurationPackage";
 import { rejectReasonByLabel } from "../shared/quoteRejectReasons";
 import { isPricingLearningServiceType } from "../shared/quotePricingMode";
+import {
+  isPricingLearningQuoteNumber,
+  PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS,
+} from "../shared/pricingLearningConfig";
 
 describe("duration package", () => {
   it("infers from hours", () => {
@@ -46,5 +50,17 @@ describe("pricing learning exclusions", () => {
     expect(isPricingLearningServiceType("corporate_event")).toBe(true);
     expect(isPricingLearningServiceType("product")).toBe(true);
     expect(isPricingLearningServiceType("menu_design")).toBe(true);
+  });
+
+  it("excludes specific quote numbers from learning", () => {
+    expect(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS.has("JD202610-JMQV")).toBe(
+      true
+    );
+    expect(PRICING_LEARNING_EXCLUDED_QUOTE_NUMBERS.has("JD202606-3EMN")).toBe(
+      true
+    );
+    expect(isPricingLearningQuoteNumber("JD202610-JMQV")).toBe(false);
+    expect(isPricingLearningQuoteNumber("JD202606-3EMN")).toBe(false);
+    expect(isPricingLearningQuoteNumber("JD202610-OTHER")).toBe(true);
   });
 });
