@@ -23,7 +23,7 @@ import { sendEmail } from "../resendEmail";
 import { appBaseUrl, buildWaTrackUrl, rewriteWaLinks, WA_RAW } from "../_core/waTracking";
 
 /** Create tracking inquiry + send first email (so FH follow-ups can fire later). */
-async function sendFirstEmailWithTracking(job: {
+export async function sendFirstEmailWithTracking(job: {
   id: number;
   jobId: string;
   title: string | null;
@@ -120,7 +120,9 @@ export const freehunterBoardRouter = router({
           replyOpenedAt: emailInquiries.replyOpenedAt,
           replyOpenCount: emailInquiries.replyOpenCount,
           realOpenCount: emailInquiries.realOpenCount,
-          followUpSentAt: (emailInquiries as any).followUpSentAt,
+          // Prefer job column (authoritative after markFollowUpSent); fall back to inquiry
+          followUpSentAt: freehunterJobs.followUpSentAt,
+          inquiryFollowUpSentAt: (emailInquiries as any).followUpSentAt,
           // Quote linked to this FH job (via email_inquiry)
           quoteId: emailInquiries.quoteId,
           // Used for deduplication: keep highest inquiry id (latest tracking record)
@@ -154,14 +156,27 @@ export const freehunterBoardRouter = router({
         if (rowInqId > existingInqId) jobMap.set(row.jobId, row);
       }
     }
-    const jobs = Array.from(jobMap.values()).slice(0, 50);
+    const jobs = Array.from(jobMap.values()).slice(0, 50).map((row) => {
+      const jobFu = row.followUpSentAt ? new Date(row.followUpSentAt) : null;
+      const inqFu = row.inquiryFollowUpSentAt ? new Date(row.inquiryFollowUpSentAt) : null;
+      const pick =
+        jobFu && jobFu.getFullYear() > 1970
+          ? jobFu
+          : inqFu && inqFu.getFullYear() > 1970
+            ? inqFu
+            : null;
+      return { ...row, followUpSentAt: pick };
+    });
+
+    const isRealFollowUp = (v: Date | string | null | undefined) =>
+      !!v && new Date(v).getFullYear() > 1970;
 
     const stats = {
       total: jobs.length,
       new: jobs.filter((j) => j.status === "new").length,
       emailFetched: jobs.filter((j) => j.status === "email_fetched").length,
       firstEmailSent: jobs.filter((j) => j.status === "first_email_sent").length,
-      followUpSent: jobs.filter((j) => !!(j as any).followUpSentAt).length,
+      followUpSent: jobs.filter((j) => isRealFollowUp(j.followUpSentAt)).length,
       imported: jobs.filter((j) => j.status === "imported").length,
       ignored: jobs.filter((j) => j.status === "ignored").length,
     };
@@ -243,8 +258,9 @@ export const freehunterBoardRouter = router({
         aiScore: freehunterJobs.aiScore,
         aiScoreReason: freehunterJobs.aiScoreReason,
         postedAt: freehunterJobs.postedAt,
-        // Follow-up tracking
+        // Follow-up tracking (job column + inquiry fallback)
         followUpSentAt: freehunterJobs.followUpSentAt,
+        inquiryFollowUpSentAt: (emailInquiries as any).followUpSentAt,
         // Reply tracking from linked email_inquiry
         replyTrackingId: emailInquiries.replyTrackingId,
         replyOpenedAt: emailInquiries.replyOpenedAt,
@@ -287,7 +303,22 @@ export const freehunterBoardRouter = router({
           if (rowInqId > existingInqId) seen.set(row.jobId, row);
         }
       }
-      return Array.from(seen.values()).slice(0, input.limit);
+      return Array.from(seen.values())
+        .slice(0, input.limit)
+        .map((row) => {
+          const jobFu = row.followUpSentAt ? new Date(row.followUpSentAt) : null;
+          // listJobs also selects inquiry follow-up when present via join fields
+          const inqFu = (row as any).inquiryFollowUpSentAt
+            ? new Date((row as any).inquiryFollowUpSentAt)
+            : null;
+          const pick =
+            jobFu && jobFu.getFullYear() > 1970
+              ? jobFu
+              : inqFu && inqFu.getFullYear() > 1970
+                ? inqFu
+                : row.followUpSentAt;
+          return { ...row, followUpSentAt: pick };
+        });
     }),
 
   /**

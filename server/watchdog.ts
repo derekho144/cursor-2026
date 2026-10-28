@@ -14,7 +14,7 @@
 import { notifyOwner } from "./_core/notification";
 import { getDb } from "./db";
 import { freehunterJobs } from "../drizzle/schema";
-import { sql, desc, eq } from "drizzle-orm";
+import { sql, desc } from "drizzle-orm";
 import {
   getFreehunterStatus,
   renewFreehunterSessionExpiry,
@@ -22,7 +22,7 @@ import {
   closeFreehunterBrowserSession,
 } from "./freehunter";
 import { fetchEmailForJob } from "./scrapers/freehunterBoard";
-import { sendFHFirstEmail } from "./routers/emailInquiries";
+import { sendFirstEmailWithTracking } from "./routers/freehunterBoard";
 import { lastFreehunterScrapeAt, lastGmailScanAt } from "./scheduler";
 import { withSchedulerLock } from "./schedulerLock";
 
@@ -95,13 +95,21 @@ async function healStuckFHJobs(): Promise<number> {
         if (!email) continue;
         fixed++;
         if ((job.aiScore ?? 0) >= 80) {
-          const sendResult = await sendFHFirstEmail(email, job.clientName || "", job.title || "");
-          if (sendResult.success) {
-            await db
-              .update(freehunterJobs)
-              .set({ status: "first_email_sent", firstEmailSentAt: new Date(), updatedAt: new Date() })
-              .where(eq(freehunterJobs.jobId, job.jobId));
-            console.log(`[Watchdog] A: repaired+sent job ${job.jobId}`);
+          // Must create email_inquiry with fhJobId — otherwise 24h follow-up never becomes eligible
+          const ok = await sendFirstEmailWithTracking({
+            id: job.id,
+            jobId: job.jobId,
+            title: job.title,
+            clientName: job.clientName,
+            clientEmail: email,
+            description: job.description,
+            jobUrl: job.jobUrl,
+            postedAt: job.postedAt,
+          });
+          if (ok) {
+            console.log(`[Watchdog] A: repaired+sent job ${job.jobId} (with follow-up tracking)`);
+          } else {
+            console.warn(`[Watchdog] A: first email send failed for job ${job.jobId}`);
           }
         } else {
           console.log(`[Watchdog] A: repaired email for job ${job.jobId}`);
