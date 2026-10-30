@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
-import { getDb, ensureExpensesPostProductionCategory } from "../db";
+import {
+  getDb,
+  ensureExpensesPostProductionCategory,
+  resyncAllQuoteCostExpenseDates,
+} from "../db";
 import { expenses } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -161,4 +165,9 @@ export const expensesRouter = router({
       await db.delete(expenses).where(eq(expenses.id, input.id));
       return { success: true };
     }),
+
+  /** One-shot: align all quote-cost expenses to quote shoot/created month. */
+  resyncQuoteLinkedDates: protectedProcedure.mutation(async () => {
+    return resyncAllQuoteCostExpenseDates();
+  }),
 });

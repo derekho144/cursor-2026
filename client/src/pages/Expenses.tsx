@@ -406,7 +406,7 @@ export default function Expenses() {
               收入及支出
             </h1>
             <p className="text-sm mt-1" style={{ color: C.muted }}>
-              收入按已接受報價（拍攝月／無拍攝日則開單月）；支出手動記錄
+              收入／報價成本支出均跟報價拍攝月（無拍攝日則開單月）；其他支出可手動記錄
             </p>
           </div>
           <Button

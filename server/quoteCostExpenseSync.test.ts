@@ -3,6 +3,7 @@ import {
   mapQuoteCostCategoryToExpense,
   formatQuoteCostExpenseDescription,
   resolveExpenseDateFromQuote,
+  hkCalendarDateAtNoon,
 } from "./quoteCostExpenseSync";
 
 describe("quoteCostExpenseSync", () => {
@@ -25,14 +26,38 @@ describe("quoteCostExpenseSync", () => {
   });
 
   it("uses shooting date when valid", () => {
-    const d = resolveExpenseDateFromQuote("2026-09-15");
+    const d = resolveExpenseDateFromQuote(
+      "2026-09-15",
+      "2026-01-02T04:00:00.000Z"
+    );
     expect(d.getFullYear()).toBe(2026);
     expect(d.getMonth()).toBe(8);
     expect(d.getDate()).toBe(15);
   });
 
-  it("falls back when shooting date missing", () => {
+  it("falls back to quote createdAt (HK calendar), not add-time", () => {
+    const addTime = new Date("2026-10-30T15:00:00.000Z");
+    const d = resolveExpenseDateFromQuote(
+      null,
+      "2026-09-08T16:30:00.000Z",
+      addTime
+    );
+    // 2026-09-08 16:30 UTC = 2026-09-09 00:30 HKT → HK calendar Sep 9
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(8);
+    expect(d.getDate()).toBe(9);
+  });
+
+  it("falls back to provided default only when quote has no dates", () => {
     const fallback = new Date("2026-01-02T12:00:00");
-    expect(resolveExpenseDateFromQuote(null, fallback)).toEqual(fallback);
+    expect(resolveExpenseDateFromQuote(null, null, fallback)).toEqual(fallback);
+  });
+
+  it("hkCalendarDateAtNoon uses Asia/Hong_Kong", () => {
+    const d = hkCalendarDateAtNoon("2026-09-08T16:30:00.000Z");
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(8);
+    expect(d!.getDate()).toBe(9);
   });
 });

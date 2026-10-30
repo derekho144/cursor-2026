@@ -88,6 +88,7 @@ export const quoteCostsRouter = router({
             quoteNumber: quote.quoteNumber,
             clientName: quote.clientName,
             shootingDate: quote.shootingDate,
+            quoteCreatedAt: quote.createdAt,
             category: input.category,
             description: input.description,
             amount: input.amount,
