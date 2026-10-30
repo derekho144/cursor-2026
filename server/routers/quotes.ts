@@ -28,7 +28,10 @@ import { getDb } from "../db";
 import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { sendEmail } from "../resendEmail";
-import { resyncClientMembershipFromQuotes } from "../db";
+import {
+  resyncClientMembershipFromQuotes,
+  resyncQuoteCostExpenseDatesForQuote,
+} from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
 import { isAirwallexConfigured } from "../airwallex";
@@ -825,6 +828,15 @@ export const quotesRouter = router({
           await linkWhatsappClickToQuote(attribution.whatsappClickId, id);
         } catch (err) {
           console.error("[Quote] Failed to link WA click on update:", err);
+        }
+      }
+
+      // Keep synced 收入及支出 dates aligned with quote month (shoot → createdAt)
+      if (input.shootingDate !== undefined) {
+        try {
+          await resyncQuoteCostExpenseDatesForQuote(id);
+        } catch (err) {
+          console.error("[Quote] Failed to resync expense dates:", err);
         }
       }
 

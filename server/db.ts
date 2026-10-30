@@ -3783,6 +3783,8 @@ export async function createExpenseFromQuoteCost(params: {
   quoteNumber: string;
   clientName?: string | null;
   shootingDate?: string | null;
+  /** Quote createdAt — used when shootingDate missing (same month as 收入). */
+  quoteCreatedAt?: Date | string | null;
   category: string;
   description: string;
   amount: string | number;
@@ -3800,7 +3802,10 @@ export async function createExpenseFromQuoteCost(params: {
     params.clientName,
     params.description
   );
-  const date = resolveExpenseDateFromQuote(params.shootingDate);
+  const date = resolveExpenseDateFromQuote(
+    params.shootingDate,
+    params.quoteCreatedAt
+  );
   const noteParts = [
     "自動由報價成本同步",
     params.notes?.trim() || null,
@@ -3816,6 +3821,87 @@ export async function createExpenseFromQuoteCost(params: {
     quoteCostId: params.quoteCostId,
   });
   return { id: (result as { insertId?: number }).insertId };
+}
+
+/**
+ * Re-date all 收入及支出 rows synced from a quote's costs
+ * (shootingDate → quote createdAt). Call when shootingDate changes.
+ */
+export async function resyncQuoteCostExpenseDatesForQuote(
+  quoteId: number
+): Promise<{ updated: number }> {
+  const db = await getDb();
+  if (!db) return { updated: 0 };
+
+  const quote = await getQuoteById(quoteId);
+  if (!quote) return { updated: 0 };
+
+  const costs = await db
+    .select({ id: quoteCosts.id })
+    .from(quoteCosts)
+    .where(eq(quoteCosts.quoteId, quoteId));
+  if (costs.length === 0) return { updated: 0 };
+
+  const date = resolveExpenseDateFromQuote(
+    quote.shootingDate,
+    quote.createdAt
+  );
+  const ids = costs.map((c) => c.id);
+  await db
+    .update(expenses)
+    .set({ date })
+    .where(inArray(expenses.quoteCostId, ids));
+  return { updated: ids.length };
+}
+
+/** One-shot: re-date every quote-cost-synced expense to match its quote month. */
+export async function resyncAllQuoteCostExpenseDates(): Promise<{
+  quotesTouched: number;
+  expensesUpdated: number;
+}> {
+  const db = await getDb();
+  if (!db) return { quotesTouched: 0, expensesUpdated: 0 };
+
+  const rows = await db
+    .select({
+      quoteId: quoteCosts.quoteId,
+      expenseId: expenses.id,
+      shootingDate: quotes.shootingDate,
+      createdAt: quotes.createdAt,
+    })
+    .from(expenses)
+    .innerJoin(quoteCosts, eq(expenses.quoteCostId, quoteCosts.id))
+    .innerJoin(quotes, eq(quoteCosts.quoteId, quotes.id));
+
+  let expensesUpdated = 0;
+  const byQuote = new Map<
+    number,
+    { shootingDate: string | null; createdAt: Date; expenseIds: number[] }
+  >();
+  for (const row of rows) {
+    const entry = byQuote.get(row.quoteId) ?? {
+      shootingDate: row.shootingDate,
+      createdAt: row.createdAt,
+      expenseIds: [],
+    };
+    entry.expenseIds.push(row.expenseId);
+    byQuote.set(row.quoteId, entry);
+  }
+
+  for (const [, entry] of byQuote) {
+    const date = resolveExpenseDateFromQuote(
+      entry.shootingDate,
+      entry.createdAt
+    );
+    if (entry.expenseIds.length === 0) continue;
+    await db
+      .update(expenses)
+      .set({ date })
+      .where(inArray(expenses.id, entry.expenseIds));
+    expensesUpdated += entry.expenseIds.length;
+  }
+
+  return { quotesTouched: byQuote.size, expensesUpdated };
 }
 
 export async function deleteExpenseByQuoteCostId(quoteCostId: number) {
