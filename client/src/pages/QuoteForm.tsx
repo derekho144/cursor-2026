@@ -60,7 +60,6 @@ import {
   canToggleQuoteWaive,
   hasConditionalSectionB,
   isManagedSectionBItem,
-  isQuoteSectionBOptionItem,
   isQuoteSectionHeader,
   isQuoteWaivedPrice,
   toggleQuoteItemWaived,
@@ -524,10 +523,6 @@ function SortableQuoteItem({
   const inferred = classifyQuoteLineItem(item.description);
   const categoryValue = item.category || "auto";
   const isSection = isQuoteSectionHeader(item.description);
-  const isSectionBOption = isQuoteSectionBOptionItem(item.description);
-  const isClientChoiceOption =
-    !isSection && !(Number(item.quantity) > 0);
-  const showOptionHint = isSectionBOption || isClientChoiceOption;
   const canWaive = canToggleQuoteWaive(item);
   const isWaived = isQuoteWaivedPrice(
     Number(item.unitPrice),
@@ -556,11 +551,6 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
-          {showOptionHint && (
-            <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-              客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
-            </div>
-          )}
         </div>
         <Select
           value={categoryValue}
@@ -624,11 +614,6 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
-            {showOptionHint && (
-              <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-                客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
-              </div>
-            )}
           </div>
           <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20 flex-shrink-0">
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
