@@ -2539,16 +2539,16 @@ export default function QuoteForm() {
               discountAmount={discountAmount}
               total={total}
               discountSlot={
-                <div className="flex justify-between items-center text-sm">
-                  <div className="flex flex-col gap-0.5">
+                <div className="flex justify-between items-center gap-2 text-sm">
+                  <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-muted-foreground">折扣</span>
                     {clientDiscount && clientDiscount.discount > 0 && (
-                      <span className="text-xs" style={{ color: "#d4a843" }}>
+                      <span className="text-xs truncate" style={{ color: "#d4a843" }}>
                         {clientDiscount.tierLabel} {clientDiscount.discount}%
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-end gap-1 shrink-0 ml-auto">
                     <div className="w-20">
                       <Input
                         type="number"
@@ -2591,11 +2591,11 @@ export default function QuoteForm() {
                 const hasDeposit = depositAmt > 0 && depositAmt < total;
                 return (
                   <>
-                    <div className="flex justify-between items-center text-sm pt-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">訂金</span>
+                    <div className="flex justify-between items-center gap-2 text-sm pt-1">
+                      <span className="text-muted-foreground shrink-0">訂金</span>
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
                         <div
-                          className="flex rounded overflow-hidden"
+                          className="flex rounded overflow-hidden shrink-0"
                           style={{
                             border: "1px solid rgba(212,168,67,0.3)",
                             height: "22px",
@@ -2647,8 +2647,6 @@ export default function QuoteForm() {
                             HKD
                           </button>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1">
                         {form.depositMode === "percent" ? (
                           <>
                             <div className="w-16">
