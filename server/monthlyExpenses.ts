@@ -48,6 +48,7 @@ export function summarizeMonthlyExpenses(rows: ExpenseAggregate[]) {
   return {
     summary,
     grandTotal: totalCents / 100,
+    expenseCount: summary.reduce((total, row) => total + row.count, 0),
     overheadExpenses: (totalCents - syncedCents) / 100,
     syncedProjectExpenses: syncedCents / 100,
   };

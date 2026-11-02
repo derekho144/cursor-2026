@@ -14,7 +14,7 @@ import { getDashboardStats, getDashboardStatsQuick } from "./db";
 beforeEach(() => {
   vi.stubEnv("DATABASE_URL", "mysql://test:test@localhost/test_readonly_mock");
   mocks.monthly.mockReset().mockResolvedValue({
-    summary: [], grandTotal: 58356.39, overheadExpenses: 6123, syncedProjectExpenses: 52233.39,
+    summary: [], grandTotal: 58356.39, expenseCount: 23, overheadExpenses: 6123, syncedProjectExpenses: 52233.39,
   });
   mocks.select.mockReset().mockImplementation((fields: Record<string, unknown>) => {
     let table: unknown;
@@ -52,6 +52,7 @@ describe("dashboard quick/full expense alignment", () => {
       monthlyRevenue: 121795,
       adSpend: 5372.19,
       businessExpenses: 58356.39,
+      expenseCount: 23,
       overheadExpenses: 6123,
       syncedProjectExpenses: 52233.39,
       projectCosts: 52233.39,
