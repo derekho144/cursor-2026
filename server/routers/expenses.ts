@@ -1,21 +1,10 @@
 import { z } from "zod";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { getDb, ensureExpensesPostProductionCategory } from "../db";
 import { expenses } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  transport: "車費",
-  equipment_rent: "租用器材",
-  equipment_buy: "購買器材",
-  staff: "員工薪酬",
-  post_production: "後期製作",
-  software: "軟件/訂閱",
-  marketing: "市場推廣",
-  office: "辦公室/場地",
-  other: "其他",
-};
+import { EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS, expenseMonthCondition, getMonthlyExpenseSummary } from "../monthlyExpenses";
 
 const expenseInputSchema = z.object({
   date: z.string(),
@@ -52,15 +41,9 @@ export const expensesRouter = router({
       const conditions = [];
 
       if (input?.year && input?.month) {
-        const startDate = new Date(input.year, input.month - 1, 1);
-        const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
-        conditions.push(gte(expenses.date, startDate));
-        conditions.push(lte(expenses.date, endDate));
+        conditions.push(expenseMonthCondition(input.year, input.month));
       } else if (input?.year) {
-        const startDate = new Date(input.year, 0, 1);
-        const endDate = new Date(input.year, 11, 31, 23, 59, 59);
-        conditions.push(gte(expenses.date, startDate));
-        conditions.push(lte(expenses.date, endDate));
+        conditions.push(sql`YEAR(${expenses.date}) = ${input.year}`);
       }
 
       if (input?.category && input.category !== "all") {
@@ -90,28 +73,7 @@ export const expensesRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
-      const startDate = new Date(input.year, input.month - 1, 1);
-      const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
-
-      const rows = await db
-        .select({
-          category: expenses.category,
-          total: sql<string>`SUM(${expenses.amount})`,
-          count: sql<string>`COUNT(*)`,
-        })
-        .from(expenses)
-        .where(and(gte(expenses.date, startDate), lte(expenses.date, endDate)))
-        .groupBy(expenses.category);
-
-      const summary = rows.map(r => ({
-        category: r.category,
-        categoryLabel: CATEGORY_LABELS[r.category] ?? r.category,
-        total: Number(r.total) || 0,
-        count: Number(r.count) || 0,
-      }));
-
-      const grandTotal = summary.reduce((sum, r) => sum + r.total, 0);
-      return { summary, grandTotal };
+      return getMonthlyExpenseSummary(db, input.year, input.month);
     }),
 
   // Create expense

@@ -316,6 +316,7 @@ export default function QuoteDetail() {
       utils.quoteCosts.summary.invalidate({ quoteId });
       utils.expenses.list.invalidate();
       utils.expenses.monthlySummary.invalidate();
+      utils.dashboard.invalidate();
       setCostDialogOpen(false);
       setCostForm({ category: "freelancer", description: "", amount: "", payee: "" });
     },
@@ -326,6 +327,7 @@ export default function QuoteDetail() {
       toast.success("已刪除");
       utils.expenses.list.invalidate();
       utils.expenses.monthlySummary.invalidate();
+      utils.dashboard.invalidate();
       utils.quoteCosts.summary.invalidate({ quoteId });
     },
     onError: (e) => toast.error(`刪除失敗：${e.message}`),

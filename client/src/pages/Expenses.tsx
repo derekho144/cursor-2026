@@ -107,7 +107,7 @@ type ExpenseForm = {
 };
 
 function fmtHkd(n: number, opts?: { signed?: boolean; digits?: number }) {
-  const digits = opts?.digits ?? 0;
+  const digits = opts?.digits ?? 2;
   const abs = Math.abs(n).toLocaleString("en-HK", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -277,6 +277,7 @@ export default function Expenses() {
     onSuccess: () => {
       utils.expenses.list.invalidate();
       utils.expenses.monthlySummary.invalidate();
+      utils.dashboard.invalidate();
       setDialogOpen(false);
       setForm(emptyFormForMonth());
       toast.success("支出已記錄");
@@ -288,6 +289,7 @@ export default function Expenses() {
     onSuccess: () => {
       utils.expenses.list.invalidate();
       utils.expenses.monthlySummary.invalidate();
+      utils.dashboard.invalidate();
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyFormForMonth());
@@ -300,6 +302,7 @@ export default function Expenses() {
     onSuccess: () => {
       utils.expenses.list.invalidate();
       utils.expenses.monthlySummary.invalidate();
+      utils.dashboard.invalidate();
       setDeleteConfirmId(null);
       toast.success("支出已刪除");
     },
