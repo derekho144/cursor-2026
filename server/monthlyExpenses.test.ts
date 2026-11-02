@@ -17,6 +17,7 @@ describe("monthly expense ledger shared by dashboard and expenses", () => {
   it("includes all 23 October expenses and counts linked costs once", () => {
     const result = summarizeMonthlyExpenses(octoberRows);
     expect(result.grandTotal).toBe(58356.39);
+    expect(result.expenseCount).toBe(23);
     expect(result.overheadExpenses).toBe(6123);
     expect(result.syncedProjectExpenses).toBe(52233.39);
     expect(result.summary.reduce((n, r) => n + r.count, 0)).toBe(23);
@@ -39,7 +40,7 @@ describe("monthly expense ledger shared by dashboard and expenses", () => {
   });
 
   it("handles empty months and losses", () => {
-    expect(summarizeMonthlyExpenses([])).toEqual({ summary: [], grandTotal: 0, overheadExpenses: 0, syncedProjectExpenses: 0 });
+    expect(summarizeMonthlyExpenses([])).toEqual({ summary: [], grandTotal: 0, expenseCount: 0, overheadExpenses: 0, syncedProjectExpenses: 0 });
     expect(calculateExpenseNetProfit(0, 10.05, 20.1)).toBe(-30.15);
   });
 

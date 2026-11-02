@@ -247,7 +247,7 @@ export default function Dashboard() {
           <KpiCard
             label="本月支出"
             value={isLoading ? "—" : fmt(quickData?.businessExpenses ?? stats?.businessExpenses ?? 0)}
-            sub={isLoading ? "與收入及支出頁一致（未扣廣告）" : `一般營運 ${fmt(quickData?.overheadExpenses ?? stats?.overheadExpenses ?? 0)} · 項目成本 ${fmt(quickData?.syncedProjectExpenses ?? stats?.syncedProjectExpenses ?? 0)}（未扣廣告）`}
+            sub={isLoading ? "—" : `${quickData?.expenseCount ?? stats?.expenseCount ?? 0} 筆支出`}
             valueColor="#e57373"
             icon="≡"
           />
