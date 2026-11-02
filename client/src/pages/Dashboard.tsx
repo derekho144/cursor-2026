@@ -92,7 +92,7 @@ export default function Dashboard() {
     }));
   }, [stats]);
 
-  const fmt = (n: number) => `HK$${n.toLocaleString()}`;
+  const fmt = (n: number) => `HK$${n.toLocaleString("zh-HK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <DashboardLayout>
@@ -232,9 +232,9 @@ export default function Dashboard() {
           />
           <KpiCard
             label="毛利"
-            value={isLoading ? "—" : fmt((stats?.monthlyRevenue ?? 0) - (stats?.adSpend ?? 0))}
-            sub={stats?.monthlyRevenue ? `廣告後毛利` : "—"}
-            valueColor={((stats?.monthlyRevenue ?? 0) - (stats?.adSpend ?? 0)) >= 0 ? "#6fcf6f" : "#e57373"}
+            value={isLoading ? "—" : fmt(quickData?.grossProfit ?? stats?.grossProfit ?? 0)}
+            sub="收入 − 已接受報價項目成本"
+            valueColor={(quickData?.grossProfit ?? stats?.grossProfit ?? 0) >= 0 ? "#6fcf6f" : "#e57373"}
             icon="▲"
           />
           <KpiCard
@@ -245,17 +245,17 @@ export default function Dashboard() {
             icon="↗"
           />
           <KpiCard
-            label="營運支出"
+            label="本月支出"
             value={isLoading ? "—" : fmt(quickData?.businessExpenses ?? stats?.businessExpenses ?? 0)}
-            sub="車費 + 器材 + 員工"
+            sub={isLoading ? "與收入及支出頁一致（未扣廣告）" : `一般營運 ${fmt(quickData?.overheadExpenses ?? stats?.overheadExpenses ?? 0)} · 項目成本 ${fmt(quickData?.syncedProjectExpenses ?? stats?.syncedProjectExpenses ?? 0)}（未扣廣告）`}
             valueColor="#e57373"
             icon="≡"
           />
           <KpiCard
             label="淨利潤"
             value={isLoading ? "—" : fmt(quickData?.netProfit ?? stats?.netProfit ?? 0)}
-            sub="收入 - 廣告 - 支出"
-            valueColor={(stats?.netProfit ?? 0) >= 0 ? "#4caf50" : "#e57373"}
+            sub="收入 − 全部支出 − 廣告"
+            valueColor={(quickData?.netProfit ?? stats?.netProfit ?? 0) >= 0 ? "#4caf50" : "#e57373"}
             icon="▦"
           />
         </div>

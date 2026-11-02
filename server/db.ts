@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { and, desc, eq, inArray, isNotNull, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
+import { getMonthlyExpenseSummary, calculateExpenseNetProfit } from "./monthlyExpenses";
 import {
   mapQuoteCostCategoryToExpense,
   formatQuoteCostExpenseDescription,
@@ -650,17 +651,8 @@ export async function getDashboardStatsQuick(year?: number, month?: number) {
       .select({ total: sql<number>`SUM(amount)` })
       .from(adExpenses)
       .where(and(eq(adExpenses.year, targetYear), eq(adExpenses.month, targetMonth))),
-    // Monthly business expenses (exclude rows synced from quote_costs — those are projectCosts)
-    db
-      .select({ total: sql<number>`SUM(amount)` })
-      .from(expenses)
-      .where(
-        and(
-          sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`,
-          isNull(expenses.quoteCostId)
-        )
-      ),
+    // Shared ledger total, identical to 收入及支出; linked project costs counted once.
+    getMonthlyExpenseSummary(db, targetYear, targetMonth),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
     db
       .select({ total: sql<number>`SUM(${quoteCosts.amount})` })
@@ -680,15 +672,17 @@ export async function getDashboardStatsQuick(year?: number, month?: number) {
 
   const monthlyRevenue = Number(acceptedQuotesForMonth[0]?.total ?? 0);
   const adSpend = Number(monthlyAdSpend[0]?.total ?? 0);
-  const businessExpenses = Number(monthlyExpensesResult[0]?.total ?? 0);
+  const businessExpenses = monthlyExpensesResult.grandTotal;
   const projectCosts = Number(monthlyProjectCostsResult[0]?.total ?? 0);
   const grossProfit = monthlyRevenue - projectCosts;
-  const netProfit = monthlyRevenue - adSpend - businessExpenses;
+  const netProfit = calculateExpenseNetProfit(monthlyRevenue, adSpend, businessExpenses);
 
   return {
     monthlyRevenue,
     adSpend,
     businessExpenses,
+    overheadExpenses: monthlyExpensesResult.overheadExpenses,
+    syncedProjectExpenses: monthlyExpensesResult.syncedProjectExpenses,
     netProfit,
     grossProfit,
     projectCosts,
@@ -840,17 +834,8 @@ export async function getDashboardStats(year?: number, month?: number) {
         )
       )
       .groupBy(quotes.leadSource),
-    // Monthly business expenses (exclude quote-cost sync rows — counted as projectCosts)
-    db
-      .select({ total: sql<number>`SUM(amount)` })
-      .from(expenses)
-      .where(
-        and(
-          sql`YEAR(date) = ${targetYear}`,
-          sql`MONTH(date) = ${targetMonth}`,
-          isNull(expenses.quoteCostId)
-        )
-      ),
+    // Shared ledger total, identical to 收入及支出; linked project costs counted once.
+    getMonthlyExpenseSummary(db, targetYear, targetMonth),
     // Monthly quote direct costs (project costs) for accepted quotes in selected month
     db
       .select({ total: sql<number>`SUM(${quoteCosts.amount})` })
@@ -877,11 +862,11 @@ export async function getDashboardStats(year?: number, month?: number) {
   // 成交率：本月開單中已接受比例（分子分母同一 createdAt 軸，避免 >100%）
   const conversionRate = totalQuotesCount > 0 ? Math.round((acceptedByCreatedCount / totalQuotesCount) * 100) : 0;
   const costPerQuote = totalQuotesCount > 0 ? Math.round(adSpend / totalQuotesCount) : 0;
-  const businessExpenses = Number(monthlyExpensesResult[0]?.total ?? 0);
+  const businessExpenses = monthlyExpensesResult.grandTotal;
   const projectCosts = Number(monthlyProjectCostsResult[0]?.total ?? 0);
   const grossProfit = monthlyRevenue - projectCosts;
   const grossMargin = monthlyRevenue > 0 ? Math.round((grossProfit / monthlyRevenue) * 100) : null;
-  const netProfit = monthlyRevenue - adSpend - businessExpenses;
+  const netProfit = calculateExpenseNetProfit(monthlyRevenue, adSpend, businessExpenses);
   const roas = adSpend > 0 ? Math.round((monthlyRevenue / adSpend) * 10) / 10 : null;
 
   // Build trend chart data (fill missing months with 0)
@@ -916,6 +901,8 @@ export async function getDashboardStats(year?: number, month?: number) {
     adSpend,
     adSpendPlatforms,
     businessExpenses,
+    overheadExpenses: monthlyExpensesResult.overheadExpenses,
+    syncedProjectExpenses: monthlyExpensesResult.syncedProjectExpenses,
     netProfit,
     costPerQuote,
     projectCosts,

@@ -23,3 +23,4 @@ quote-client-choice-qty0-option
 quote-detail-edit-total-sync-v1
 
 quote-money-summary-unify-v1
+dashboard-expense-ledger-align-v1
