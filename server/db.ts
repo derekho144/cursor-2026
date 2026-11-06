@@ -343,10 +343,19 @@ export async function createQuote(
     }
   }
 
-  if (items.length > 0) {
-    await db.insert(quoteItems).values(
-      items.map((item, idx) => ({ ...item, quoteId: newQuote.id, sortOrder: idx }))
-    );
+  try {
+    if (items.length > 0) {
+      await db.insert(quoteItems).values(
+        items.map((item, idx) => ({ ...item, quoteId: newQuote.id, sortOrder: idx }))
+      );
+    }
+  } catch (error) {
+    // Keep quote creation atomic from the caller's perspective. Without this
+    // cleanup, an item insert error leaves a quote row behind while the caller
+    // receives an error, producing an orphaned email_inquiries.quote_id later.
+    await db.delete(quoteItems).where(eq(quoteItems.quoteId, newQuote.id));
+    await db.delete(quotes).where(eq(quotes.id, newQuote.id));
+    throw error;
   }
   return newQuote;
 }

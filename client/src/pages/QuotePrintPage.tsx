@@ -5,6 +5,7 @@
  * Layout matches the reference PDF template exactly.
  * Accessible at /print/quote/:id (protected, requires login)
  */
+import { formatQuoteDateRange } from "@shared/quoteDate";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef } from "react";
@@ -332,7 +333,7 @@ export default function QuotePrintPage() {
           <div style={S.serviceCol}>
             <div style={S.sectionLabel}>SERVICE DETAILS</div>
             <div style={S.serviceType}>{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
-            {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
+            {quote.shootingDate && <div style={S.clientDetail}>Date: {formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate)}</div>}
             {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
             {(quote as any).shotCount != null && Number((quote as any).shotCount) > 0 && (
               <div style={S.clientDetail}>Shots: {Number((quote as any).shotCount)}</div>
@@ -567,6 +568,10 @@ export default function QuotePrintPage() {
             {/* Bank Transfer */}
             <div style={S.paymentCol}>
               <div style={S.paymentTitle}>BANK TRANSFER</div>
+              <div style={S.paymentRow}>
+                <span style={S.paymentRowLabel}>PAYMENT METHOD</span>
+                <span style={S.paymentRowValue}>Bank Transfer Only</span>
+              </div>
               <div style={S.paymentRow}>
                 <span style={S.paymentRowLabel}>PAYEE</span>
                 <span style={S.paymentRowValue}>JD STUDIO Limited</span>

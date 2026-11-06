@@ -27,6 +27,7 @@ import {
 
 const SERVICE_TYPES = [
   "corporate_event",
+  "party_family_event",
   "product",
   "food_beverage",
   "jewelry",
@@ -102,6 +103,9 @@ export function hintServiceTypeFromText(text: string): InquiryServiceType | null
     return "interior";
   }
   if (/portrait|人像|形象照|headshot/.test(t)) return "portrait";
+  if (/party|family\s*event|birthday\s*party|birthday|派對|家庭活動|生日會|私人活動/.test(t)) {
+    return "party_family_event";
+  }
   if (/product\s*photo|產品攝影|白底|靜物|sku|e-?commerce\s*photo/.test(t)) {
     return "product";
   }
@@ -286,24 +290,10 @@ export function refineInquiryParseWithExtractors(input: {
     ? [...parsed.missingFields]
     : [];
 
-  // Fix line qty confused with hours, e.g. "Event Photography (3 hours)" qty=3
-  if (Array.isArray(parsed.suggestedItems)) {
-    parsed.suggestedItems = parsed.suggestedItems.map((it: any) => {
-      const desc = String(it?.description ?? "");
-      const hourMatch = desc.match(/\((\d+(?:\.\d+)?)\s*hours?\)/i);
-      if (!hourMatch) return it;
-      const hoursInDesc = Number(hourMatch[1]);
-      const qty = Number(it?.quantity);
-      if (
-        Number.isFinite(hoursInDesc) &&
-        Number.isFinite(qty) &&
-        qty === hoursInDesc
-      ) {
-        return { ...it, quantity: 1 };
-      }
-      return it;
-    });
-  }
+  // Do not collapse an explicit hourly quantity to 1 merely because the
+  // description contains "(4 hours)". The quote-item normalizer later
+  // distinguishes per-hour lines from genuine flat packages using the unit
+  // price and package signals.
 
   const serviceType = String(parsed.serviceType ?? "other").trim() || "other";
   const mode = quotePricingMode(serviceType);

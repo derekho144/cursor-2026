@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { formatQuoteDateRange } from "@shared/quoteDate";
 import { useParams } from "wouter";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -272,7 +273,7 @@ export default function SignPage() {
                 <div style={{ display: "inline-block", background: "rgba(255,255,255,0.08)", color: ACCENT_MED, padding: "4px 12px", borderRadius: 2, fontSize: 12, letterSpacing: "0.1em", border: `1px solid ${BORDER}`, fontFamily: SANS }}>
                   {serviceLabel}
                 </div>
-                {quote.shootingDate && <div style={{ color: ACCENT_MED, fontSize: 13, marginTop: 8, fontFamily: SANS }}>{t("sign.shootingDate")}{quote.shootingDate}</div>}
+                {quote.shootingDate && <div style={{ color: ACCENT_MED, fontSize: 13, marginTop: 8, fontFamily: SANS }}>{t("sign.shootingDate")}{formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate)}</div>}
                 {quote.shootingLocation && <div style={{ color: ACCENT_MED, fontSize: 13, fontFamily: SANS }}>{t("sign.shootingLocation")}{quote.shootingLocation}</div>}
               </div>
             </div>

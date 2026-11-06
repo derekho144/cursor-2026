@@ -1,3 +1,4 @@
+import { formatQuoteDateRange } from "../../shared/quoteDate";
 /**
  * quotePdf.ts
  * PDF generation helpers for JD Studio quotations and receipts.
@@ -77,46 +78,66 @@ export async function generatePdfFromHtml(
     runtime === "sparticuz"
       ? chromium.args
       : ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"];
-  process.stderr.write(`${logPrefix} Using ${runtime} Chromium renderer\n`);
-
-  const browser = await puppeteerCore.launch({
-    args: [
-      ...launchArgs,
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--font-render-hinting=none",
-    ],
-    executablePath,
-    headless: true,
-  });
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
-    // Avoid networkidle0 — CDN @font-face can hang forever on Manus egress and break email send.
-    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
-    try {
-      await Promise.race([
-        page.evaluate(async () => {
-          if (document.fonts?.ready) await document.fonts.ready;
-        }),
-        new Promise((resolve) => setTimeout(resolve, 2500)),
-      ]);
-    } catch {
-      /* fonts optional — continue with fallback glyphs */
-    }
-    if (waitMs > 0) await new Promise((r) => setTimeout(r, Math.min(waitMs, 1500)));
-    const pdfData = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+  const renderOnce = async (): Promise<Buffer> => {
+    const browser = await puppeteerCore.launch({
+      args: [
+        ...launchArgs,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--font-render-hinting=none",
+      ],
+      executablePath,
+      headless: true,
     });
-    const buf = Buffer.from(pdfData);
-    process.stderr.write(`${logPrefix} PDF generated: ${buf.length} bytes\n`);
-    return buf;
-  } finally {
-    await browser.close();
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
+      // Avoid networkidle0 — CDN @font-face can hang forever on Manus egress and break email send.
+      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 30000 });
+      try {
+        await Promise.race([
+          page.evaluate(async () => {
+            if (document.fonts?.ready) await document.fonts.ready;
+          }),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]);
+      } catch {
+        /* fonts optional — continue with fallback glyphs */
+      }
+      if (waitMs > 0) await new Promise((r) => setTimeout(r, Math.min(waitMs, 1500)));
+      const pdfData = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      });
+      return Buffer.from(pdfData);
+    } finally {
+      // Cleanup must not replace a valid PDF return or the original render error.
+      try {
+        await browser.close();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`${logPrefix} Chromium cleanup warning: ${message}\n`);
+      }
+    }
+  };
+
+  process.stderr.write(`${logPrefix} Using ${runtime} Chromium renderer\n`);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const buf = await renderOnce();
+      process.stderr.write(`${logPrefix} PDF generated: ${buf.length} bytes (attempt ${attempt})\n`);
+      return buf;
+    } catch (err) {
+      lastError = err;
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`${logPrefix} PDF render attempt ${attempt} failed: ${message}\n`);
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 // ─── HTML Template ─────────────────────────────────────────────────
@@ -284,7 +305,7 @@ export function generateQuotePdfHtml(
   const teamLabel = crewParts.length > 0 ? crewParts.join(" + ") : teamField;
   const serviceDetailLines = [
     quote.shootingDate
-      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Date: ${escapeHtml(String(quote.shootingDate))}</div>`
+      ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Date: ${escapeHtml(formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate))}</div>`
       : "",
     quote.shootingLocation
       ? `<div style="font-size:9.5px;color:#555;margin-bottom:1px;">Location: ${escapeHtml(String(quote.shootingLocation))}</div>`
@@ -420,6 +441,7 @@ export function generateQuotePdfHtml(
         <td style="vertical-align:top;width:35%;padding-right:16px;">
           <div style="font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:#aaaaaa;font-weight:500;margin-bottom:5px;">BANK TRANSFER</div>
           <table cellpadding="0" cellspacing="0">
+            <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;white-space:nowrap;width:48px;vertical-align:top;">PAYMENT METHOD</td><td style="font-size:9.5px;color:#222222;font-weight:500;">Bank Transfer Only</td></tr>
             <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;white-space:nowrap;width:48px;vertical-align:top;">PAYEE</td><td style="font-size:9.5px;color:#222222;font-weight:500;">JD STUDIO Limited</td></tr>
             <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">BANK</td><td style="font-size:9.5px;color:#222222;font-weight:500;">Standard Chartered Bank (Hong Kong) Ltd</td></tr>
             <tr><td style="font-size:7.5px;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;padding:1px 6px 2px 0;vertical-align:top;">ACCOUNT</td><td style="font-size:9.5px;color:#222222;font-weight:500;">44796326072</td></tr>

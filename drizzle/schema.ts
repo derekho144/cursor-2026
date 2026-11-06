@@ -46,6 +46,7 @@ export const quotes = mysqlTable("quotes", {
   clientCompany: varchar("clientCompany", { length: 255 }),
   serviceType: mysqlEnum("serviceType", [
     "corporate_event",
+    "party_family_event",
     "product",
     "food_beverage",
     "jewelry",
@@ -64,6 +65,7 @@ export const quotes = mysqlTable("quotes", {
     "other",
   ]).notNull(),
   shootingDate: varchar("shootingDate", { length: 32 }),
+  shootingEndDate: varchar("shootingEndDate", { length: 32 }),
   shootingLocation: text("shootingLocation"),
   notes: text("notes"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),

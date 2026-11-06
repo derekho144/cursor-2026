@@ -31,6 +31,7 @@ import { Link } from "wouter";
 /** Align with quotePdfKit SERVICE_TYPE_LABELS (client-safe copy). */
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   corporate_event: "企業活動攝影",
+  party_family_event: "派對／家庭活動",
   product: "產品攝影",
   food_beverage: "食物攝影",
   jewelry: "珠寶攝影",

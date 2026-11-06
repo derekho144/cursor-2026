@@ -1,3 +1,4 @@
+import { formatQuoteDateRange } from "../../shared/quoteDate";
 /**
  * quotePdfKit.ts
  * Pure Node.js PDF generation using PDFKit — no Chrome/Puppeteer required.
@@ -56,6 +57,7 @@ async function ensureFonts(): Promise<{ regular: string; bold: string }> {
 // ─── Service Type Labels ───────────────────────────────────────────
 export const SERVICE_TYPE_LABELS: Record<string, string> = {
   corporate_event: "企業活動攝影",
+  party_family_event: "派對／家庭活動",
   product: "產品攝影",
   food_beverage: "食物攝影",
   jewelry: "珠寶攝影",
@@ -253,7 +255,7 @@ export async function generateQuotePdfBuffer(
 
     if (quote.shootingDate) {
       doc.fontSize(9).font("NotoSans").fillColor(C.medGray);
-      doc.text(`Date: ${quote.shootingDate}`, PW / 2 + 16, y + 40, { lineBreak: false });
+      doc.text(`Date: ${formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate)}`, PW / 2 + 16, y + 40, { lineBreak: false });
     }
     if (quote.shootingLocation) {
       doc.fontSize(9).font("NotoSans").fillColor(C.medGray);
@@ -586,6 +588,7 @@ export async function generateQuotePdfBuffer(
     y += 14;
 
     const bankRows = [
+      ["PAYMENT METHOD", "Bank Transfer Only"],
       ["PAYEE", "JD STUDIO Limited"],
       ["BANK", "Standard Chartered Bank (Hong Kong) Ltd"],
       ["ACCOUNT", "44796326072"],

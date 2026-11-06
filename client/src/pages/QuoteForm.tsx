@@ -1,3 +1,4 @@
+import { isValidQuoteDateRange } from "@shared/quoteDate";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
@@ -79,6 +80,7 @@ import {
 
 const SERVICE_OPTIONS = [
   { value: "corporate_event", label: "企業活動攝影" },
+  { value: "party_family_event", label: "派對／家庭活動 Party / Family Event" },
   { value: "product", label: "產品攝影" },
   { value: "food_beverage", label: "食物攝影" },
   { value: "jewelry", label: "珠寶攝影" },
@@ -142,6 +144,7 @@ type FormData = {
   clientCompany: string;
   serviceType: string;
   shootingDate: string;
+  shootingEndDate: string;
   shootingLocation: string;
   notes: string;
   discountPercent: number; // 0-100, e.g. 10 = 10% off
@@ -192,6 +195,7 @@ const emptyForm: FormData = {
   clientCompany: "",
   serviceType: "corporate_event",
   shootingDate: "",
+  shootingEndDate: "",
   shootingLocation: "",
   notes: "",
   discountPercent: 0,
@@ -272,6 +276,19 @@ function parseEditDraft(raw: string | null): EditDraftEnvelope | null {
 }
 
 function formDataFromExistingQuote(existingQuote: any): FormData {
+  const existingItems = (existingQuote.items ?? []).map((item: any) => ({
+    id: crypto.randomUUID(),
+    description: item.description,
+    quantity: Number(item.quantity),
+    unitPrice: Number(item.unitPrice),
+    amount: Number(item.amount),
+    category: isQuoteLineItemCategory(item.category)
+      ? (item.category as QuoteLineItemCategory)
+      : ("" as const),
+  }));
+  const items = hasConditionalSectionB(existingQuote.serviceType)
+    ? applySectionBForServiceType(existingItems, existingQuote.serviceType, () => crypto.randomUUID())
+    : existingItems;
   return normalizeFormData({
     clientName: existingQuote.clientName,
     clientEmail: existingQuote.clientEmail ?? "",
@@ -279,6 +296,7 @@ function formDataFromExistingQuote(existingQuote: any): FormData {
     clientCompany: existingQuote.clientCompany ?? "",
     serviceType: existingQuote.serviceType,
     shootingDate: existingQuote.shootingDate ?? "",
+    shootingEndDate: (existingQuote as any).shootingEndDate ?? "",
     shootingLocation: existingQuote.shootingLocation ?? "",
     notes: existingQuote.notes ?? "",
     discountPercent: Number(existingQuote.discountPercent ?? 0),
@@ -329,16 +347,7 @@ function formDataFromExistingQuote(existingQuote: any): FormData {
       Number(existingQuote.whatsappClickId) > 0
         ? Number(existingQuote.whatsappClickId)
         : undefined,
-    items: (existingQuote.items ?? []).map((item: any) => ({
-      id: crypto.randomUUID(),
-      description: item.description,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
-      amount: Number(item.amount),
-      category: isQuoteLineItemCategory(item.category)
-        ? (item.category as QuoteLineItemCategory)
-        : ("" as const),
-    })),
+    items,
   });
 }
 
@@ -1545,6 +1554,11 @@ export default function QuoteForm() {
       const s = (v ?? "").trim();
       return s ? s : null;
     };
+    if (!isValidQuoteDateRange(form.shootingDate, form.shootingEndDate)) {
+      toast.error("拍攝結束日期不可早於開始日期");
+      return;
+    }
+
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
@@ -1870,37 +1884,26 @@ export default function QuoteForm() {
               </Select>
             </FormField>
             {!DESIGN_SERVICE_TYPES.has(form.serviceType) && (
-              <FormField label="拍攝日期">
-                <Input
-                  type="date"
-                  value={form.shootingDate}
-                  onChange={(e) => {
+              <>
+                <FormField label="拍攝開始日期">
+                  <Input type="date" value={form.shootingDate} onChange={(e) => {
                     const newShootingDate = e.target.value;
                     setForm((p) => {
-                      // Auto-set validUntil to 14 days before shooting date
-                      // only if validUntil is empty or was previously auto-set (same as old shooting date - 14 days)
                       let newValidUntil = p.validUntil;
                       if (newShootingDate) {
-                        const shootDate = new Date(newShootingDate);
-                        const autoValid = new Date(shootDate);
-                        autoValid.setDate(autoValid.getDate() - 14);
-                        const autoValidStr = autoValid.toISOString().split('T')[0];
-                        // Check if current validUntil was auto-set from old shooting date
-                        const oldAutoValid = p.shootingDate ? (() => {
-                          const old = new Date(p.shootingDate);
-                          old.setDate(old.getDate() - 14);
-                          return old.toISOString().split('T')[0];
-                        })() : null;
-                        if (!p.validUntil || p.validUntil === p.shootingDate || p.validUntil === oldAutoValid) {
-                          newValidUntil = autoValidStr;
-                        }
+                        const autoValid = new Date(newShootingDate); autoValid.setDate(autoValid.getDate() - 14);
+                        const autoValidStr = autoValid.toISOString().split("T")[0];
+                        const oldAutoValid = p.shootingDate ? (() => { const old = new Date(p.shootingDate); old.setDate(old.getDate() - 14); return old.toISOString().split("T")[0]; })() : null;
+                        if (!p.validUntil || p.validUntil === p.shootingDate || p.validUntil === oldAutoValid) newValidUntil = autoValidStr;
                       }
                       return { ...p, shootingDate: newShootingDate, validUntil: newValidUntil };
                     });
-                  }}
-                  style={inputStyle}
-                />
-              </FormField>
+                  }} style={inputStyle} />
+                </FormField>
+                <FormField label="拍攝結束日期（多日拍攝可選）">
+                  <Input type="date" min={form.shootingDate || undefined} value={form.shootingEndDate} onChange={(e) => setForm((p) => ({ ...p, shootingEndDate: e.target.value }))} style={inputStyle} />
+                </FormField>
+              </>
             )}
             <FormField label="拍攝地點">
               <Input

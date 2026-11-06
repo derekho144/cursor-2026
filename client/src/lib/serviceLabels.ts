@@ -6,6 +6,7 @@
 
 export const SERVICE_LABELS: Record<string, string> = {
   corporate_event: "企業活動攝影",
+  party_family_event: "派對／家庭活動",
   product: "產品攝影",
   food_beverage: "食物攝影",
   jewelry: "珠寶攝影",
@@ -26,6 +27,7 @@ export const SERVICE_LABELS: Record<string, string> = {
 
 export const SERVICE_LABELS_EN: Record<string, string> = {
   corporate_event: "Corporate Event Photography",
+  party_family_event: "Party / Family Event",
   product: "Product Photography",
   food_beverage: "Food & Beverage Photography",
   jewelry: "Jewelry Photography",

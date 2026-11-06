@@ -5,6 +5,7 @@
  * Layout matches the quotation PDF template exactly, with title changed to RECEIPT.
  * Accessible publicly via delivery token (no login required).
  */
+import { formatQuoteDateRange } from "@shared/quoteDate";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
@@ -307,7 +308,7 @@ export default function ReceiptPrintPage() {
               )}
               {quote.clientPhone && <div style={S.clientDetail}>{quote.clientPhone}</div>}
               {quote.clientEmail && <div style={S.clientDetail}>{quote.clientEmail}</div>}
-              {quote.shootingDate && <div style={S.clientDetail}>Date: {quote.shootingDate}</div>}
+              {quote.shootingDate && <div style={S.clientDetail}>Date: {formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate)}</div>}
               {quote.shootingLocation && <div style={S.clientDetail}>Location: {quote.shootingLocation}</div>}
             </div>
             <div style={S.serviceCol}>
@@ -474,6 +475,10 @@ export default function ReceiptPrintPage() {
             <div style={S.paymentGrid}>
               <div style={S.paymentCol}>
                 <div style={S.paymentTitle}>BANK TRANSFER</div>
+                <div style={S.paymentRow}>
+                  <span style={S.paymentRowLabel}>PAYMENT METHOD</span>
+                  <span style={S.paymentRowValue}>Bank Transfer Only</span>
+                </div>
                 <div style={S.paymentRow}>
                   <span style={S.paymentRowLabel}>PAYEE</span>
                   <span style={S.paymentRowValue}>JD STUDIO Limited</span>

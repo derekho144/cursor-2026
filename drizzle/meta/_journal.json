@@ -491,6 +491,20 @@
       "when": 1789700000000,
       "tag": "0069_ads_offline_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "5",
+      "when": 1793868355588,
+      "tag": "0070_public_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "5",
+      "when": 1793944468278,
+      "tag": "0071_cooing_stature",
+      "breakpoints": true
     }
   ]
 }

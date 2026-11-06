@@ -25,6 +25,7 @@ describe("quoteSectionB", () => {
   it("exposes food, event, and product service gates", () => {
     expect(hasConditionalSectionB("food_beverage")).toBe(true);
     expect(hasConditionalSectionB("corporate_event")).toBe(true);
+    expect(hasConditionalSectionB("party_family_event")).toBe(true);
     expect(hasConditionalSectionB("product")).toBe(true);
     expect(hasConditionalSectionB("jewelry")).toBe(false);
   });

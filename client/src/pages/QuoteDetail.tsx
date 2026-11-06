@@ -1,3 +1,4 @@
+import { formatQuoteDateRange } from "@shared/quoteDate";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
@@ -572,7 +573,7 @@ export default function QuoteDetail() {
                   {SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}
                 </span>
               </div>
-              {quote.shootingDate && !(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && <div className="text-sm text-muted-foreground">拍攝日期：{quote.shootingDate}</div>}
+              {quote.shootingDate && !(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && <div className="text-sm text-muted-foreground">拍攝日期：{formatQuoteDateRange(quote.shootingDate, (quote as any).shootingEndDate)}</div>}
               {quote.shootingLocation && <div className="text-sm text-muted-foreground mt-1">拍攝地點：{quote.shootingLocation}</div>}
               {!(["graphic_design","web_development","menu_design"].includes(quote.serviceType)) && (
                 <>
