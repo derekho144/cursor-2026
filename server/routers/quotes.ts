@@ -27,7 +27,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
-import { sendEmail } from "../resendEmail";
+import { normalizeEmailAddress, sendEmail } from "../resendEmail";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
@@ -947,13 +947,14 @@ ${itemsText}
   sendQuoteEmail: protectedProcedure
     .input(z.object({
       id: z.number(),
-      to: z.string(),
+      to: z.string().trim().email("請輸入有效的收件人電郵地址"),
       subject: z.string(),
       body: z.string(),
     }))
     .mutation(async ({ input }) => {
       const quote = await getQuoteById(input.id);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
+      const recipient = normalizeEmailAddress(input.to);
       if (!ENV.gmailUser || !ENV.gmailAppPassword) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
@@ -971,7 +972,7 @@ ${itemsText}
       // Pre-create email log to get the ID for tracking pixel
       const logId = await createEmailLog({
         quoteId: input.id,
-        to: input.to,
+        to: recipient,
         subject: input.subject,
         body: input.body,
         status: "sent",
@@ -990,7 +991,7 @@ ${itemsText}
 </div>`;
 
       const result = await sendEmail({
-        to: input.to,
+        to: recipient,
         subject: input.subject,
         html: htmlBody,
         text: input.body,
@@ -1022,7 +1023,7 @@ ${itemsText}
       }
 
       if (quote.status === "draft") await updateQuote(input.id, { status: "sent" });
-      return { success: true, sentTo: input.to };
+      return { success: true, sentTo: recipient };
     }),
 
   // ─── Generate Sign Link (admin) ────────────────────────────────
