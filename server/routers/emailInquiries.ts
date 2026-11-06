@@ -51,10 +51,34 @@ import {
   refineInquiryParseWithExtractors,
   resolveInquiryCrewCounts,
 } from "../inquiryParseRefine";
+import { buildInquiryQuoteItems } from "../inquiryQuoteItems";
 import {
   applyAttachmentUnderstandingToParsed,
   resolveAttachmentUnderstanding,
 } from "../../shared/emailAttachmentUnderstanding";
+import { sectionBLinesForService } from "../../shared/quoteSectionB";
+import { hasOrphanedQuoteLink } from "../inquiryQuoteRepair";
+
+/** Keep inquiry-created quote drafts aligned with the full QuoteForm Section B options. */
+function addSectionBQuoteItems<T extends {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  sortOrder?: number;
+}>(items: T[], serviceType: string): T[] {
+  if (items.some((item) => /^SECTION\s+B\b|^(B1(?:\.1)?|B2)\b/i.test(item.description.trim()))) {
+    return items;
+  }
+  const sectionB = sectionBLinesForService(serviceType).map((line, index) => ({
+    description: line.description,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    amount: line.amount,
+    sortOrder: items.length + index,
+  }));
+  return [...items, ...sectionB] as T[];
+}
 
 /** After AI parse: annotate attachment status (none/used/missing/unsupported) and gate confidence. */
 function enrichParsedWithAttachmentGate(
@@ -764,7 +788,7 @@ async function parseInquiryWithAI(subject: string, body: string, fromEmail?: str
   const classifyText = buildInquiryClassifyText(subject, body);
   const keywordHint = hintServiceTypeFromText(`${subject}\n${body}`);
   const quickParsePrompt = `Identify the photography/design service type from this email inquiry. Return only the serviceType value.
-Service types: corporate_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, kol_mi, other
+Service types: corporate_event, party_family_event, product, food_beverage, jewelry, artwork, interior, video_production, graphic_design, ad_video, web_development, ai_photography, menu_design, portrait, 360_photography, drone, kol_mi, other
 Use kol_mi for KOL/influencer/MI social promotions.
 Prefer signals from the subject, body, AND any PDF attachment text section.
 Email:
@@ -904,10 +928,10 @@ corporate_event photography
   - Main item: "Event Photography" - billed PER HOUR. Extract event duration from email. Default: 5 hours (half-day) only if duration missing — then quantitySource must be "assumed".
   - Corporate/commercial events: HKD 1,000/hr. Personal events (birthday, wedding, etc.): HKD 700/hr.
   - Half-day ≈ 4–5 hours; full-day ≈ 6–10 hours. Set durationPackage accordingly.
-  - Retouching is INCLUDED. Add "Transportation Fee" HKD 320 (fixed, always include).
+  - Retouching is INCLUDED, but ALWAYS add a separate zero-priced line: "Retouch (Post image editing included fine retouch of lighting, colour, sharpen, dust)" (quantity 1, unitPrice 0). Add "Transportation Fee" HKD 320 (fixed, always include).
   - If videography also requested, add "Event Videography" per hour HKD 1,500-2,500 + "Video Editing" flat HKD 2,000-4,000.
-  - Example (corporate, 4 hrs): 4 x HKD 1,000 + transport HKD 320 = HKD 4,320.
-  - Example (personal, 3 hrs): 3 x HKD 700 + transport HKD 320 = HKD 2,420.
+  - Example (corporate, 4 hrs): 4 x HKD 1,000 + included retouch HKD 0 + transport HKD 320 = HKD 4,320.
+  - Example (personal, 3 hrs): 3 x HKD 700 + included retouch HKD 0 + transport HKD 320 = HKD 2,420.
 
 ${arwRawDeliveryBillingRulesText()}
 
@@ -960,7 +984,7 @@ artwork photography
   - unitPrice per location: HKD 800-1,500. Add: "Virtual Tour Stitching & Hosting" flat HKD 1,500-3,000.
 
 RETOUCHING SUMMARY (CRITICAL):
-  - product, food_beverage, jewelry, corporate_event: retouching INCLUDED in per-image/per-hour price. Do NOT add separate retouching line.
+  - product, food_beverage, jewelry, corporate_event, party_family_event: retouching INCLUDED in the service price. ALWAYS show an explicit zero-priced included retouching line; never add a retouching charge for these services.
   - interior, portrait: retouching is SEPARATE at HKD 150/image. ALWAYS add as a line item.
 
 IMPORTANT RULES FOR ALL SERVICE TYPES:
@@ -1069,7 +1093,7 @@ Extract and return a JSON object with these fields:
 - clientEmail: string (reply-to email if mentioned, or empty string)
 - clientPhone: string (phone number if mentioned, or empty string)
 - clientCompany: string (company name if mentioned, or empty string)
-- serviceType: one of ["corporate_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"]
+- serviceType: one of ["corporate_event","party_family_event","product","food_beverage","jewelry","artwork","interior","video_production","graphic_design","ad_video","web_development","ai_photography","menu_design","portrait","360_photography","drone","kol_mi","other"]
   (use "kol_mi" for KOL/influencer marketing, social media content creation, MI promotions)
 - eventName: string (event / project name if mentioned, else empty string)
 - shootingDate: string (date mentioned, YYYY-MM-DD format, or empty string — do NOT invent)
@@ -1443,6 +1467,7 @@ interface MeetingDraftParams {
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   corporate_event: "corporate event photography",
+  party_family_event: "party / family event photography",
   product: "product photography",
   food_beverage: "food & beverage photography",
   jewelry: "jewelry photography",
@@ -1780,20 +1805,11 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
     if (isHighConfidence && !isFHSource && !isHighValue && readyForAutoDraft && inquiry) {
       try {
         const clientName = aiResult?.clientName || fromName || fromEmail;
-        const items = (aiResult?.suggestedItems ?? []).map((item: any, idx: number) => {
-          const qty = Number(item.quantity) || 1;
-          const price = Number(item.unitPrice) || 0;
-          return {
-            description: item.description || "Photography Service",
-            quantity: qty,
-            unitPrice: price,
-            amount: qty * price,
-            sortOrder: idx,
-          };
-        });
-        if (items.length === 0) {
-          items.push({ description: "Photography Service", quantity: 1, unitPrice: 0, amount: 0, sortOrder: 0 });
-        }
+        const serviceType = (aiResult?.serviceType as string) || "other";
+        const items = addSectionBQuoteItems(
+          buildInquiryQuoteItems(aiResult),
+          serviceType,
+        );
         // 自動計算 subtotal 和 total（$0 項目視為免費服務，仍計入項目列表但不計入金額）
         const subtotalNum = items.reduce((sum: number, it: { amount: number }) => sum + it.amount, 0);
         const newQuote = await createQuote({
@@ -1801,7 +1817,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
           clientEmail: aiResult?.clientEmail || fromEmail,
           clientPhone: aiResult?.clientPhone || "",
           clientCompany: aiResult?.clientCompany || "",
-          serviceType: (aiResult?.serviceType as any) || "other",
+          serviceType: serviceType as any,
           shootingDate: aiResult?.shootingDate || "",
           shootingLocation: aiResult?.shootingLocation || "",
           notes: formatInquiryDraftNotes({
@@ -1810,7 +1826,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
             aiNotes: aiResult?.notes,
             readiness: draftReadiness,
             autoDraft: true,
-            serviceType: (aiResult?.serviceType as string) || "other",
+            serviceType,
           }),
           subtotal: subtotalNum.toString(),
           discountAmount: "0",
@@ -1840,7 +1856,7 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
             subject,
             fhJobId: inquiry.fhJobId,
           }),
-          items,
+          items: items as any,
         });
         await updateEmailInquiry(inquiry.id, { quoteId: newQuote.id });
         console.log(`[EmailInquiry] AI pending_send inquiry ${inquiry.id}, created draft quote ${newQuote.id} (awaiting admin confirmation)`);
@@ -1902,21 +1918,28 @@ export const emailInquiriesRouter = router({
 
       let quoteId = existing.quoteId;
 
+      // A previous failed draft creation could leave an orphan quote_id on the
+      // inquiry. Treat it as missing so the admin can repair the inquiry instead
+      // of being sent to a permanent /quotes/:id 404 page.
+      if (quoteId) {
+        const linkedQuote = await getQuoteById(quoteId);
+        if (hasOrphanedQuoteLink(quoteId, linkedQuote)) {
+          console.warn(`[EmailInquiry] Inquiry ${input.id} has orphan quote_id=${quoteId}; rebuilding draft quote`);
+          quoteId = null;
+          await updateEmailInquiry(input.id, { quoteId: null });
+        }
+      }
+
       // If no draft quote linked yet, create one now
       if (!quoteId) {
         try {
           const aiParsed = existing.aiParsed ? JSON.parse(existing.aiParsed) : null;
           const clientName = aiParsed?.clientName || existing.fromName || existing.fromEmail;
-          const items = (aiParsed?.suggestedItems ?? []).map((item: any, idx: number) => ({
-            description: item.description || "Photography Service",
-            quantity: Number(item.quantity) || 1,
-            unitPrice: Number(item.unitPrice) || 0,
-            amount: (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0),
-            sortOrder: idx,
-          }));
-          if (items.length === 0) {
-            items.push({ description: "Photography Service", quantity: 1, unitPrice: 0, amount: 0, sortOrder: 0 });
-          }
+          const serviceType = (aiParsed?.serviceType as string) || "other";
+          const items = addSectionBQuoteItems(
+            buildInquiryQuoteItems(aiParsed),
+            serviceType,
+          );
           const readiness =
             aiParsed?.draftReadiness ??
             (aiParsed ? evaluateInquiryDraftReadiness(aiParsed) : null);
@@ -1929,7 +1952,7 @@ export const emailInquiriesRouter = router({
             clientEmail: input.clientEmail || aiParsed?.clientEmail || existing.fromEmail,
             clientPhone: input.clientPhone || aiParsed?.clientPhone || "",
             clientCompany: aiParsed?.clientCompany || "",
-            serviceType: (aiParsed?.serviceType as any) || "other",
+            serviceType: serviceType as any,
             shootingDate: aiParsed?.shootingDate || "",
             shootingLocation: aiParsed?.shootingLocation || "",
             notes: formatInquiryDraftNotes({
@@ -1938,7 +1961,7 @@ export const emailInquiriesRouter = router({
               aiNotes: aiParsed?.notes,
               readiness,
               autoDraft: false,
-              serviceType: (aiParsed?.serviceType as string) || "other",
+              serviceType,
             }),
             subtotal: subtotalNum.toString(),
             discountAmount: "0",
@@ -1972,12 +1995,22 @@ export const emailInquiriesRouter = router({
               subject: existing.subject,
               fhJobId: existing.fhJobId,
             }),
-            items,
+            items: items as any,
           });
           quoteId = newQuote.id;
           await updateEmailInquiry(input.id, { quoteId });
         } catch (e) {
           console.error("[EmailInquiry] Failed to create draft quote on approve:", e);
+          await updateEmailInquiry(input.id, {
+            status: "pending",
+            processedAt: null,
+            quoteId: null,
+          });
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "建立草稿報價單失敗，請稍後再試。",
+            cause: e,
+          });
         }
       }
 

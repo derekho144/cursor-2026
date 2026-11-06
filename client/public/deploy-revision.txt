@@ -25,3 +25,4 @@ quote-detail-edit-total-sync-v1
 quote-money-summary-unify-v1
 dashboard-expense-ledger-align-v1
 dashboard-expense-total-count-v1
+inquiry-quote-complete-pdf-retry-v1

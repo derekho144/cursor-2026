@@ -9,6 +9,7 @@ import {
 
 const serviceTypeSchema = z.enum([
   "corporate_event",
+  "party_family_event",
   "product",
   "food_beverage",
   "jewelry",

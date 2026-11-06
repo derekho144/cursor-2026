@@ -26,6 +26,13 @@ describe("hintServiceTypeFromText", () => {
     expect(hintServiceTypeFromText("需要產品攝影白底 20 張")).toBe("product");
   });
 
+  it("detects party and family events separately from corporate events", () => {
+    expect(hintServiceTypeFromText("Birthday party family event photography")).toBe(
+      "party_family_event"
+    );
+    expect(hintServiceTypeFromText("家庭活動攝影")).toBe("party_family_event");
+  });
+
   it("treats celebration film + aerial as video_production (not drone-only)", () => {
     expect(
       hintServiceTypeFromText(
@@ -161,7 +168,10 @@ Time: 10:00 am - 12:00 pm
       },
     });
     expect(refined.crewPhotographers).toBe(1);
-    expect(refined.suggestedItems[0].quantity).toBe(1);
+    // A parenthetical duration on a per-hour photography line is billable
+    // quantity, not a flat-package marker. Package detection happens in the
+    // final quote item normalizer where unit price is also available.
+    expect(refined.suggestedItems[0].quantity).toBe(3);
   });
 });
 

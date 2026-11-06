@@ -26,6 +26,7 @@ export const SECTION_B_OPTION_LABEL = "Option";
 export type QuoteSectionBService =
   | "food_beverage"
   | "corporate_event"
+  | "party_family_event"
   | "product";
 
 export type SectionBLineSeed = {
@@ -47,7 +48,7 @@ export function isFoodPhotographyService(serviceType: string): boolean {
 }
 
 export function isEventPhotographyService(serviceType: string): boolean {
-  return serviceType === "corporate_event";
+  return serviceType === "corporate_event" || serviceType === "party_family_event";
 }
 
 export function isProductPhotographyService(serviceType: string): boolean {

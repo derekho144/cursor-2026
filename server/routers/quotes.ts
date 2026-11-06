@@ -305,6 +305,7 @@ const quoteItemSchema = z.object({
 
 const serviceTypeEnum = z.enum([
   "corporate_event",
+  "party_family_event",
   "product",
   "food_beverage",
   "jewelry",
@@ -409,6 +410,7 @@ export const quotesRouter = router({
         clientCompany: z.string().optional(),
         serviceType: serviceTypeEnum,
         shootingDate: z.string().optional(),
+        shootingEndDate: z.string().optional(),
         shootingLocation: z.string().optional(),
         notes: z.string().optional(),
         subtotal: z.number(),
@@ -601,6 +603,7 @@ export const quotesRouter = router({
         clientCompany: z.string().optional(),
         serviceType: serviceTypeEnum.optional(),
         shootingDate: z.string().optional(),
+        shootingEndDate: z.string().optional(),
         shootingLocation: z.string().optional(),
         notes: z.string().optional(),
         subtotal: z.number().optional(),
@@ -703,7 +706,7 @@ export const quotesRouter = router({
         : null;
       // Check if content-affecting fields are being changed
       // If so, clear pdfUrl so the next download regenerates a fresh PDF
-      const contentFields = ["clientName", "serviceType", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
+      const contentFields = ["clientName", "serviceType", "shootingDate", "shootingEndDate", "shootingLocation", "items", "subtotal", "discountPercent", "discountAmount", "total", "depositPercent", "equipment", "team", "shootHours", "shotCount", "durationPackage", "crewPhotographers", "crewAssistants", "crewVideographers", "crewOthers", "deliveryMethod", "validUntil", "notes"];
       const hasContentChange = contentFields.some((f) => f in input);
 
       const existingForReconcile =
