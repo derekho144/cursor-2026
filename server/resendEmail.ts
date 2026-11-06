@@ -50,6 +50,15 @@ export interface SendEmailResult {
   provider?: "resend" | "gmail";
 }
 
+/** Normalize the address once so Resend and Gmail receive the same valid value. */
+export function normalizeEmailAddress(value: string): string {
+  const normalized = value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error("收件人電郵地址格式不正確");
+  }
+  return normalized;
+}
+
 /**
  * Send an email via Gmail SMTP (Nodemailer).
  * Used as fallback when Resend domain is not verified.
@@ -107,6 +116,8 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
  * this will fail for external recipients and fall back to Gmail SMTP.
  */
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
+  const normalizedTo = normalizeEmailAddress(opts.to);
+  const normalizedOpts = { ...opts, to: normalizedTo };
   const resend = getResend();
   const gmailUser = process.env.GMAIL_USER;
 
@@ -117,7 +128,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
   try {
     const { data, error } = await resend.emails.send({
       from,
-      to: [opts.to],
+      to: [normalizedTo],
       subject: opts.subject,
       html: opts.html ?? "<p></p>",
       ...(opts.text ? { text: opts.text } : {}),
@@ -137,10 +148,10 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
       // Resend domain not verified — fall back to Gmail SMTP
       if (errMsg.includes("domain is not verified") || errMsg.includes("testing emails")) {
         process.stderr.write(`[Resend] Domain not verified, falling back to Gmail SMTP: ${errMsg}\n`);
-        return sendViaGmail(opts);
+        return sendViaGmail(normalizedOpts);
       }
-      console.error("[Resend] Send error:", error);
-      return { success: false, error: errMsg };
+      console.error("[Resend] Send error; falling back to Gmail SMTP:", error);
+      return sendViaGmail(normalizedOpts);
     }
 
     process.stderr.write(`[Resend] Sent to ${opts.to}: ${data?.id}\n`);
@@ -149,7 +160,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
     console.error("[Resend] Unexpected error:", err);
     // Fallback to Gmail on unexpected errors
     process.stderr.write(`[Resend] Unexpected error, falling back to Gmail SMTP: ${err?.message}\n`);
-    return sendViaGmail(opts);
+    return sendViaGmail(normalizedOpts);
   }
 }
 
