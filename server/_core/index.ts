@@ -92,7 +92,8 @@ async function startServer() {
           parseWhatsappWebhookPayload,
           isWhatsappCloudConfigured,
         } = await import("./whatsappCloud");
-        const { recordWhatsappInboundMessage } = await import("../db");
+        const { recordWhatsappInboundMessage, getWhatsappClickAttributionById } = await import("../db");
+        const { scheduleWhatsappInboundConversionUpload } = await import("../adsOfflineConversions");
 
         if (!isWhatsappCloudConfigured()) {
           res.status(503).json({ error: "not_configured" });
@@ -130,6 +131,20 @@ async function startServer() {
           console.log(
             `[WhatsApp Webhook] inbound from=${msg.fromPhone} match=${saved?.matchReason || "?"} click=${saved?.matchedClickId ?? "-"}`
           );
+          if (saved?.id && saved.matchedClickId) {
+            const click = await getWhatsappClickAttributionById(saved.matchedClickId);
+            if (click) {
+              scheduleWhatsappInboundConversionUpload({
+                inboundId: saved.id,
+                gclid: click.gclid,
+                gbraid: click.gbraid,
+                wbraid: click.wbraid,
+                waTimestamp: saved.waTimestamp,
+                createdAt: saved.createdAt,
+                adsOfflineConversionUploadedAt: saved.adsOfflineConversionUploadedAt,
+              });
+            }
+          }
         }
 
         // Meta requires 200 quickly
@@ -410,7 +425,7 @@ async function startServer() {
       }
     }
     if (
-      (source === "other" || source === "website") &&
+      ((source as string) === "other" || source === "website") &&
       hasAdsAttribution(attr)
     ) {
       source = "google_ads";

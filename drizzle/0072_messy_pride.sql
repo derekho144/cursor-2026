@@ -1,0 +1,2 @@
+ALTER TABLE `whatsapp_inbound_messages` ADD `ads_offline_conversion_uploaded_at` timestamp;--> statement-breakpoint
+ALTER TABLE `whatsapp_inbound_messages` ADD `ads_offline_conversion_last_error` varchar(512);

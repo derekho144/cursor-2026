@@ -588,6 +588,9 @@ export const whatsappInboundMessages = mysqlTable("whatsapp_inbound_messages", {
   matchedClickId: int("matched_click_id"),
   /** single_recent | none | manual */
   matchReason: varchar("match_reason", { length: 32 }),
+  /** Google Ads offline lead upload markers; one conversion per inbound message. */
+  adsOfflineConversionUploadedAt: timestamp("ads_offline_conversion_uploaded_at"),
+  adsOfflineConversionLastError: varchar("ads_offline_conversion_last_error", { length: 512 }),
   rawJson: mediumtext("raw_json"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
