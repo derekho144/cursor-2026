@@ -21,6 +21,7 @@ vi.mock("./db", () => ({
 
 vi.mock("../drizzle/schema", () => ({
   quotes: { id: "id" },
+  whatsappInboundMessages: { id: "whatsapp-inbound-id" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -107,5 +108,29 @@ describe("adsOfflineConversions", () => {
     });
     expect(r.skipped).toBe("already_uploaded");
     expect(uploadClickConversions).not.toHaveBeenCalled();
+  });
+
+  it("uploads one matched WhatsApp inbound as a lead and marks it", async () => {
+    const { uploadWhatsappInboundConversion } = await import("./adsOfflineConversions");
+    const r = await uploadWhatsappInboundConversion({
+      inboundId: 22560001,
+      gclid: "Cj0WA-LEAD",
+      waTimestamp: new Date("2026-11-06T04:13:38Z"),
+    });
+    expect(r.ok).toBe(true);
+    expect(uploadClickConversions).toHaveBeenCalledWith([
+      expect.objectContaining({
+        gclid: "Cj0WA-LEAD",
+        orderId: "jd-wa-inbound-22560001",
+        conversionValue: 1,
+      }),
+    ]);
+    expect(update).toHaveBeenCalledWith({ id: "whatsapp-inbound-id" });
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adsOfflineConversionUploadedAt: expect.any(Date),
+        adsOfflineConversionLastError: null,
+      })
+    );
   });
 });

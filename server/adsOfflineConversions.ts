@@ -16,7 +16,7 @@ import {
   type ClickConversionUpload,
 } from "./googleAds";
 import { getDb } from "./db";
-import { quotes } from "../drizzle/schema";
+import { quotes, whatsappInboundMessages } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 const INQUIRY_ACTION_NAME = "JD Quote Inquiry (Offline)";
@@ -35,7 +35,19 @@ export type QuoteConversionRow = {
   adsOfflineAcceptedUploadedAt?: Date | string | null;
 };
 
-function clickId(row: QuoteConversionRow): { kind: "gclid" | "gbraid" | "wbraid"; value: string } | null {
+export type WhatsappInboundConversionRow = {
+  inboundId: number;
+  gclid?: string | null;
+  gbraid?: string | null;
+  wbraid?: string | null;
+  waTimestamp?: Date | string | null;
+  createdAt?: Date | string | null;
+  adsOfflineConversionUploadedAt?: Date | string | null;
+};
+
+type ClickIdRow = Pick<QuoteConversionRow, "gclid" | "gbraid" | "wbraid">;
+
+function clickId(row: ClickIdRow): { kind: "gclid" | "gbraid" | "wbraid"; value: string } | null {
   const gclid = (row.gclid || "").trim();
   if (gclid) return { kind: "gclid", value: gclid };
   const gbraid = (row.gbraid || "").trim();
@@ -158,6 +170,78 @@ export async function uploadQuoteAcceptedConversion(row: QuoteConversionRow): Pr
   }
 }
 
+/** Upload one matched WhatsApp inbound as a real lead, once only. */
+export async function uploadWhatsappInboundConversion(
+  row: WhatsappInboundConversionRow
+): Promise<{ ok: boolean; skipped?: string; error?: string }> {
+  if (row.adsOfflineConversionUploadedAt) {
+    return { ok: true, skipped: "already_uploaded" };
+  }
+  const click = clickId(row);
+  if (!click) return { ok: true, skipped: "no_click_id" };
+
+  const mark = async (error: string | null) => {
+    const db = await getDb();
+    if (!db) return;
+    await db
+      .update(whatsappInboundMessages)
+      .set({
+        ...(error ? {} : { adsOfflineConversionUploadedAt: new Date() }),
+        adsOfflineConversionLastError: error,
+      })
+      .where(eq(whatsappInboundMessages.id, row.inboundId));
+  };
+
+  try {
+    await ensureAdsOfflineConversionSchema();
+    const envId = (process.env.GOOGLE_ADS_QUOTE_INQUIRY_CONVERSION_ACTION_ID || "").trim();
+    const action = envId
+      ? `customers/${(process.env.GOOGLE_ADS_AD_ACCOUNT_ID ?? "4839352747").replace(/-/g, "")}/conversionActions/${envId}`
+      : await ensureUploadClickConversionAction(INQUIRY_ACTION_NAME, "SUBMIT_LEAD_FORM");
+    const when = row.waTimestamp || row.createdAt
+      ? new Date(row.waTimestamp || row.createdAt!)
+      : new Date();
+    const conversion: ClickConversionUpload = {
+      conversionAction: action,
+      conversionDateTime: formatAdsConversionDateTime(when),
+      conversionValue: 1,
+      currencyCode: "HKD",
+      orderId: `jd-wa-inbound-${row.inboundId}`,
+      consent: { adUserData: "GRANTED" },
+    };
+    if (click.kind === "gclid") conversion.gclid = click.value;
+    if (click.kind === "gbraid") conversion.gbraid = click.value;
+    if (click.kind === "wbraid") conversion.wbraid = click.value;
+
+    const result = await uploadClickConversions([conversion]);
+    if (result.partialFailure) {
+      const error = (result.errorMessage || "partial_failure").slice(0, 512);
+      await mark(error);
+      return { ok: false, error };
+    }
+    await mark(null);
+    return { ok: true };
+  } catch (err) {
+    const error = String((err as Error)?.message || err).slice(0, 512);
+    try {
+      await mark(error);
+    } catch (_) {}
+    return { ok: false, error };
+  }
+}
+
+export function scheduleWhatsappInboundConversionUpload(
+  row: WhatsappInboundConversionRow
+): void {
+  void uploadWhatsappInboundConversion(row).then((result) => {
+    if (!result.ok) {
+      console.warn(`[Ads OCI] WhatsApp inbound #${row.inboundId}:`, result.error);
+    } else if (!result.skipped) {
+      console.log(`[Ads OCI] WhatsApp inbound uploaded #${row.inboundId}`);
+    }
+  });
+}
+
 /** Fire-and-forget wrappers used by quote router. */
 export function scheduleQuoteInquiryConversionUpload(row: QuoteConversionRow): void {
   void uploadQuoteInquiryConversion(row).then((r) => {
@@ -191,6 +275,20 @@ export async function ensureAdsOfflineConversionSchema(): Promise<void> {
     await add("ads_offline_inquiry_uploaded_at", "timestamp NULL");
     await add("ads_offline_accepted_uploaded_at", "timestamp NULL");
     await add("ads_offline_last_error", "varchar(512)");
+    const addInbound = async (col: string, ddl: string) => {
+      try {
+        await db.execute(
+          sql.raw(`ALTER TABLE \`whatsapp_inbound_messages\` ADD \`${col}\` ${ddl}`)
+        );
+      } catch (err) {
+        const msg = String((err as any)?.message || err);
+        if (!/Duplicate column|already exists/i.test(msg)) {
+          console.warn(`[Ads OCI] ADD whatsapp_inbound_messages.${col}:`, msg.slice(0, 200));
+        }
+      }
+    };
+    await addInbound("ads_offline_conversion_uploaded_at", "timestamp NULL");
+    await addInbound("ads_offline_conversion_last_error", "varchar(512)");
   } catch (err) {
     // Tests / environments without full db mock — ignore
     console.warn("[Ads OCI] ensure schema skipped:", String((err as Error)?.message || err).slice(0, 160));

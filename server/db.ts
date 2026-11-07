@@ -3038,6 +3038,8 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
       \`wa_timestamp\` timestamp NULL,
       \`matched_click_id\` int,
       \`match_reason\` varchar(32),
+      \`ads_offline_conversion_uploaded_at\` timestamp NULL,
+      \`ads_offline_conversion_last_error\` varchar(512),
       \`raw_json\` mediumtext,
       \`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT \`whatsapp_inbound_messages_id\` PRIMARY KEY(\`id\`),
@@ -3049,6 +3051,17 @@ export async function ensureAdsQuoteAttributionSchema(): Promise<void> {
       String((err as any)?.message || err).slice(0, 200)
     );
   }
+
+  await addCol(
+    "whatsapp_inbound_messages",
+    "ads_offline_conversion_uploaded_at",
+    "timestamp NULL"
+  );
+  await addCol(
+    "whatsapp_inbound_messages",
+    "ads_offline_conversion_last_error",
+    "varchar(512)"
+  );
 
   adsQuoteAttributionSchemaReady = true;
   console.log("[ads-attribution] schema 0066/0067/0068/0069 ensured");
@@ -3311,6 +3324,27 @@ export async function listUnmatchedAdsWhatsappClicks(limit = 50) {
     )
     .orderBy(desc(whatsappClickEvents.clickedAt))
     .limit(limit);
+}
+
+/** Read the click attribution attached to one WhatsApp inbound message. */
+export async function getWhatsappClickAttributionById(id: number) {
+  const db = await getDb();
+  if (!db || !Number.isFinite(id) || id <= 0) return null;
+  await ensureAdsQuoteAttributionSchema();
+  const rows = await db
+    .select({
+      id: whatsappClickEvents.id,
+      gclid: whatsappClickEvents.gclid,
+      gbraid: whatsappClickEvents.gbraid,
+      wbraid: whatsappClickEvents.wbraid,
+      clickedAt: whatsappClickEvents.clickedAt,
+      adsCampaignId: whatsappClickEvents.adsCampaignId,
+      adsCampaignName: whatsappClickEvents.adsCampaignName,
+    })
+    .from(whatsappClickEvents)
+    .where(eq(whatsappClickEvents.id, id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /** Persist Cloud API inbound message + auto-match Ads click when unambiguous. */
