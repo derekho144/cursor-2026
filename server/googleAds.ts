@@ -238,8 +238,10 @@ export function formatAdsConversionDateTime(d: Date): string {
 }
 
 /**
- * Upload offline click conversions (UPLOAD_CLICKS actions).
- * partialFailure is always true so valid rows still import.
+ * Upload offline click conversions through the Data Manager API.
+ * New integrations are not allowed to use the legacy Google Ads
+ * ConversionUploadService endpoint. The conversion action must be an
+ * UPLOAD_CLICKS action owned by AD_ACCOUNT_ID.
  */
 export async function uploadClickConversions(
   conversions: ClickConversionUpload[],
@@ -248,42 +250,71 @@ export async function uploadClickConversions(
   checkEnvVars();
   if (!conversions.length) return { partialFailure: false, results: [] };
   const accessToken = await getAccessToken();
-  const res = await fetch(
-    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${AD_ACCOUNT_ID}:uploadClickConversions`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "developer-token": DEVELOPER_TOKEN,
-        "login-customer-id": MANAGER_CUSTOMER_ID,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        conversions,
-        partialFailure: true,
-        validateOnly: Boolean(opts?.validateOnly),
-      }),
-    }
-  );
+  const firstAction = conversions[0]?.conversionAction ?? "";
+  const actionId = firstAction.match(/conversionActions\/(\d+)$/)?.[1];
+  if (!actionId || conversions.some((c) => !c.conversionAction.endsWith(`/conversionActions/${actionId}`))) {
+    throw new Error("Data Manager upload requires all conversions to use one valid UPLOAD_CLICKS conversion action");
+  }
+
+  const toIsoTimestamp = (value: string) => {
+    // Existing callers provide Google Ads format: YYYY-MM-DD HH:mm:ss+08:00.
+    // Data Manager accepts an ISO-8601 timestamp.
+    const iso = value.includes("T") ? value : value.replace(" ", "T");
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) throw new Error(`Invalid conversion timestamp: ${value}`);
+    return date.toISOString();
+  };
+
+  const events = conversions.map((conversion) => {
+    const adIdentifiers: Record<string, string> = {};
+    if (conversion.gclid) adIdentifiers.gclid = conversion.gclid;
+    if (conversion.gbraid) adIdentifiers.gbraid = conversion.gbraid;
+    if (conversion.wbraid) adIdentifiers.wbraid = conversion.wbraid;
+    return {
+      adIdentifiers,
+      conversionValue: conversion.conversionValue ?? 0,
+      currency: conversion.currencyCode ?? "HKD",
+      eventTimestamp: toIsoTimestamp(conversion.conversionDateTime),
+      transactionId: conversion.orderId,
+      eventSource: "WEB",
+    };
+  });
+
+  const res = await fetch("https://datamanager.googleapis.com/v1/events:ingest", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      destinations: [
+        {
+          operatingAccount: { accountType: "GOOGLE_ADS", accountId: AD_ACCOUNT_ID },
+          loginAccount: { accountType: "GOOGLE_ADS", accountId: MANAGER_CUSTOMER_ID },
+          productDestinationId: actionId,
+        },
+      ],
+      encoding: "HEX",
+      events,
+      validateOnly: Boolean(opts?.validateOnly),
+    }),
+  });
   const json = (await res.json()) as any;
   if (!res.ok) {
     const errMsg =
       json?.error?.details?.[0]?.errors?.[0]?.message ??
       json?.error?.message ??
       JSON.stringify(json);
-    throw new Error(`Google Ads uploadClickConversions error (${res.status}): ${errMsg}`);
+    throw new Error(`Google Data Manager events.ingest error (${res.status}): ${errMsg}`);
   }
-  const pf = json.partialFailureError;
+  const warnings = Array.isArray(json.fieldWarnings) ? json.fieldWarnings : [];
   let errorMessage: string | undefined;
-  if (pf) {
-    errorMessage =
-      pf.message ||
-      pf.details?.[0]?.errors?.[0]?.message ||
-      JSON.stringify(pf).slice(0, 400);
+  if (warnings.length) {
+    errorMessage = JSON.stringify(warnings).slice(0, 400);
   }
   return {
-    partialFailure: Boolean(pf),
-    results: Array.isArray(json.results) ? json.results : [],
+    partialFailure: warnings.length > 0,
+    results: json.requestId ? [{ requestId: json.requestId }] : [],
     errorMessage,
   };
 }
