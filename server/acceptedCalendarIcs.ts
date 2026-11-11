@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
 import {
+  enumerateInclusiveYmds,
   nextQuoteYmd,
   normalizeQuoteDateYmd,
   normalizeShootDateSpan,
@@ -117,41 +118,77 @@ export function buildAcceptedShootEventDescription(
   return lines.join("\n");
 }
 
-export function buildAcceptedShootVEvent(
+/**
+ * Google Calendar subscribed feeds often keep a stale single-day VEVENT when we
+ * only widen DTEND on the same UID. Emit one all-day event per inclusive shoot
+ * day (clear month markers) and cancel the legacy `jd-quote-{id}@` UID.
+ */
+export function buildAcceptedShootVEvents(
   event: AcceptedShootCalendarEvent,
   opts?: { quoteBaseUrl?: string; dtStamp?: Date }
-): string {
+): string[] {
   const span = normalizeShootDateSpan(event.shootingDate, event.shootingEndDate);
   if (!span) throw new Error("Invalid shootingDate");
 
+  const days = enumerateInclusiveYmds(span.start, span.endInclusive);
   const quoteUrl = opts?.quoteBaseUrl
     ? `${opts.quoteBaseUrl.replace(/\/+$/, "")}/quotes/${event.id}`
     : undefined;
-  const summary = escapeIcsText(buildAcceptedShootEventSummary(event));
+  const baseSummary = buildAcceptedShootEventSummary(event);
   const description = escapeIcsText(
     buildAcceptedShootEventDescription(event, quoteUrl)
   );
   const location = event.shootingLocation
     ? escapeIcsText(String(event.shootingLocation).trim())
     : "";
-  const uid = `jd-quote-${event.id}@jdsys.biz`;
   const stamp = formatIcsUtcStamp(opts?.dtStamp ?? new Date());
-  // ICS all-day DTEND is exclusive → day after inclusive end.
-  const dtEndExclusive = nextYmd(span.endInclusive);
+  const out: string[] = [];
 
-  const lines = [
-    "BEGIN:VEVENT",
-    `UID:${uid}`,
-    `DTSTAMP:${stamp}`,
-    `DTSTART;VALUE=DATE:${ymdToIcsDate(span.start)}`,
-    `DTEND;VALUE=DATE:${ymdToIcsDate(dtEndExclusive)}`,
-    `SUMMARY:${summary}`,
-    `DESCRIPTION:${description}`,
-  ];
-  if (location) lines.push(`LOCATION:${location}`);
-  if (quoteUrl) lines.push(`URL:${quoteUrl}`);
-  lines.push("TRANSP:OPAQUE", "STATUS:CONFIRMED", "END:VEVENT");
-  return lines.join("\r\n");
+  days.forEach((ymd, index) => {
+    const dayLabel =
+      days.length > 1 ? `${baseSummary} · ${index + 1}/${days.length}` : baseSummary;
+    const summary = escapeIcsText(dayLabel);
+    const lines = [
+      "BEGIN:VEVENT",
+      `UID:jd-quote-${event.id}-${ymd}@jdsys.biz`,
+      `DTSTAMP:${stamp}`,
+      `LAST-MODIFIED:${stamp}`,
+      `DTSTART;VALUE=DATE:${ymdToIcsDate(ymd)}`,
+      `DTEND;VALUE=DATE:${ymdToIcsDate(nextYmd(ymd))}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:${description}`,
+    ];
+    if (location) lines.push(`LOCATION:${location}`);
+    if (quoteUrl) lines.push(`URL:${quoteUrl}`);
+    lines.push("TRANSP:OPAQUE", "STATUS:CONFIRMED", "END:VEVENT");
+    out.push(lines.join("\r\n"));
+  });
+
+  // Cancel pre-span-fix UID so Google drops the cached single-day block.
+  out.push(
+    [
+      "BEGIN:VEVENT",
+      `UID:jd-quote-${event.id}@jdsys.biz`,
+      `DTSTAMP:${stamp}`,
+      `LAST-MODIFIED:${stamp}`,
+      `DTSTART;VALUE=DATE:${ymdToIcsDate(span.start)}`,
+      `DTEND;VALUE=DATE:${ymdToIcsDate(nextYmd(span.start))}`,
+      `SUMMARY:${escapeIcsText(baseSummary)}`,
+      "STATUS:CANCELLED",
+      "TRANSP:TRANSPARENT",
+      "END:VEVENT",
+    ].join("\r\n")
+  );
+
+  return out;
+}
+
+/** @deprecated Prefer buildAcceptedShootVEvents — kept for single-event tests. */
+export function buildAcceptedShootVEvent(
+  event: AcceptedShootCalendarEvent,
+  opts?: { quoteBaseUrl?: string; dtStamp?: Date }
+): string {
+  return buildAcceptedShootVEvents(event, opts)[0]!;
 }
 
 export function buildAcceptedShootsIcs(
@@ -160,14 +197,16 @@ export function buildAcceptedShootsIcs(
 ): string {
   const calName = escapeIcsText(opts?.calendarName ?? "JD Studio 拍攝");
   const stamp = opts?.dtStamp ?? new Date();
-  const vevents = events
+  const sorted = events
     .filter((e) => normalizeShootingDateYmd(e.shootingDate))
     .sort((a, b) => {
       const da = normalizeShootingDateYmd(a.shootingDate)!;
       const db = normalizeShootingDateYmd(b.shootingDate)!;
       return da === db ? a.id - b.id : da.localeCompare(db);
-    })
-    .map((e) => buildAcceptedShootVEvent(e, { quoteBaseUrl: opts?.quoteBaseUrl, dtStamp: stamp }));
+    });
+  const vevents = sorted.flatMap((e) =>
+    buildAcceptedShootVEvents(e, { quoteBaseUrl: opts?.quoteBaseUrl, dtStamp: stamp })
+  );
 
   return [
     "BEGIN:VCALENDAR",

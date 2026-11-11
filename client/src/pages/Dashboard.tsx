@@ -507,7 +507,7 @@ export default function Dashboard() {
           </div>
           {gcalFeed?.feedUrl ? (
             <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-              訂閱「{gcalFeed.calendarName}」後，所有已接受且有拍攝日期嘅報價會以全日事件出現喺 Google Calendar（跨日拍攝會佔用開始至結束全日）；接受新單或改拍攝日後，Google 通常幾小時內自動更新。
+              訂閱「{gcalFeed.calendarName}」後，已接受拍攝會以全日事件出現喺 Google Calendar（跨日會喺每一日各有一項）。Google 刷新可能要幾小時；若仲見到舊嘅單日事件，喺 Google Calendar 刪除「{gcalFeed.calendarName}」再重新加入連結。
             </p>
           ) : null}
 

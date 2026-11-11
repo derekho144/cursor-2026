@@ -181,7 +181,9 @@ async function startServer() {
       const ics = await renderAcceptedShootsIcsFeed();
       res.setHeader("Content-Type", "text/calendar; charset=utf-8");
       res.setHeader("Content-Disposition", 'inline; filename="jd-studio-shoots.ics"');
-      res.setHeader("Cache-Control", "no-cache, max-age=300");
+      // Google Calendar polls on its own schedule; avoid CDN/browser caching a stale feed.
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      res.setHeader("Pragma", "no-cache");
       res.status(200).send(ics);
     } catch (err) {
       console.error("[Calendar ICS] Error:", err);
