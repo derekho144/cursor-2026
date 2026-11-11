@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { toast } from "sonner";
 import { ArrowLeft, Download, Edit, FileText, Loader2, Sparkles, Mail, Clock, Link2, CheckCircle2, Paperclip, X, UploadCloud, Eye, ExternalLink, ImageIcon, DollarSign, Plus, Trash2, TrendingUp, CreditCard, Copy } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -130,15 +130,62 @@ export default function QuoteDetail() {
     { enabled: !!quoteId }
   );
 
+  const [emailSendJobId, setEmailSendJobId] = useState<string | null>(null);
+
   const sendEmailMutation = trpc.quotes.sendQuoteEmail.useMutation({
     onSuccess: (data) => {
+      if (data.jobId) {
+        setEmailSendJobId(data.jobId);
+        toast.message(`正在產生 PDF 並發送至 ${data.sentTo}…`);
+        return;
+      }
       toast.success(`郵件已發送至 ${data.sentTo}`);
       setEmailDialogOpen(false);
       utils.quotes.getById.invalidate({ id: quoteId });
       utils.quotes.getEmailLogs.invalidate({ quoteId });
     },
-    onError: (e) => toast.error(`郵件發送失敗：${e.message}`),
+    onError: (e) => {
+      const msg = e.message || "";
+      // Safari / proxy abort on long requests — show actionable copy
+      if (
+        msg.includes("expected pattern") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Load failed") ||
+        msg.includes("network")
+      ) {
+        toast.error("郵件發送逾時或連線中斷，請再試一次（PDF 產生需時）");
+        return;
+      }
+      toast.error(`郵件發送失敗：${msg}`);
+    },
   });
+
+  const emailSendStatusQuery = trpc.quotes.getQuoteEmailSendStatus.useQuery(
+    { jobId: emailSendJobId! },
+    {
+      enabled: !!emailSendJobId,
+      refetchInterval: (q) => {
+        const s = q.state.data?.status;
+        if (s === "ok" || s === "error") return false;
+        return 1500;
+      },
+    }
+  );
+
+  useEffect(() => {
+    const job = emailSendStatusQuery.data;
+    if (!job || !emailSendJobId) return;
+    if (job.status === "ok") {
+      toast.success(`郵件已發送至 ${job.sentTo ?? emailTo}`);
+      setEmailSendJobId(null);
+      setEmailDialogOpen(false);
+      utils.quotes.getById.invalidate({ id: quoteId });
+      utils.quotes.getEmailLogs.invalidate({ quoteId });
+    } else if (job.status === "error") {
+      toast.error(`郵件發送失敗：${job.error ?? "未知錯誤"}`);
+      setEmailSendJobId(null);
+    }
+  }, [emailSendStatusQuery.data, emailSendJobId, emailTo, quoteId, utils.quotes.getById, utils.quotes.getEmailLogs]);
 
   const toggleStopFollowUpMutation = trpc.quotes.toggleStopFollowUp.useMutation({
     onSuccess: () => {
@@ -1418,7 +1465,9 @@ export default function QuoteDetail() {
                 value={emailTo}
                 onChange={(e) => setEmailTo(e.target.value)}
                 placeholder="client@example.com"
-                type="email"
+                type="text"
+                inputMode="email"
+                autoComplete="email"
                 style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", fontSize: "0.85rem" }}
               />
             </div>
@@ -1502,12 +1551,12 @@ export default function QuoteDetail() {
                 if (!emailBody.trim()) { toast.error("請填寫正文"); return; }
                 sendEmailMutation.mutate({ id: quoteId, to: emailTo.trim(), subject: emailSubject.trim(), body: emailBody.trim() });
               }}
-              disabled={sendEmailMutation.isPending}
+              disabled={sendEmailMutation.isPending || !!emailSendJobId}
               className="flex items-center gap-2 px-5 py-2 text-xs rounded transition-all hover:opacity-80 disabled:opacity-50"
               style={{ background: "#d4a843", color: "#0a0a0a", fontWeight: 700, letterSpacing: "0.1em" }}
             >
-              {sendEmailMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-              {sendEmailMutation.isPending ? "發送中..." : "確認發送"}
+              {sendEmailMutation.isPending || emailSendJobId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+              {emailSendJobId ? "發送中..." : sendEmailMutation.isPending ? "排隊中..." : "確認發送"}
             </button>
           </DialogFooter>
         </DialogContent>

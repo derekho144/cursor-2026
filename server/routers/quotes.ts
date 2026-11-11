@@ -28,6 +28,10 @@ import { getDb } from "../db";
 import { quotes as quotesTable, quoteFollowUps } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { normalizeEmailAddress, sendEmail } from "../resendEmail";
+import {
+  enqueueQuoteEmailSend,
+  getQuoteEmailSendStatus,
+} from "../quoteEmailSendQueue";
 import { resyncClientMembershipFromQuotes } from "../db";
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { renderQuotePdfLikePrint } from "./quotePdf";
@@ -944,86 +948,48 @@ ${itemsText}
     }),
 
   // ─── Send Quote Email with PDF (admin) ─────────────────────────
+  // Returns immediately; PDF + SMTP run in background (avoids Safari
+  // "The string did not match the expected pattern" on long requests).
   sendQuoteEmail: protectedProcedure
     .input(z.object({
       id: z.number(),
-      to: z.string().trim().email("請輸入有效的收件人電郵地址"),
-      subject: z.string(),
-      body: z.string(),
+      to: z.string().trim().min(1, "請填寫收件人電郵地址"),
+      subject: z.string().trim().min(1, "請填寫標題"),
+      body: z.string().trim().min(1, "請填寫正文"),
     }))
     .mutation(async ({ input }) => {
       const quote = await getQuoteById(input.id);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
-      const recipient = normalizeEmailAddress(input.to);
+      let recipient: string;
+      try {
+        recipient = normalizeEmailAddress(input.to);
+      } catch (err: any) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: err?.message ?? "請輸入有效的收件人電郵地址",
+        });
+      }
       if (!ENV.gmailUser || !ENV.gmailAppPassword) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
 
-      // Same layout as 「下載 PDF」(/print/quote) — HTML print template via Chromium
-      const llmDescription = quote.llmDescription || "感謝您選擇 JD Studio HK 的專業攝影服務。";
-      const signatureData = (quote as any).signatureData || null;
-      const pdfBuffer = await generateQuotePdfMatchingDownload(
-        quote,
-        llmDescription,
-        "QUOTATION",
-        signatureData
-      );
-
-      // Pre-create email log to get the ID for tracking pixel
-      const logId = await createEmailLog({
+      const { jobId } = enqueueQuoteEmailSend({
         quoteId: input.id,
         to: recipient,
-        subject: input.subject,
-        body: input.body,
-        status: "sent",
+        subject: input.subject.trim(),
+        body: input.body.trim(),
       });
+      return { success: true as const, queued: true as const, jobId, sentTo: recipient };
+    }),
 
-      // Build the tracking pixel URL using the log ID
-      // The pixel is a 1x1 transparent GIF served by our own server
-      const trackingPixelUrl = `https://jdsys.manus.space/api/track/open/${logId}`;
-
-      // Build HTML email body with tracking pixel
-      const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-<div style="background:#1a1a1a;padding:20px 30px"><h2 style="color:#fff;margin:0;font-size:18px;letter-spacing:2px">JD STUDIO HK</h2></div>
-<div style="padding:30px"><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${input.body}</pre></div>
-<div style="background:#f5f5f5;padding:15px 30px;font-size:12px;color:#888"><p style="margin:0">JD Studio · Hong Kong &nbsp;|&nbsp; info.exposurehk@gmail.com &nbsp;|&nbsp; www.jdstudiohk.com</p></div>
-<img src="${trackingPixelUrl}" width="1" height="1" style="display:block;width:1px;height:1px;border:0;" alt="" />
-</div>`;
-
-      const result = await sendEmail({
-        to: recipient,
-        subject: input.subject,
-        html: htmlBody,
-        text: input.body,
-        attachments: [{
-          filename: `${quote.quoteNumber}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        }],
-        tags: [{ name: "type", value: "quotation" }, { name: "quoteId", value: String(input.id) }],
-      });
-
-      if (!result.success) {
-        // Update the pre-created log to failed status
-        const db = await getDb();
-        if (db) {
-          const { emailLogs } = await import("../../drizzle/schema");
-          await db.update(emailLogs).set({ status: "failed", errorMessage: result.error ?? "Unknown error" }).where(eq(emailLogs.id, logId));
-        }
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `郵件發送失敗：${result.error}` });
+  getQuoteEmailSendStatus: protectedProcedure
+    .input(z.object({ jobId: z.string().min(1) }))
+    .query(({ input }) => {
+      const job = getQuoteEmailSendStatus(input.jobId);
+      if (!job) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "找不到發送任務" });
       }
-
-      // Update with Resend message ID if available
-      if (result.messageId) {
-        const db = await getDb();
-        if (db) {
-          const { emailLogs } = await import("../../drizzle/schema");
-          await db.update(emailLogs).set({ resendMessageId: result.messageId }).where(eq(emailLogs.id, logId));
-        }
-      }
-
-      if (quote.status === "draft") await updateQuote(input.id, { status: "sent" });
-      return { success: true, sentTo: recipient };
+      return job;
     }),
 
   // ─── Generate Sign Link (admin) ────────────────────────────────
