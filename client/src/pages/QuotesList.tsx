@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
+import { formatQuoteDateRange } from "@shared/quoteDate";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: "草稿", color: "#666" },
@@ -20,10 +21,19 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 export default function QuotesList() {
   const [, setLocation] = useLocation();
 
-  function handleDeliverPhotos(quote: { id: number; clientName: string; clientCompany?: string | null; title?: string | null; quoteNumber: string; shootingDate?: string | null }) {
+  function handleDeliverPhotos(quote: {
+    id: number;
+    clientName: string;
+    clientCompany?: string | null;
+    title?: string | null;
+    quoteNumber: string;
+    shootingDate?: string | null;
+    shootingEndDate?: string | null;
+  }) {
     // Build a prefilled delivery title from quote info
     const titleParts = [quote.clientName];
-    if (quote.shootingDate) titleParts.push(quote.shootingDate);
+    const shootLabel = formatQuoteDateRange(quote.shootingDate, quote.shootingEndDate);
+    if (shootLabel) titleParts.push(shootLabel);
     const deliveryTitle = titleParts.join(" - ");
     // Navigate to delivery list with prefill params including quoteId
     const params = new URLSearchParams({
@@ -279,7 +289,9 @@ export default function QuotesList() {
                       <span className="text-xs text-muted-foreground">{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-muted-foreground">{quote.shootingDate || "—"}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatQuoteDateRange(quote.shootingDate, (quote as { shootingEndDate?: string | null }).shootingEndDate) || "—"}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm font-medium">HKD {Number(quote.total).toLocaleString()}</span>
@@ -439,7 +451,11 @@ export default function QuotesList() {
                   <div className="space-y-0.5">
                     <div className="text-xs font-mono" style={{ color: "#d4a843" }}>{quote.quoteNumber}</div>
                     <div className="text-xs text-muted-foreground">{SERVICE_LABELS[quote.serviceType] ?? quote.serviceType}</div>
-                    {quote.shootingDate && <div className="text-xs text-muted-foreground">{quote.shootingDate}</div>}
+                    {quote.shootingDate && (
+                      <div className="text-xs text-muted-foreground">
+                        {formatQuoteDateRange(quote.shootingDate, (quote as { shootingEndDate?: string | null }).shootingEndDate)}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-medium" style={{ color: "#d4a843" }}>HKD {Number(quote.total).toLocaleString()}</div>

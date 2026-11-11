@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveAcceptedCalendarDate, toHktYmd } from "./opsInsights";
+import {
+  resolveAcceptedCalendarDate,
+  resolveAcceptedCalendarDates,
+  toHktYmd,
+} from "./opsInsights";
 
 describe("resolveAcceptedCalendarDate", () => {
   it("prefers shootingDate when valid YYYY-MM-DD", () => {
@@ -38,5 +42,25 @@ describe("resolveAcceptedCalendarDate", () => {
       createdAt: "2026-03-05T02:00:00.000Z",
     });
     expect(r.source).toBe("createdAt");
+  });
+
+  it("expands multi-day shootingDate..shootingEndDate onto each inclusive day", () => {
+    const days = resolveAcceptedCalendarDates({
+      shootingDate: "2026-10-18",
+      shootingEndDate: "2026-10-19",
+      signedAt: "2026-10-01T04:00:00.000Z",
+      createdAt: "2026-09-20T04:00:00.000Z",
+    });
+    expect(days).toEqual([
+      { date: "2026-10-18", source: "shootingDate" },
+      { date: "2026-10-19", source: "shootingDate" },
+    ]);
+    expect(
+      resolveAcceptedCalendarDate({
+        shootingDate: "2026-10-18",
+        shootingEndDate: "2026-10-19",
+        createdAt: "2026-09-20T04:00:00.000Z",
+      })
+    ).toEqual({ date: "2026-10-18", source: "shootingDate" });
   });
 });

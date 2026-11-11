@@ -67,6 +67,23 @@ describe("accepted calendar ICS helpers", () => {
     expect(vevent).toContain("END:VEVENT");
   });
 
+  it("builds multi-day all-day VEVENT using exclusive DTEND after shootingEndDate", () => {
+    const vevent = buildAcceptedShootVEvent(
+      {
+        id: 9,
+        quoteNumber: "JD202610-9HC4",
+        clientName: "測試客戶",
+        shootingDate: "2026-10-18",
+        shootingEndDate: "2026-10-19",
+      },
+      { dtStamp: new Date("2026-10-01T00:00:00.000Z") }
+    );
+    expect(vevent).toContain("DTSTART;VALUE=DATE:20261018");
+    // Inclusive end 19 → exclusive ICS DTEND 20
+    expect(vevent).toContain("DTEND;VALUE=DATE:20261020");
+    expect(vevent).toContain("UID:jd-quote-9@jdsys.biz");
+  });
+
   it("builds full ICS calendar and skips invalid shootingDate", () => {
     const ics = buildAcceptedShootsIcs(
       [

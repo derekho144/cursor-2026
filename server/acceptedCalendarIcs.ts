@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
+import {
+  nextQuoteYmd,
+  normalizeQuoteDateYmd,
+  normalizeShootDateSpan,
+} from "../shared/quoteDate";
 import { quotes } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { getDb } from "./db";
@@ -11,6 +16,8 @@ export type AcceptedShootCalendarEvent = {
   clientCompany?: string | null;
   clientPhone?: string | null;
   shootingDate: string;
+  /** Inclusive end day when multi-day; omitted/blank = single day. */
+  shootingEndDate?: string | null;
   shootingLocation?: string | null;
   shootHours?: string | number | null;
   serviceType?: string | null;
@@ -65,18 +72,12 @@ export function escapeIcsText(value: string): string {
 }
 
 export function normalizeShootingDateYmd(value: string | null | undefined): string | null {
-  const raw = String(value ?? "")
-    .trim()
-    .slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  return normalizeQuoteDateYmd(value);
 }
 
 /** Exclusive end date for an all-day ICS event (next calendar day). */
 export function nextYmd(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  return dt.toISOString().slice(0, 10);
+  return nextQuoteYmd(ymd);
 }
 
 function ymdToIcsDate(ymd: string): string {
@@ -120,8 +121,8 @@ export function buildAcceptedShootVEvent(
   event: AcceptedShootCalendarEvent,
   opts?: { quoteBaseUrl?: string; dtStamp?: Date }
 ): string {
-  const shoot = normalizeShootingDateYmd(event.shootingDate);
-  if (!shoot) throw new Error("Invalid shootingDate");
+  const span = normalizeShootDateSpan(event.shootingDate, event.shootingEndDate);
+  if (!span) throw new Error("Invalid shootingDate");
 
   const quoteUrl = opts?.quoteBaseUrl
     ? `${opts.quoteBaseUrl.replace(/\/+$/, "")}/quotes/${event.id}`
@@ -135,13 +136,15 @@ export function buildAcceptedShootVEvent(
     : "";
   const uid = `jd-quote-${event.id}@jdsys.biz`;
   const stamp = formatIcsUtcStamp(opts?.dtStamp ?? new Date());
+  // ICS all-day DTEND is exclusive → day after inclusive end.
+  const dtEndExclusive = nextYmd(span.endInclusive);
 
   const lines = [
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${stamp}`,
-    `DTSTART;VALUE=DATE:${ymdToIcsDate(shoot)}`,
-    `DTEND;VALUE=DATE:${ymdToIcsDate(nextYmd(shoot))}`,
+    `DTSTART;VALUE=DATE:${ymdToIcsDate(span.start)}`,
+    `DTEND;VALUE=DATE:${ymdToIcsDate(dtEndExclusive)}`,
     `SUMMARY:${summary}`,
     `DESCRIPTION:${description}`,
   ];
@@ -195,6 +198,7 @@ export async function listAcceptedQuotesWithShootingDate(): Promise<
       clientCompany: quotes.clientCompany,
       clientPhone: quotes.clientPhone,
       shootingDate: quotes.shootingDate,
+      shootingEndDate: quotes.shootingEndDate,
       shootingLocation: quotes.shootingLocation,
       shootHours: quotes.shootHours,
       serviceType: quotes.serviceType,
@@ -210,11 +214,16 @@ export async function listAcceptedQuotesWithShootingDate(): Promise<
     );
 
   return rows
-    .map((r) => ({
-      ...r,
-      shootingDate: normalizeShootingDateYmd(r.shootingDate) ?? "",
-    }))
-    .filter((r) => Boolean(r.shootingDate));
+    .map((r) => {
+      const span = normalizeShootDateSpan(r.shootingDate, r.shootingEndDate);
+      if (!span) return null;
+      return {
+        ...r,
+        shootingDate: span.start,
+        shootingEndDate: span.endInclusive === span.start ? null : span.endInclusive,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => Boolean(r));
 }
 
 export async function renderAcceptedShootsIcsFeed(): Promise<string> {

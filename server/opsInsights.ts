@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { enumerateInclusiveYmds, normalizeShootDateSpan } from "../shared/quoteDate";
 import { getDb } from "./db";
 import { emailInquiries, freehunterJobs, quotes } from "../drizzle/schema";
 
@@ -156,22 +157,40 @@ export function toHktYmd(d: Date): string {
 /**
  * Day shown on the accepted calendar:
  * prefer shootingDate; else signedAt (HKT); else createdAt (HKT).
+ * For multi-day shoots, returns the start day only — use
+ * `resolveAcceptedCalendarDates` when the full span matters.
  */
 export function resolveAcceptedCalendarDate(input: {
   shootingDate?: string | null;
+  shootingEndDate?: string | null;
   signedAt?: Date | string | null;
   createdAt: Date | string;
 }): { date: string; source: AcceptedCalendarItem["dateSource"] } {
-  const shoot = String(input.shootingDate ?? "")
-    .trim()
-    .slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(shoot)) {
-    return { date: shoot, source: "shootingDate" };
+  const dates = resolveAcceptedCalendarDates(input);
+  return dates[0]!;
+}
+
+/**
+ * Inclusive calendar days for an accepted quote.
+ * Multi-day shoots expand shootingDate..shootingEndDate onto every day.
+ */
+export function resolveAcceptedCalendarDates(input: {
+  shootingDate?: string | null;
+  shootingEndDate?: string | null;
+  signedAt?: Date | string | null;
+  createdAt: Date | string;
+}): Array<{ date: string; source: AcceptedCalendarItem["dateSource"] }> {
+  const span = normalizeShootDateSpan(input.shootingDate, input.shootingEndDate);
+  if (span) {
+    return enumerateInclusiveYmds(span.start, span.endInclusive).map((date) => ({
+      date,
+      source: "shootingDate" as const,
+    }));
   }
   if (input.signedAt) {
-    return { date: toHktYmd(new Date(input.signedAt)), source: "signedAt" };
+    return [{ date: toHktYmd(new Date(input.signedAt)), source: "signedAt" }];
   }
-  return { date: toHktYmd(new Date(input.createdAt)), source: "createdAt" };
+  return [{ date: toHktYmd(new Date(input.createdAt)), source: "createdAt" }];
 }
 
 /** Accepted quotes whose calendar day falls in year/month (dashboard selectors). */
@@ -189,6 +208,7 @@ export async function getAcceptedCalendar(
       clientName: quotes.clientName,
       total: quotes.total,
       shootingDate: quotes.shootingDate,
+      shootingEndDate: quotes.shootingEndDate,
       signedAt: quotes.signedAt,
       createdAt: quotes.createdAt,
     })
@@ -199,17 +219,18 @@ export async function getAcceptedCalendar(
   const prefix = `${year}-${String(month).padStart(2, "0")}-`;
   const items: AcceptedCalendarItem[] = [];
   for (const q of rows) {
-    const { date, source } = resolveAcceptedCalendarDate(q);
-    if (!date.startsWith(prefix)) continue;
-    items.push({
-      id: q.id,
-      quoteNumber: q.quoteNumber,
-      clientName: q.clientName,
-      total: Number(q.total ?? 0),
-      date,
-      dateSource: source,
-      href: `/quotes/${q.id}`,
-    });
+    for (const { date, source } of resolveAcceptedCalendarDates(q)) {
+      if (!date.startsWith(prefix)) continue;
+      items.push({
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        clientName: q.clientName,
+        total: Number(q.total ?? 0),
+        date,
+        dateSource: source,
+        href: `/quotes/${q.id}`,
+      });
+    }
   }
   items.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date.localeCompare(b.date)));
   return items;
