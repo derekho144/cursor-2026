@@ -57,7 +57,7 @@ describe("quoteEmailSendQueue", () => {
     // Wait for background chain
     for (let i = 0; i < 40; i++) {
       const st = getQuoteEmailSendStatus(jobId);
-      if (st && st.status !== "running") break;
+      if (st && st.status !== "running" && st.status !== "queued") break;
       await new Promise((r) => setTimeout(r, 25));
     }
 

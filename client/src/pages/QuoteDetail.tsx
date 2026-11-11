@@ -132,8 +132,8 @@ export default function QuoteDetail() {
 
   const [emailSendJobId, setEmailSendJobId] = useState<string | null>(null);
   const [emailSendStartedAt, setEmailSendStartedAt] = useState<number | null>(null);
-  /** Client-side guard — must exceed server QUOTE_EMAIL_JOB_TIMEOUT_MS. */
-  const EMAIL_SEND_CLIENT_TIMEOUT_MS = 150_000;
+  /** Covers queue wait + server PDF/SMTP timeout; do not treat transient poll errors as done. */
+  const EMAIL_SEND_CLIENT_TIMEOUT_MS = 360_000;
 
   const sendEmailMutation = trpc.quotes.sendQuoteEmail.useMutation({
     onSuccess: (data) => {
@@ -159,7 +159,7 @@ export default function QuoteDetail() {
         msg.includes("Load failed") ||
         msg.includes("network")
       ) {
-        toast.error("郵件發送逾時或連線中斷，請再試一次（PDF 產生需時）");
+        toast.error("郵件發送逾時或連線中斷，請查收件箱後再決定是否重發");
         return;
       }
       toast.error(`郵件發送失敗：${msg}`);
@@ -170,7 +170,7 @@ export default function QuoteDetail() {
     { jobId: emailSendJobId! },
     {
       enabled: !!emailSendJobId,
-      retry: false,
+      retry: 2,
       refetchInterval: (q) => {
         const s = q.state.data?.status;
         if (s === "ok" || s === "error") return false;
@@ -195,17 +195,10 @@ export default function QuoteDetail() {
       toast.error(`郵件發送失敗：${job.error ?? "未知錯誤"}`);
       setEmailSendJobId(null);
       setEmailSendStartedAt(null);
-      return;
     }
-    if (emailSendStatusQuery.isError) {
-      toast.error(`郵件發送狀態查詢失敗：${emailSendStatusQuery.error.message || "請再試一次"}`);
-      setEmailSendJobId(null);
-      setEmailSendStartedAt(null);
-    }
+    // Transient poll/network errors: keep polling; do not abort an in-flight send.
   }, [
     emailSendStatusQuery.data,
-    emailSendStatusQuery.isError,
-    emailSendStatusQuery.error,
     emailSendJobId,
     emailTo,
     quoteId,
@@ -213,14 +206,14 @@ export default function QuoteDetail() {
     utils.quotes.getEmailLogs,
   ]);
 
-  // Client timeout if status stays running (or never arrives).
+  // Client timeout if status stays queued/running (or never arrives).
   useEffect(() => {
     if (!emailSendJobId || !emailSendStartedAt) return;
     const left = EMAIL_SEND_CLIENT_TIMEOUT_MS - (Date.now() - emailSendStartedAt);
     const timer = window.setTimeout(() => {
       setEmailSendJobId((cur) => {
         if (!cur) return cur;
-        toast.error("郵件發送逾時，請再試一次（PDF 產生需時）");
+        toast.error("郵件發送逾時。請查收件箱；若未收到再試，勿重複連按");
         return null;
       });
       setEmailSendStartedAt(null);
