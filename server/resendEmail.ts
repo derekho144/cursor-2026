@@ -118,8 +118,26 @@ export async function sendViaGmail(opts: SendEmailOptions): Promise<SendEmailRes
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
   const normalizedTo = normalizeEmailAddress(opts.to);
   const normalizedOpts = { ...opts, to: normalizedTo };
-  const resend = getResend();
-  const gmailUser = process.env.GMAIL_USER;
+
+  // Prefer Gmail when sending attachments — Resend/onboarding often rejects
+  // external recipients or large payloads with opaque validation errors
+  // ("The string did not match the expected pattern").
+  if (opts.attachments && opts.attachments.length > 0) {
+    process.stderr.write(
+      `[Email] Attachment present → Gmail SMTP directly (to=${normalizedTo})\n`
+    );
+    return sendViaGmail(normalizedOpts);
+  }
+
+  let resend: Resend;
+  try {
+    resend = getResend();
+  } catch (err: any) {
+    process.stderr.write(
+      `[Resend] Not configured, using Gmail SMTP: ${err?.message}\n`
+    );
+    return sendViaGmail(normalizedOpts);
+  }
 
   // Use verified Resend domain if available, otherwise use onboarding address
   // Once jdstudiohk.com is verified in Resend, change this to derek@jdstudiohk.com
@@ -133,14 +151,6 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
       html: opts.html ?? "<p></p>",
       ...(opts.text ? { text: opts.text } : {}),
       ...(opts.tags ? { tags: opts.tags } : {}),
-      ...(opts.attachments && opts.attachments.length > 0
-        ? {
-            attachments: opts.attachments.map((a) => ({
-              filename: a.filename,
-              content: a.content,
-            })),
-          }
-        : {}),
     });
 
     if (error) {
