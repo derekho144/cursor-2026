@@ -22,6 +22,8 @@ export type AcceptedShootCalendarEvent = {
   shootHours?: string | number | null;
   serviceType?: string | null;
   notes?: string | null;
+  /** Used for monotonic ICS SEQUENCE (unix seconds). */
+  updatedAt?: Date | string | null;
 };
 
 /** Stable feed token — prefer CALENDAR_FEED_SECRET, else derive from JWT secret. */
@@ -118,21 +120,36 @@ export function buildAcceptedShootEventDescription(
 }
 
 /**
- * SEQUENCE so Google Calendar applies DTEND / date-span updates on the same UID.
- * Derived from the inclusive shoot span (changes whenever start/end move).
+ * Monotonic ICS SEQUENCE so Google applies updates on the same UID.
+ * Prefer quote `updatedAt` (unix seconds). Date-sum fallback is only for
+ * fixtures without updatedAt — not used for production feed rows.
  */
-export function shootSpanSequence(startYmd: string, endInclusiveYmd: string): number {
-  const s = Number(String(startYmd).replace(/-/g, ""));
-  const e = Number(String(endInclusiveYmd).replace(/-/g, ""));
+export function shootCalendarSequence(input: {
+  updatedAt?: Date | string | null;
+  startYmd?: string;
+  endInclusiveYmd?: string;
+}): number {
+  if (input.updatedAt != null && String(input.updatedAt).trim() !== "") {
+    const ms = new Date(input.updatedAt).getTime();
+    if (Number.isFinite(ms) && ms > 0) {
+      return Math.max(1, Math.min(2_000_000_000, Math.floor(ms / 1000)));
+    }
+  }
+  const s = Number(String(input.startYmd ?? "").replace(/-/g, ""));
+  const e = Number(String(input.endInclusiveYmd ?? input.startYmd ?? "").replace(/-/g, ""));
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1;
-  // Stay within a safe non-negative ICS SEQUENCE range.
   return Math.max(1, Math.min(2_000_000_000, s + e));
+}
+
+/** @deprecated Use shootCalendarSequence — kept name for older imports/tests. */
+export function shootSpanSequence(startYmd: string, endInclusiveYmd: string): number {
+  return shootCalendarSequence({ startYmd, endInclusiveYmd });
 }
 
 /**
  * One stable all-day VEVENT per quote (UID jd-quote-{id}@).
  * Multi-day shoots use exclusive DTEND after the inclusive end day.
- * SEQUENCE bumps when the span changes so subscribed Google calendars refresh.
+ * SEQUENCE follows quote updatedAt so subscribed Google calendars refresh.
  */
 export function buildAcceptedShootVEvent(
   event: AcceptedShootCalendarEvent,
@@ -153,7 +170,11 @@ export function buildAcceptedShootVEvent(
     : "";
   const uid = `jd-quote-${event.id}@jdsys.biz`;
   const stamp = formatIcsUtcStamp(opts?.dtStamp ?? new Date());
-  const sequence = shootSpanSequence(span.start, span.endInclusive);
+  const sequence = shootCalendarSequence({
+    updatedAt: event.updatedAt,
+    startYmd: span.start,
+    endInclusiveYmd: span.endInclusive,
+  });
   const dtEndExclusive = nextYmd(span.endInclusive);
 
   const lines = [
@@ -222,6 +243,7 @@ export async function listAcceptedQuotesWithShootingDate(): Promise<
       shootHours: quotes.shootHours,
       serviceType: quotes.serviceType,
       notes: quotes.notes,
+      updatedAt: quotes.updatedAt,
     })
     .from(quotes)
     .where(
