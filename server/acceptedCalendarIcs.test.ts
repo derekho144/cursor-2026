@@ -8,6 +8,7 @@ import {
   escapeIcsText,
   nextYmd,
   normalizeShootingDateYmd,
+  shootCalendarSequence,
   timingSafeEqualToken,
 } from "./acceptedCalendarIcs";
 
@@ -59,6 +60,10 @@ describe("accepted calendar ICS helpers", () => {
     expect(vevent).toContain("UID:jd-quote-42@jdsys.biz");
     expect(vevent).toContain("DTSTART;VALUE=DATE:20261001");
     expect(vevent).toContain("DTEND;VALUE=DATE:20261002");
+    expect(vevent).toContain(
+      `SEQUENCE:${shootCalendarSequence({ startYmd: "2026-10-01", endInclusiveYmd: "2026-10-01" })}`
+    );
+    expect(vevent).toContain("LAST-MODIFIED:");
     expect(vevent).toContain("SUMMARY:JD202609-TEST · 測試客戶");
     expect(vevent).toContain("LOCATION:觀塘 Studio");
     expect(vevent).toContain("URL:https://jdsys.biz/quotes/42");
@@ -67,21 +72,39 @@ describe("accepted calendar ICS helpers", () => {
     expect(vevent).toContain("END:VEVENT");
   });
 
-  it("builds multi-day all-day VEVENT using exclusive DTEND after shootingEndDate", () => {
-    const vevent = buildAcceptedShootVEvent(
+  it("builds multi-day VEVENT with exclusive DTEND and monotonic updatedAt SEQUENCE", () => {
+    const older = buildAcceptedShootVEvent(
       {
         id: 9,
         quoteNumber: "JD202610-9HC4",
         clientName: "測試客戶",
-        shootingDate: "2026-10-18",
-        shootingEndDate: "2026-10-19",
+        shootingDate: "2026-11-18",
+        shootingEndDate: "2026-11-19",
+        updatedAt: "2026-11-01T04:00:00.000Z",
       },
       { dtStamp: new Date("2026-10-01T00:00:00.000Z") }
     );
-    expect(vevent).toContain("DTSTART;VALUE=DATE:20261018");
+    const rescheduledEarlier = buildAcceptedShootVEvent(
+      {
+        id: 9,
+        quoteNumber: "JD202610-9HC4",
+        clientName: "測試客戶",
+        shootingDate: "2026-11-10",
+        shootingEndDate: "2026-11-11",
+        updatedAt: "2026-11-02T04:00:00.000Z",
+      },
+      { dtStamp: new Date("2026-10-01T00:00:00.000Z") }
+    );
+    expect(older).toContain("UID:jd-quote-9@jdsys.biz");
+    expect(older).toContain("DTSTART;VALUE=DATE:20261118");
     // Inclusive end 19 → exclusive ICS DTEND 20
-    expect(vevent).toContain("DTEND;VALUE=DATE:20261020");
-    expect(vevent).toContain("UID:jd-quote-9@jdsys.biz");
+    expect(older).toContain("DTEND;VALUE=DATE:20261120");
+    const seqOld = shootCalendarSequence({ updatedAt: "2026-11-01T04:00:00.000Z" });
+    const seqNew = shootCalendarSequence({ updatedAt: "2026-11-02T04:00:00.000Z" });
+    expect(older).toContain(`SEQUENCE:${seqOld}`);
+    expect(rescheduledEarlier).toContain(`SEQUENCE:${seqNew}`);
+    expect(seqNew).toBeGreaterThan(seqOld);
+    expect(rescheduledEarlier).toContain("DTSTART;VALUE=DATE:20261110");
   });
 
   it("builds full ICS calendar and skips invalid shootingDate", () => {
