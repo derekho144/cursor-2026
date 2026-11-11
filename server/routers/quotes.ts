@@ -985,11 +985,9 @@ ${itemsText}
   getQuoteEmailSendStatus: protectedProcedure
     .input(z.object({ jobId: z.string().min(1) }))
     .query(({ input }) => {
-      const job = getQuoteEmailSendStatus(input.jobId);
-      if (!job) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "找不到發送任務" });
-      }
-      return job;
+      // Always returns a status object (missing/stale → error) so the client
+      // can leave 「發送中」 instead of polling a NOT_FOUND forever.
+      return getQuoteEmailSendStatus(input.jobId);
     }),
 
   // ─── Generate Sign Link (admin) ────────────────────────────────

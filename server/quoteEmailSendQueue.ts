@@ -4,6 +4,10 @@
  * Safari / reverse proxies often abort long Chromium-PDF + SMTP mutations and
  * surface "The string did not match the expected pattern" even when work would
  * succeed. Return immediately; client polls status.
+ *
+ * Job status lives in-process (shared via globalThis). Polls must tolerate
+ * missing jobs after restarts; the worker also hard-times-out so UI never
+ * spins forever on a hung Chromium/SMTP call.
  */
 import { eq } from "drizzle-orm";
 import { ENV } from "./_core/env";
@@ -25,11 +29,22 @@ export type QuoteEmailSendStatus = {
   finishedAt?: number;
 };
 
-const jobs = new Map<string, QuoteEmailSendStatus>();
-let chain: Promise<void> = Promise.resolve();
+const g = globalThis as typeof globalThis & {
+  __jdQuoteEmailSendJobs?: Map<string, QuoteEmailSendStatus>;
+  __jdQuoteEmailSendChain?: Promise<void>;
+};
+
+const jobs: Map<string, QuoteEmailSendStatus> =
+  g.__jdQuoteEmailSendJobs ?? new Map<string, QuoteEmailSendStatus>();
+g.__jdQuoteEmailSendJobs = jobs;
+
+let chain: Promise<void> = g.__jdQuoteEmailSendChain ?? Promise.resolve();
+g.__jdQuoteEmailSendChain = chain;
 
 const MAX_TRACKED = 40;
 const STALE_MS = 30 * 60 * 1000;
+/** Hard cap for PDF + SMTP — client shows an error instead of endless 發送中. */
+export const QUOTE_EMAIL_JOB_TIMEOUT_MS = 120_000;
 
 function prune(): void {
   const now = Date.now();
@@ -55,9 +70,52 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function getQuoteEmailSendStatus(jobId: string): QuoteEmailSendStatus | null {
+function markJobError(job: QuoteEmailSendStatus, message: string): void {
+  if (job.status !== "running") return;
+  job.status = "error";
+  job.error = message;
+  job.finishedAt = Date.now();
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label}逾時（${Math.round(ms / 1000)} 秒），請再試一次`));
+    }, ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/**
+ * Read job status. Missing / timed-out jobs return an error payload so the
+ * client can exit 「發送中」 instead of polling forever.
+ */
+export function getQuoteEmailSendStatus(jobId: string): QuoteEmailSendStatus {
   prune();
-  return jobs.get(jobId) ?? null;
+  const job = jobs.get(jobId);
+  if (!job) {
+    return {
+      jobId,
+      quoteId: 0,
+      status: "error",
+      error: "找不到發送任務（伺服器可能已重啟，請再按一次發送）",
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+    };
+  }
+  if (job.status === "running" && Date.now() - job.startedAt > QUOTE_EMAIL_JOB_TIMEOUT_MS) {
+    markJobError(job, `郵件發送逾時（${Math.round(QUOTE_EMAIL_JOB_TIMEOUT_MS / 1000)} 秒），請再試一次`);
+  }
+  return job;
 }
 
 export function enqueueQuoteEmailSend(input: {
@@ -79,17 +137,20 @@ export function enqueueQuoteEmailSend(input: {
   chain = chain
     .then(async () => {
       try {
-        await runQuoteEmailSend(job, input);
+        await withTimeout(
+          runQuoteEmailSend(job, input),
+          QUOTE_EMAIL_JOB_TIMEOUT_MS,
+          "產生 PDF / 發送郵件"
+        );
       } catch (err: any) {
-        job.status = "error";
-        job.error = err?.message ?? "郵件發送失敗";
-        job.finishedAt = Date.now();
+        markJobError(job, err?.message ?? "郵件發送失敗");
         console.error(`[QuoteEmailQueue] job ${jobId} failed:`, err);
       }
     })
     .catch((err) => {
       console.error("[QuoteEmailQueue] chain error:", err);
     });
+  g.__jdQuoteEmailSendChain = chain;
 
   return { jobId };
 }
@@ -116,6 +177,9 @@ async function runQuoteEmailSend(
     "QUOTATION",
     signatureData
   );
+
+  // If the client already timed the job out, stop before SMTP.
+  if (job.status !== "running") return;
 
   const logId = await createEmailLog({
     quoteId: input.quoteId,
@@ -176,6 +240,7 @@ async function runQuoteEmailSend(
     await updateQuote(input.quoteId, { status: "sent" });
   }
 
+  if (job.status !== "running") return;
   job.status = "ok";
   job.sentTo = input.to;
   job.finishedAt = Date.now();

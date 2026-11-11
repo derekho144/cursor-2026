@@ -69,4 +69,10 @@ describe("quoteEmailSendQueue", () => {
       "derekho1144@gmail.com"
     );
   });
+
+  it("returns an error status for unknown job ids instead of null", () => {
+    const st = getQuoteEmailSendStatus("qe-missing-0");
+    expect(st.status).toBe("error");
+    expect(st.error).toMatch(/找不到發送任務/);
+  });
 });

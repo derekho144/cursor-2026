@@ -131,11 +131,15 @@ export default function QuoteDetail() {
   );
 
   const [emailSendJobId, setEmailSendJobId] = useState<string | null>(null);
+  const [emailSendStartedAt, setEmailSendStartedAt] = useState<number | null>(null);
+  /** Client-side guard — must exceed server QUOTE_EMAIL_JOB_TIMEOUT_MS. */
+  const EMAIL_SEND_CLIENT_TIMEOUT_MS = 150_000;
 
   const sendEmailMutation = trpc.quotes.sendQuoteEmail.useMutation({
     onSuccess: (data) => {
       if (data.jobId) {
         setEmailSendJobId(data.jobId);
+        setEmailSendStartedAt(Date.now());
         toast.message(`正在產生 PDF 並發送至 ${data.sentTo}…`);
         return;
       }
@@ -145,6 +149,8 @@ export default function QuoteDetail() {
       utils.quotes.getEmailLogs.invalidate({ quoteId });
     },
     onError: (e) => {
+      setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
       const msg = e.message || "";
       // Safari / proxy abort on long requests — show actionable copy
       if (
@@ -164,6 +170,7 @@ export default function QuoteDetail() {
     { jobId: emailSendJobId! },
     {
       enabled: !!emailSendJobId,
+      retry: false,
       refetchInterval: (q) => {
         const s = q.state.data?.status;
         if (s === "ok" || s === "error") return false;
@@ -173,19 +180,53 @@ export default function QuoteDetail() {
   );
 
   useEffect(() => {
+    if (!emailSendJobId) return;
     const job = emailSendStatusQuery.data;
-    if (!job || !emailSendJobId) return;
-    if (job.status === "ok") {
+    if (job?.status === "ok") {
       toast.success(`郵件已發送至 ${job.sentTo ?? emailTo}`);
       setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
       setEmailDialogOpen(false);
       utils.quotes.getById.invalidate({ id: quoteId });
       utils.quotes.getEmailLogs.invalidate({ quoteId });
-    } else if (job.status === "error") {
+      return;
+    }
+    if (job?.status === "error") {
       toast.error(`郵件發送失敗：${job.error ?? "未知錯誤"}`);
       setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
+      return;
     }
-  }, [emailSendStatusQuery.data, emailSendJobId, emailTo, quoteId, utils.quotes.getById, utils.quotes.getEmailLogs]);
+    if (emailSendStatusQuery.isError) {
+      toast.error(`郵件發送狀態查詢失敗：${emailSendStatusQuery.error.message || "請再試一次"}`);
+      setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
+    }
+  }, [
+    emailSendStatusQuery.data,
+    emailSendStatusQuery.isError,
+    emailSendStatusQuery.error,
+    emailSendJobId,
+    emailTo,
+    quoteId,
+    utils.quotes.getById,
+    utils.quotes.getEmailLogs,
+  ]);
+
+  // Client timeout if status stays running (or never arrives).
+  useEffect(() => {
+    if (!emailSendJobId || !emailSendStartedAt) return;
+    const left = EMAIL_SEND_CLIENT_TIMEOUT_MS - (Date.now() - emailSendStartedAt);
+    const timer = window.setTimeout(() => {
+      setEmailSendJobId((cur) => {
+        if (!cur) return cur;
+        toast.error("郵件發送逾時，請再試一次（PDF 產生需時）");
+        return null;
+      });
+      setEmailSendStartedAt(null);
+    }, Math.max(0, left));
+    return () => window.clearTimeout(timer);
+  }, [emailSendJobId, emailSendStartedAt]);
 
   const toggleStopFollowUpMutation = trpc.quotes.toggleStopFollowUp.useMutation({
     onSuccess: () => {
