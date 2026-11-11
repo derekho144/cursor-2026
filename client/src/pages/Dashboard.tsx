@@ -77,6 +77,12 @@ export default function Dashboard() {
     return map;
   }, [acceptedCalendar]);
 
+  // Multi-day shoots emit one calendar row per day; header count is unique quotes.
+  const acceptedQuoteCount = useMemo(
+    () => new Set(acceptedCalendar.map((item) => item.id)).size,
+    [acceptedCalendar]
+  );
+
   const selectedDayItems = selectedDay ? acceptedByDate.get(selectedDay) ?? [] : [];
 
   useEffect(() => {
@@ -448,7 +454,7 @@ export default function Dashboard() {
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
                 {selectedYear}年{selectedMonth}月 · 顯示已接受報價日子（優先拍攝日，否則接受／建立日）
-                {acceptedCalendar.length > 0 ? ` · ${acceptedCalendar.length} 單` : ""}
+                {acceptedQuoteCount > 0 ? ` · ${acceptedQuoteCount} 單` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
