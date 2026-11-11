@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import { and, eq, isNotNull, ne } from "drizzle-orm";
 import {
-  enumerateInclusiveYmds,
   nextQuoteYmd,
   normalizeQuoteDateYmd,
   normalizeShootDateSpan,
@@ -119,76 +118,59 @@ export function buildAcceptedShootEventDescription(
 }
 
 /**
- * Google Calendar subscribed feeds often keep a stale single-day VEVENT when we
- * only widen DTEND on the same UID. Emit one all-day event per inclusive shoot
- * day (clear month markers) and cancel the legacy `jd-quote-{id}@` UID.
+ * SEQUENCE so Google Calendar applies DTEND / date-span updates on the same UID.
+ * Derived from the inclusive shoot span (changes whenever start/end move).
  */
-export function buildAcceptedShootVEvents(
+export function shootSpanSequence(startYmd: string, endInclusiveYmd: string): number {
+  const s = Number(String(startYmd).replace(/-/g, ""));
+  const e = Number(String(endInclusiveYmd).replace(/-/g, ""));
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return 1;
+  // Stay within a safe non-negative ICS SEQUENCE range.
+  return Math.max(1, Math.min(2_000_000_000, s + e));
+}
+
+/**
+ * One stable all-day VEVENT per quote (UID jd-quote-{id}@).
+ * Multi-day shoots use exclusive DTEND after the inclusive end day.
+ * SEQUENCE bumps when the span changes so subscribed Google calendars refresh.
+ */
+export function buildAcceptedShootVEvent(
   event: AcceptedShootCalendarEvent,
   opts?: { quoteBaseUrl?: string; dtStamp?: Date }
-): string[] {
+): string {
   const span = normalizeShootDateSpan(event.shootingDate, event.shootingEndDate);
   if (!span) throw new Error("Invalid shootingDate");
 
-  const days = enumerateInclusiveYmds(span.start, span.endInclusive);
   const quoteUrl = opts?.quoteBaseUrl
     ? `${opts.quoteBaseUrl.replace(/\/+$/, "")}/quotes/${event.id}`
     : undefined;
-  const baseSummary = buildAcceptedShootEventSummary(event);
+  const summary = escapeIcsText(buildAcceptedShootEventSummary(event));
   const description = escapeIcsText(
     buildAcceptedShootEventDescription(event, quoteUrl)
   );
   const location = event.shootingLocation
     ? escapeIcsText(String(event.shootingLocation).trim())
     : "";
+  const uid = `jd-quote-${event.id}@jdsys.biz`;
   const stamp = formatIcsUtcStamp(opts?.dtStamp ?? new Date());
-  const out: string[] = [];
+  const sequence = shootSpanSequence(span.start, span.endInclusive);
+  const dtEndExclusive = nextYmd(span.endInclusive);
 
-  days.forEach((ymd, index) => {
-    const dayLabel =
-      days.length > 1 ? `${baseSummary} · ${index + 1}/${days.length}` : baseSummary;
-    const summary = escapeIcsText(dayLabel);
-    const lines = [
-      "BEGIN:VEVENT",
-      `UID:jd-quote-${event.id}-${ymd}@jdsys.biz`,
-      `DTSTAMP:${stamp}`,
-      `LAST-MODIFIED:${stamp}`,
-      `DTSTART;VALUE=DATE:${ymdToIcsDate(ymd)}`,
-      `DTEND;VALUE=DATE:${ymdToIcsDate(nextYmd(ymd))}`,
-      `SUMMARY:${summary}`,
-      `DESCRIPTION:${description}`,
-    ];
-    if (location) lines.push(`LOCATION:${location}`);
-    if (quoteUrl) lines.push(`URL:${quoteUrl}`);
-    lines.push("TRANSP:OPAQUE", "STATUS:CONFIRMED", "END:VEVENT");
-    out.push(lines.join("\r\n"));
-  });
-
-  // Cancel pre-span-fix UID so Google drops the cached single-day block.
-  out.push(
-    [
-      "BEGIN:VEVENT",
-      `UID:jd-quote-${event.id}@jdsys.biz`,
-      `DTSTAMP:${stamp}`,
-      `LAST-MODIFIED:${stamp}`,
-      `DTSTART;VALUE=DATE:${ymdToIcsDate(span.start)}`,
-      `DTEND;VALUE=DATE:${ymdToIcsDate(nextYmd(span.start))}`,
-      `SUMMARY:${escapeIcsText(baseSummary)}`,
-      "STATUS:CANCELLED",
-      "TRANSP:TRANSPARENT",
-      "END:VEVENT",
-    ].join("\r\n")
-  );
-
-  return out;
-}
-
-/** @deprecated Prefer buildAcceptedShootVEvents — kept for single-event tests. */
-export function buildAcceptedShootVEvent(
-  event: AcceptedShootCalendarEvent,
-  opts?: { quoteBaseUrl?: string; dtStamp?: Date }
-): string {
-  return buildAcceptedShootVEvents(event, opts)[0]!;
+  const lines = [
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${stamp}`,
+    `LAST-MODIFIED:${stamp}`,
+    `SEQUENCE:${sequence}`,
+    `DTSTART;VALUE=DATE:${ymdToIcsDate(span.start)}`,
+    `DTEND;VALUE=DATE:${ymdToIcsDate(dtEndExclusive)}`,
+    `SUMMARY:${summary}`,
+    `DESCRIPTION:${description}`,
+  ];
+  if (location) lines.push(`LOCATION:${location}`);
+  if (quoteUrl) lines.push(`URL:${quoteUrl}`);
+  lines.push("TRANSP:OPAQUE", "STATUS:CONFIRMED", "END:VEVENT");
+  return lines.join("\r\n");
 }
 
 export function buildAcceptedShootsIcs(
@@ -197,16 +179,14 @@ export function buildAcceptedShootsIcs(
 ): string {
   const calName = escapeIcsText(opts?.calendarName ?? "JD Studio 拍攝");
   const stamp = opts?.dtStamp ?? new Date();
-  const sorted = events
+  const vevents = events
     .filter((e) => normalizeShootingDateYmd(e.shootingDate))
     .sort((a, b) => {
       const da = normalizeShootingDateYmd(a.shootingDate)!;
       const db = normalizeShootingDateYmd(b.shootingDate)!;
       return da === db ? a.id - b.id : da.localeCompare(db);
-    });
-  const vevents = sorted.flatMap((e) =>
-    buildAcceptedShootVEvents(e, { quoteBaseUrl: opts?.quoteBaseUrl, dtStamp: stamp })
-  );
+    })
+    .map((e) => buildAcceptedShootVEvent(e, { quoteBaseUrl: opts?.quoteBaseUrl, dtStamp: stamp }));
 
   return [
     "BEGIN:VCALENDAR",
