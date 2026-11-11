@@ -57,7 +57,7 @@ describe("quoteEmailSendQueue", () => {
     // Wait for background chain
     for (let i = 0; i < 40; i++) {
       const st = getQuoteEmailSendStatus(jobId);
-      if (st && st.status !== "running") break;
+      if (st && st.status !== "running" && st.status !== "queued") break;
       await new Promise((r) => setTimeout(r, 25));
     }
 
@@ -68,5 +68,11 @@ describe("quoteEmailSendQueue", () => {
     expect(vi.mocked(sendViaGmail).mock.calls[0]![0].to).toBe(
       "derekho1144@gmail.com"
     );
+  });
+
+  it("returns an error status for unknown job ids instead of null", () => {
+    const st = getQuoteEmailSendStatus("qe-missing-0");
+    expect(st.status).toBe("error");
+    expect(st.error).toMatch(/找不到發送任務/);
   });
 });

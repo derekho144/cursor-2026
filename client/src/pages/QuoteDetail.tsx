@@ -131,11 +131,15 @@ export default function QuoteDetail() {
   );
 
   const [emailSendJobId, setEmailSendJobId] = useState<string | null>(null);
+  const [emailSendStartedAt, setEmailSendStartedAt] = useState<number | null>(null);
+  /** Covers queue wait + server PDF/SMTP timeout; do not treat transient poll errors as done. */
+  const EMAIL_SEND_CLIENT_TIMEOUT_MS = 360_000;
 
   const sendEmailMutation = trpc.quotes.sendQuoteEmail.useMutation({
     onSuccess: (data) => {
       if (data.jobId) {
         setEmailSendJobId(data.jobId);
+        setEmailSendStartedAt(Date.now());
         toast.message(`正在產生 PDF 並發送至 ${data.sentTo}…`);
         return;
       }
@@ -145,6 +149,8 @@ export default function QuoteDetail() {
       utils.quotes.getEmailLogs.invalidate({ quoteId });
     },
     onError: (e) => {
+      setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
       const msg = e.message || "";
       // Safari / proxy abort on long requests — show actionable copy
       if (
@@ -153,7 +159,7 @@ export default function QuoteDetail() {
         msg.includes("Load failed") ||
         msg.includes("network")
       ) {
-        toast.error("郵件發送逾時或連線中斷，請再試一次（PDF 產生需時）");
+        toast.error("郵件發送逾時或連線中斷，請查收件箱後再決定是否重發");
         return;
       }
       toast.error(`郵件發送失敗：${msg}`);
@@ -164,6 +170,7 @@ export default function QuoteDetail() {
     { jobId: emailSendJobId! },
     {
       enabled: !!emailSendJobId,
+      retry: 2,
       refetchInterval: (q) => {
         const s = q.state.data?.status;
         if (s === "ok" || s === "error") return false;
@@ -173,19 +180,46 @@ export default function QuoteDetail() {
   );
 
   useEffect(() => {
+    if (!emailSendJobId) return;
     const job = emailSendStatusQuery.data;
-    if (!job || !emailSendJobId) return;
-    if (job.status === "ok") {
+    if (job?.status === "ok") {
       toast.success(`郵件已發送至 ${job.sentTo ?? emailTo}`);
       setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
       setEmailDialogOpen(false);
       utils.quotes.getById.invalidate({ id: quoteId });
       utils.quotes.getEmailLogs.invalidate({ quoteId });
-    } else if (job.status === "error") {
+      return;
+    }
+    if (job?.status === "error") {
       toast.error(`郵件發送失敗：${job.error ?? "未知錯誤"}`);
       setEmailSendJobId(null);
+      setEmailSendStartedAt(null);
     }
-  }, [emailSendStatusQuery.data, emailSendJobId, emailTo, quoteId, utils.quotes.getById, utils.quotes.getEmailLogs]);
+    // Transient poll/network errors: keep polling; do not abort an in-flight send.
+  }, [
+    emailSendStatusQuery.data,
+    emailSendJobId,
+    emailTo,
+    quoteId,
+    utils.quotes.getById,
+    utils.quotes.getEmailLogs,
+  ]);
+
+  // Client timeout if status stays queued/running (or never arrives).
+  useEffect(() => {
+    if (!emailSendJobId || !emailSendStartedAt) return;
+    const left = EMAIL_SEND_CLIENT_TIMEOUT_MS - (Date.now() - emailSendStartedAt);
+    const timer = window.setTimeout(() => {
+      setEmailSendJobId((cur) => {
+        if (!cur) return cur;
+        toast.error("郵件發送逾時。請查收件箱；若未收到再試，勿重複連按");
+        return null;
+      });
+      setEmailSendStartedAt(null);
+    }, Math.max(0, left));
+    return () => window.clearTimeout(timer);
+  }, [emailSendJobId, emailSendStartedAt]);
 
   const toggleStopFollowUpMutation = trpc.quotes.toggleStopFollowUp.useMutation({
     onSuccess: () => {
