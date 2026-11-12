@@ -44,12 +44,15 @@ describe("reject reasons", () => {
 });
 
 describe("pricing learning exclusions", () => {
-  it("excludes other and graphic_design (平面設計)", () => {
+  it("excludes other, graphic_design, kol_mi, and ad_video", () => {
     expect(isPricingLearningServiceType("other")).toBe(false);
     expect(isPricingLearningServiceType("graphic_design")).toBe(false);
+    expect(isPricingLearningServiceType("kol_mi")).toBe(false);
+    expect(isPricingLearningServiceType("ad_video")).toBe(false);
     expect(isPricingLearningServiceType("corporate_event")).toBe(true);
     expect(isPricingLearningServiceType("product")).toBe(true);
     expect(isPricingLearningServiceType("menu_design")).toBe(true);
+    expect(isPricingLearningServiceType("video_production")).toBe(true);
   });
 
   it("excludes specific quote numbers from learning", () => {

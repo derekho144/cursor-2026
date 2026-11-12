@@ -125,7 +125,7 @@ async function loadLearningQuotesWithItems(opts?: {
   const db = await getDb();
   if (!db) return [];
 
-  // Excluded types (其他、平面設計, …) — never learn from them.
+  // Excluded types (其他、平面設計、KOL/MI、廣告影片, …) — never learn from them.
   if (opts?.serviceType && !isPricingLearningServiceType(opts.serviceType)) {
     return [];
   }

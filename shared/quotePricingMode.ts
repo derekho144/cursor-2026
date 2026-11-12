@@ -27,10 +27,14 @@ export const SHOT_COUNT_SERVICE_TYPES = new Set([
  * Excluded from pricing learning / win-rate / suggest.
  * - other: too mixed to learn from
  * - graphic_design: 平面設計定價唔跟拍攝小時／張數模型，唔納入學習
+ * - kol_mi: KOL/MI 推廣計價同拍攝模型唔同，唔納入學習
+ * - ad_video: 廣告影片專案變數大（腳本／製作級別），唔納入學習
  */
 export const PRICING_LEARNING_EXCLUDED_TYPES = new Set([
   "other",
   "graphic_design",
+  "kol_mi",
+  "ad_video",
 ]);
 
 export function isPricingLearningServiceType(serviceType: string): boolean {

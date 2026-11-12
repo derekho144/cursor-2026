@@ -21,4 +21,11 @@ describe("quotePricingMode", () => {
     expect(isPricingLearningServiceType("graphic_design")).toBe(false);
     expect(quotePricingMode("graphic_design")).toBe("design");
   });
+
+  it("excludes KOL/MI and 廣告影片 from pricing learning", () => {
+    expect(isPricingLearningServiceType("kol_mi")).toBe(false);
+    expect(isPricingLearningServiceType("ad_video")).toBe(false);
+    expect(quotePricingMode("kol_mi")).toBe("design");
+    expect(quotePricingMode("ad_video")).toBe("time_crew");
+  });
 });

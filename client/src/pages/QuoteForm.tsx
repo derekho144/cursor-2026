@@ -2394,8 +2394,7 @@ export default function QuoteForm() {
             {priceSuggest &&
               !priceSuggest.suggestion &&
               form.serviceType &&
-              form.serviceType !== "other" &&
-              !DESIGN_SERVICE_TYPES.has(form.serviceType) && (
+              isPricingLearningServiceType(form.serviceType) && (
               <div
                 className="md:col-span-2 p-3 rounded text-xs text-muted-foreground"
                 style={{
