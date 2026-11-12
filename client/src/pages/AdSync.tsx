@@ -11,6 +11,11 @@ import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
+import {
+  isHelloTobyCookiesStale,
+  resolveHelloTobyConnBadge,
+  type HelloTobyLiveProbe,
+} from "@shared/hellotobyConnStatus";
 
 // Note: AdSync uses an extended platform definition with extra fields (description, website, hasApi, etc.)
 // For simple value/label/color lookups, use @/lib/platformConstants instead.
@@ -89,10 +94,13 @@ export default function AdSync() {
   const [htCookieJson, setHtCookieJson] = useState("");
   const [htAccountEmail, setHtAccountEmail] = useState("derekho1155@gmail.com");
   const [showHtCookieForm, setShowHtCookieForm] = useState(false);
+  /** Live probe result — null until operator runs 測試連線 (or after save). */
+  const [htLiveOk, setHtLiveOk] = useState<HelloTobyLiveProbe>(null);
 
   const saveHelloTobyCookiesMutation = trpc.adExpenses.saveHelloTobyCookies.useMutation({
     onSuccess: (r) => {
       toast.success(`HelloToby Cookies 已儲存（帳號：${r.accountEmail}）。請再按「自動同步」確認。`);
+      setHtLiveOk(true);
       refetchCreds();
       setHtCookieJson("");
       setShowHtCookieForm(false);
@@ -102,10 +110,13 @@ export default function AdSync() {
 
   const probeStoredHtMutation = trpc.adExpenses.probeStoredHelloTobySession.useMutation({
     onSuccess: (r) => {
+      setHtLiveOk(r.ok);
       if (r.ok) {
         toast.success(
           `HelloToby 連線正常${r.remainCredit != null ? `（餘額約 ${r.remainCredit}）` : ""}`
         );
+        // Server bumps cookie updatedAt on live-ok — refresh age heuristic.
+        refetchCreds();
       } else {
         toast.error(r.apiMessage || r.error || "HelloToby 連線失敗，請更新 Cookies");
       }
@@ -864,10 +875,15 @@ export default function AdSync() {
                   const htLastLog = syncLogs?.find((l) => l.platform === "hellotoby");
                   const htLastFail =
                     htLastLog && htLastLog.status !== "success" ? htLastLog : undefined;
-                  const htCookiesStale =
-                    !!cred?.updatedAt &&
-                    Date.now() - new Date(cred.updatedAt).getTime() > 30 * 24 * 3600 * 1000;
-                  const htLikelyDisconnected = !!htLastFail || htCookiesStale;
+                  const htCookiesStale = isHelloTobyCookiesStale(cred?.updatedAt);
+                  const htBadge = resolveHelloTobyConnBadge({
+                    hasCred: !!cred,
+                    liveOk: htLiveOk,
+                    cookiesStale: htCookiesStale,
+                    lastSyncFailed: !!htLastFail,
+                  });
+                  const htShowWarnUi = htBadge.kind === "warn" || htBadge.kind === "dead";
+                  const htShowOkUi = htBadge.kind === "ok";
 
                   return (
                     <div className="px-5 pb-5" style={{ borderTop: `1px solid ${platform.color}25` }}>
@@ -875,11 +891,14 @@ export default function AdSync() {
                         <div className="flex items-center gap-2 mb-3">
                           <KeyRound className="h-3.5 w-3.5" style={{ color: platform.color }} />
                           <span className="text-xs font-medium" style={{ color: platform.color }}>Session Cookies 認證</span>
-                          {cred && !htLikelyDisconnected && (
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "#4caf50", fontSize: "0.6rem", letterSpacing: "0.08em" }}>已設定</span>
+                          {htBadge.kind === "ok" && htBadge.label && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(76,175,80,0.15)", color: "#4caf50", fontSize: "0.6rem", letterSpacing: "0.08em" }}>{htBadge.label}</span>
                           )}
-                          {cred && htLikelyDisconnected && (
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171", fontSize: "0.6rem", letterSpacing: "0.08em" }}>連線失效</span>
+                          {htBadge.kind === "warn" && htBadge.label && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", fontSize: "0.6rem", letterSpacing: "0.08em" }}>{htBadge.label}</span>
+                          )}
+                          {htBadge.kind === "dead" && htBadge.label && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171", fontSize: "0.6rem", letterSpacing: "0.08em" }}>{htBadge.label}</span>
                           )}
                         </div>
 
@@ -916,14 +935,16 @@ export default function AdSync() {
                         {cred && (
                           <div className="space-y-2 mb-3">
                             <div className="flex items-center gap-2 text-xs">
-                              {htLikelyDisconnected ? (
-                                <WifiOff className="h-3.5 w-3.5" style={{ color: "#f87171" }} />
+                              {htShowOkUi ? (
+                                <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#4caf50" }} />
+                              ) : htShowWarnUi ? (
+                                <WifiOff className="h-3.5 w-3.5" style={{ color: htBadge.kind === "dead" ? "#f87171" : "#fbbf24" }} />
                               ) : (
                                 <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#4caf50" }} />
                               )}
                               <span className="text-muted-foreground">
                                 已儲存 Session Cookies（標記帳號：
-                                <span style={{ color: htLikelyDisconnected ? "#f87171" : "#4caf50" }}>
+                                <span style={{ color: htShowOkUi ? "#4caf50" : htBadge.kind === "dead" ? "#f87171" : "#fbbf24" }}>
                                   {cred.loginEmail || "HelloToby Pro"}
                                 </span>
                                 ）
@@ -932,12 +953,15 @@ export default function AdSync() {
                             {cred.updatedAt && (
                               <div className="text-xs text-muted-foreground">
                                 Cookies 更新於 {new Date(cred.updatedAt).toLocaleString("zh-HK")}
-                                {htCookiesStale && (
-                                  <span style={{ color: "#f87171" }}> — 超過 30 日未更新，Session 多半已過期，請重新登入後貼 Cookies</span>
+                                {htCookiesStale && htLiveOk !== true && (
+                                  <span style={{ color: "#fbbf24" }}> — 超過 30 日未更新；請按「測試連線」確認，若失敗再重貼 Cookies</span>
+                                )}
+                                {htLiveOk === true && (
+                                  <span style={{ color: "#4caf50" }}> — 測試連線已確認有效</span>
                                 )}
                               </div>
                             )}
-                            {htLastFail?.message && (
+                            {htLastFail?.message && htLiveOk !== true && (
                               <div className="flex items-start gap-2 p-2.5 rounded text-xs" style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.35)" }}>
                                 <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" style={{ color: "#f87171" }} />
                                 <span style={{ color: "#fca5a5" }}>
@@ -946,10 +970,18 @@ export default function AdSync() {
                                 </span>
                               </div>
                             )}
+                            {htLastFail?.message && htLiveOk === true && (
+                              <div className="flex items-start gap-2 p-2.5 rounded text-xs" style={{ background: "rgba(76,175,80,0.08)", border: "1px solid rgba(76,175,80,0.35)" }}>
+                                <CheckCircle2 className="h-3 w-3 shrink-0 mt-0.5" style={{ color: "#4caf50" }} />
+                                <span style={{ color: "#86efac" }}>
+                                  Session 現時有效；先前同步失敗未必代表 Cookies 已死（可再按「自動同步」）。
+                                </span>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 p-2.5 rounded text-xs" style={{ background: `${platform.color}0d`, border: `1px solid ${platform.color}35` }}>
                               <RefreshCw className="h-3 w-3 shrink-0" style={{ color: platform.color }} />
                               <span style={{ color: "#c8b88a" }}>
-                                <strong style={{ color: platform.color }}>自動續期</strong>——只有同步成功先會更新 Cookies。若 API 回「請登錄后再執行」，代表 Session 已過期，必須重新貼。
+                                <strong style={{ color: platform.color }}>狀態說明</strong>——紅／黃標係推測（舊同步失敗或超過 30 日未更新）；「測試連線」先係即時結果。只有同步成功或測試通過先會刷新 Cookies 時間戳。
                               </span>
                             </div>
                             <button

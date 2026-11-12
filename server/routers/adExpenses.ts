@@ -212,9 +212,17 @@ export const adExpensesRouter = router({
         error: "尚未儲存 HelloToby Cookies，請先貼上 Session",
         remainCredit: null as number | null,
         apiMessage: null as string | null,
+        touchedAt: null as string | null,
       };
     }
     const probe = await probeHelloTobySession(cookiesJson);
+    let touchedAt: string | null = null;
+    // Live-ok sessions are still valid even if cookies look "old" — bump updatedAt
+    // so the UI age heuristic stops claiming expiry after a successful probe.
+    if (probe.ok) {
+      await saveHelloTobyCookies(cookiesJson);
+      touchedAt = new Date().toISOString();
+    }
     return {
       ok: probe.ok,
       error: probe.error,
@@ -222,6 +230,7 @@ export const adExpensesRouter = router({
       apiMessage: probe.apiMessage,
       creditHttp: probe.creditHttp,
       transHttp: probe.transHttp,
+      touchedAt,
     };
   }),
 

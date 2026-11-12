@@ -96,6 +96,17 @@ vi.mock("./scrapers/hellotoby", () => ({
   scrapePro360Expenses: vi.fn(),
   scrapePro360WithCookies: vi.fn(),
   scrapeHelloTobyWithCookies: vi.fn(),
+  scrapeHelloTobyViaAPI: vi.fn(),
+  probeHelloTobySession: vi.fn().mockResolvedValue({
+    ok: true,
+    error: null,
+    remainCredit: 12,
+    apiMessage: null,
+    creditHttp: 200,
+    transHttp: 200,
+    creditOk: true,
+    transOk: true,
+  }),
 }));
 
 // Mock LLM and storage
@@ -363,6 +374,59 @@ describe("adExpenses router", () => {
     const caller = appRouter.createCaller(ctx);
     // getHelloTobyCookies returns null by default in mock
     await expect(caller.adExpenses.triggerAutoSync({ platform: "hellotoby" })).rejects.toThrow();
+  });
+
+  it("probeStoredHelloTobySession touches cookies when live ok", async () => {
+    const db = await import("./db");
+    const scrapers = await import("./scrapers/hellotoby");
+    const cookiesJson = JSON.stringify([
+      { name: "nftoken", value: "tok", domain: ".hellotoby.com" },
+      { name: "nfsession", value: "ses", domain: ".hellotoby.com" },
+    ]);
+    vi.mocked(db.getHelloTobyCookies).mockResolvedValueOnce(cookiesJson);
+    vi.mocked(scrapers.probeHelloTobySession).mockResolvedValueOnce({
+      ok: true,
+      error: null,
+      remainCredit: 42,
+      apiMessage: null,
+      creditHttp: 200,
+      transHttp: 200,
+      creditOk: true,
+      transOk: true,
+    });
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.adExpenses.probeStoredHelloTobySession();
+    expect(result.ok).toBe(true);
+    expect(result.remainCredit).toBe(42);
+    expect(result.touchedAt).toBeTruthy();
+    expect(db.saveHelloTobyCookies).toHaveBeenCalledWith(cookiesJson);
+  });
+
+  it("probeStoredHelloTobySession does not touch cookies when live fail", async () => {
+    const db = await import("./db");
+    const scrapers = await import("./scrapers/hellotoby");
+    const cookiesJson = JSON.stringify([
+      { name: "nftoken", value: "tok", domain: ".hellotoby.com" },
+    ]);
+    vi.mocked(db.getHelloTobyCookies).mockResolvedValueOnce(cookiesJson);
+    vi.mocked(db.saveHelloTobyCookies).mockClear();
+    vi.mocked(scrapers.probeHelloTobySession).mockResolvedValueOnce({
+      ok: false,
+      error: "請登錄后再執行",
+      remainCredit: null,
+      apiMessage: "請登錄后再執行",
+      creditHttp: 401,
+      transHttp: 401,
+      creditOk: false,
+      transOk: false,
+    });
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.adExpenses.probeStoredHelloTobySession();
+    expect(result.ok).toBe(false);
+    expect(result.touchedAt).toBeNull();
+    expect(db.saveHelloTobyCookies).not.toHaveBeenCalled();
   });
 });
 
