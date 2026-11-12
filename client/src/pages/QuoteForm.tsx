@@ -296,7 +296,11 @@ function formDataFromExistingQuote(existingQuote: any): FormData {
     clientCompany: existingQuote.clientCompany ?? "",
     serviceType: existingQuote.serviceType,
     shootingDate: existingQuote.shootingDate ?? "",
-    shootingEndDate: (existingQuote as any).shootingEndDate ?? "",
+    // Default end = start so single-day shoots stay same-day unless operator extends.
+    shootingEndDate:
+      (existingQuote as any).shootingEndDate ||
+      existingQuote.shootingDate ||
+      "",
     shootingLocation: existingQuote.shootingLocation ?? "",
     notes: existingQuote.notes ?? "",
     discountPercent: Number(existingQuote.discountPercent ?? 0),
@@ -305,7 +309,8 @@ function formDataFromExistingQuote(existingQuote: any): FormData {
     depositMode: (existingQuote.depositMode ?? "percent") as "percent" | "fixed",
     depositFixedAmount: Number(existingQuote.depositFixedAmount ?? 0),
     currency: existingQuote.currency,
-    validUntil: existingQuote.validUntil ?? "",
+    // Validity field removed from UI — keep empty going forward.
+    validUntil: "",
     clientId: existingQuote.clientId ?? undefined,
     saveAsNewClient: false,
     equipment: existingQuote.equipment ?? "",
@@ -373,9 +378,14 @@ function normalizeFormData(raw: Partial<FormData> | null | undefined): FormData 
         };
       })
     : base.items;
+  const shootingDate = String(raw.shootingDate ?? base.shootingDate ?? "").trim();
+  const shootingEndDateRaw = String(raw.shootingEndDate ?? "").trim();
   return {
     ...base,
     ...raw,
+    shootingDate,
+    shootingEndDate: shootingEndDateRaw || shootingDate,
+    validUntil: "",
     shootHours: raw.shootHours != null ? String(raw.shootHours) : "",
     durationPackage:
       raw.durationPackage === "hours" ||
@@ -1562,6 +1572,10 @@ export default function QuoteForm() {
     const payload = {
       ...form,
       serviceType: form.serviceType as any,
+      // Single-day default: blank end inherits start so calendars/PDF stay consistent.
+      shootingEndDate:
+        form.shootingEndDate.trim() || form.shootingDate.trim() || "",
+      validUntil: "",
       subtotal: reconciledSubtotal,
       discountPercent: form.discountPercent,
       discountAmount: reconciledDiscountAmount,
@@ -1886,22 +1900,41 @@ export default function QuoteForm() {
             {!DESIGN_SERVICE_TYPES.has(form.serviceType) && (
               <>
                 <FormField label="拍攝開始日期">
-                  <Input type="date" value={form.shootingDate} onChange={(e) => {
-                    const newShootingDate = e.target.value;
-                    setForm((p) => {
-                      let newValidUntil = p.validUntil;
-                      if (newShootingDate) {
-                        const autoValid = new Date(newShootingDate); autoValid.setDate(autoValid.getDate() - 14);
-                        const autoValidStr = autoValid.toISOString().split("T")[0];
-                        const oldAutoValid = p.shootingDate ? (() => { const old = new Date(p.shootingDate); old.setDate(old.getDate() - 14); return old.toISOString().split("T")[0]; })() : null;
-                        if (!p.validUntil || p.validUntil === p.shootingDate || p.validUntil === oldAutoValid) newValidUntil = autoValidStr;
-                      }
-                      return { ...p, shootingDate: newShootingDate, validUntil: newValidUntil };
-                    });
-                  }} style={inputStyle} />
+                  <Input
+                    type="date"
+                    value={form.shootingDate}
+                    onChange={(e) => {
+                      const newShootingDate = e.target.value;
+                      setForm((p) => {
+                        const endWasSameDay =
+                          !p.shootingEndDate || p.shootingEndDate === p.shootingDate;
+                        return {
+                          ...p,
+                          shootingDate: newShootingDate,
+                          // Keep start/end linked for single-day; preserve multi-day span if operator already extended end.
+                          shootingEndDate: endWasSameDay
+                            ? newShootingDate
+                            : p.shootingEndDate,
+                          validUntil: "",
+                        };
+                      });
+                    }}
+                    style={inputStyle}
+                  />
                 </FormField>
-                <FormField label="拍攝結束日期（多日拍攝可選）">
-                  <Input type="date" min={form.shootingDate || undefined} value={form.shootingEndDate} onChange={(e) => setForm((p) => ({ ...p, shootingEndDate: e.target.value }))} style={inputStyle} />
+                <FormField label="拍攝結束日期（多日可改）">
+                  <Input
+                    type="date"
+                    min={form.shootingDate || undefined}
+                    value={form.shootingEndDate || form.shootingDate}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        shootingEndDate: e.target.value || p.shootingDate,
+                      }))
+                    }
+                    style={inputStyle}
+                  />
                 </FormField>
               </>
             )}
@@ -1913,16 +1946,6 @@ export default function QuoteForm() {
                 style={inputStyle}
               />
             </FormField>
-            {!DESIGN_SERVICE_TYPES.has(form.serviceType) && (
-              <FormField label="報價有效期至">
-                <Input
-                  type="date"
-                  value={form.validUntil}
-                  onChange={(e) => setForm((p) => ({ ...p, validUntil: e.target.value }))}
-                  style={inputStyle}
-                />
-              </FormField>
-            )}
             {quotePricingMode(form.serviceType) === "time_crew" && (
               <FormField label={<span>拍攝時數 <span style={{ color: "#ef4444", fontWeight: "bold" }}>*</span></span>}>
                 <Input
