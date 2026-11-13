@@ -646,8 +646,6 @@ export async function generateQuotePdfBuffer(
 
     const terms = [
       "訂金不設退款 · Deposit is non-refundable",
-      "報價單有效期 14 天 · Quotation valid for 14 days from date of issue",
-      "付款後方可確認預約 · Booking confirmed upon receipt of deposit",
       "因不可抗力（如天災、疫情等）導致拍攝無法進行，雙方可協商改期，但不能取消 · In case of force majeure (e.g. natural disaster, pandemic), rescheduling may be arranged by mutual agreement, but cancellation is not permitted",
       "本報價單經客戶簽署或以任何形式確認後，即視為具有法律效力之合約，雙方均受其條款約束 · This quotation, once signed or confirmed by the client in any form, constitutes a legally binding contract and both parties shall be bound by its terms.",
     ];
