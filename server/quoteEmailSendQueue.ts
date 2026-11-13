@@ -157,6 +157,16 @@ export function enqueueQuoteEmailSend(input: {
   body: string;
 }): { jobId: string } {
   prune();
+  // Reuse an in-flight job for the same quote so a client timeout + retry cannot
+  // stack a second PDF/SMTP while the first is still running.
+  for (const existing of jobs.values()) {
+    if (
+      existing.quoteId === input.quoteId &&
+      (existing.status === "queued" || existing.status === "running")
+    ) {
+      return { jobId: existing.jobId };
+    }
+  }
   const jobId = `qe-${input.quoteId}-${Date.now()}`;
   const job: InternalJob = {
     jobId,
@@ -285,22 +295,6 @@ async function runQuoteEmailSend(
     throw new Error(result.error ?? "郵件發送失敗");
   }
 
-  // SMTP already accepted — if we timed out mid-send, keep log as sent but do
-  // not flip draft→sent / ok status (UI already showed timeout; avoid double UX).
-  if (!stillActive(job, epoch)) {
-    if (result.messageId) {
-      const db = await getDb();
-      if (db) {
-        const { emailLogs } = await import("../drizzle/schema");
-        await db
-          .update(emailLogs)
-          .set({ resendMessageId: result.messageId })
-          .where(eq(emailLogs.id, logId));
-      }
-    }
-    return;
-  }
-
   if (result.messageId) {
     const db = await getDb();
     if (db) {
@@ -316,7 +310,9 @@ async function runQuoteEmailSend(
     await updateQuote(input.quoteId, { status: "sent" });
   }
 
-  if (!stillActive(job, epoch)) return;
+  // SMTP already accepted. Even if the UI timed the job out mid-send, recover to
+  // ok so a late status poll shows success and the operator does not resend
+  // (duplicate client email).
   job.status = "ok";
   job.sentTo = input.to;
   job.finishedAt = Date.now();

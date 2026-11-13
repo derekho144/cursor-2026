@@ -392,17 +392,6 @@ export async function applyAirwallexPaymentToQuote(input: {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  if (input.paymentIntentId) {
-    const existing = await getAirwallexLinkByPaymentIntentId(input.paymentIntentId);
-    if (existing?.status === "PAID") {
-      return {
-        applied: false,
-        reason: "duplicate_payment_intent",
-        quoteId: existing.quoteId,
-      };
-    }
-  }
-
   const [quote] = await db
     .select()
     .from(quotesTable)
@@ -419,6 +408,10 @@ export async function applyAirwallexPaymentToQuote(input: {
     };
   }
 
+  // Idempotency must key off the quote payment notes — not the link row alone.
+  // Previously we marked the link PAID before updating the quote; a crash/error
+  // between those steps left the link PAID while the quote stayed unpaid, and
+  // retries then returned duplicate_payment_intent forever.
   if (
     input.paymentIntentId &&
     paymentIntentAlreadyRecorded(quote.paymentNotes, input.paymentIntentId)
@@ -445,14 +438,7 @@ export async function applyAirwallexPaymentToQuote(input: {
     paymentIntentId: input.paymentIntentId,
   });
 
-  if (input.paymentLinkId) {
-    await markAirwallexLinkPaid({
-      airwallexId: input.paymentLinkId,
-      paymentIntentId: input.paymentIntentId,
-      paidAt: input.paidAt,
-    });
-  }
-
+  // Quote first, link second — so a failed/interrupted apply can be retried.
   await db
     .update(quotesTable)
     .set({
@@ -464,6 +450,19 @@ export async function applyAirwallexPaymentToQuote(input: {
       paymentNotes: patch.paymentNotes,
     })
     .where(eq(quotesTable.id, input.quoteId));
+
+  if (input.paymentLinkId) {
+    try {
+      await markAirwallexLinkPaid({
+        airwallexId: input.paymentLinkId,
+        paymentIntentId: input.paymentIntentId,
+        paidAt: input.paidAt,
+      });
+    } catch (err) {
+      // Quote already reflects payment; link status can be repaired on a later sync.
+      console.error("[Airwallex] markAirwallexLinkPaid failed after quote update:", err);
+    }
+  }
 
   if (patch.paymentStatus === "fully_paid" && quote.clientId) {
     try {
