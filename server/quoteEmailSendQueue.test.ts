@@ -75,4 +75,38 @@ describe("quoteEmailSendQueue", () => {
     expect(st.status).toBe("error");
     expect(st.error).toMatch(/找不到發送任務/);
   });
+
+  it("reuses an in-flight job for the same quote instead of stacking SMTP", async () => {
+    let releasePdf!: () => void;
+    const pdfGate = new Promise<Buffer>((resolve) => {
+      releasePdf = () => resolve(Buffer.from("%PDF-1.4 slow"));
+    });
+    const quotesRouter = await import("./routers/quotes");
+    vi.mocked(quotesRouter.generateQuotePdfMatchingDownload).mockImplementationOnce(
+      () => pdfGate as any
+    );
+
+    const first = enqueueQuoteEmailSend({
+      quoteId: 7,
+      to: "a@example.com",
+      subject: "Q",
+      body: "Hi",
+    });
+    const second = enqueueQuoteEmailSend({
+      quoteId: 7,
+      to: "a@example.com",
+      subject: "Q",
+      body: "Hi again",
+    });
+    expect(second.jobId).toBe(first.jobId);
+
+    releasePdf();
+    for (let i = 0; i < 40; i++) {
+      const st = getQuoteEmailSendStatus(first.jobId);
+      if (st && st.status !== "running" && st.status !== "queued") break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(getQuoteEmailSendStatus(first.jobId)?.status).toBe("ok");
+    expect(sendViaGmail).toHaveBeenCalledTimes(1);
+  });
 });
