@@ -436,7 +436,7 @@ export default function SignPage() {
           {/* Terms */}
           <div style={{ background: "rgba(255,255,255,0.04)", padding: "14px 18px", borderRadius: 4, marginBottom: 16, border: `1px solid ${DIVIDER}` }}>
             <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: 10, letterSpacing: "0.15em", color: ACCENT_LOW, textTransform: "uppercase", marginBottom: 10 }}>{t("sign.terms.label")}</div>
-            {[t("sign.terms.1"), t("sign.terms.2"), t("sign.terms.3"), t("sign.terms.4")].map((term) => (
+            {[t("sign.terms.1"), t("sign.terms.2")].map((term) => (
               <div key={term} style={{ fontFamily: SANS, color: ACCENT_LOW, fontSize: 12, lineHeight: 1.9, letterSpacing: "0.02em" }}>· {term}</div>
             ))}
           </div>
