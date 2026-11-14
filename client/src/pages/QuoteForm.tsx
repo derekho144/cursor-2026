@@ -832,11 +832,26 @@ export default function QuoteForm() {
           : null,
       durationPackage: form.durationPackage || null,
       leadSource: form.leadSource || null,
+      items: form.items
+        .filter((it) => it.description.trim())
+        .map((it) => ({
+          description: it.description,
+          quantity: Number(it.quantity) || 0,
+          category: it.category || null,
+        })),
     },
     {
       enabled: !!form.serviceType && isPricingLearningServiceType(form.serviceType),
       refetchOnWindowFocus: false,
     }
+  );
+
+  const usableItemSuggestions = useMemo(
+    () =>
+      (priceSuggest?.itemSuggestions ?? []).filter(
+        (s) => s.suggestedUnitPrice != null && Number.isFinite(s.suggestedUnitPrice)
+      ),
+    [priceSuggest?.itemSuggestions]
   );
 
   // Phone auto-lookup state
@@ -2307,6 +2322,102 @@ export default function QuoteForm() {
                       />
                     </FormField>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {usableItemSuggestions.length > 0 && (
+              <div
+                className="md:col-span-2 p-3 rounded space-y-2"
+                style={{
+                  background: "rgba(212,168,67,0.08)",
+                  border: "1px solid rgba(212,168,67,0.28)",
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div
+                      className="text-xs"
+                      style={{ color: "#d4a843", letterSpacing: "0.1em" }}
+                    >
+                      報價項目定價建議
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      以同服務類別、時數／人手／張數及數量級距的已成交報價，計算價格中位數及價格帶；拒單只作成交率參考，按需要逐項套用。只顯示有足夠成交資料的項目。
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded text-[11px]"
+                    style={{
+                      border: "1px solid rgba(212,168,67,0.45)",
+                      color: "#d4a843",
+                    }}
+                    onClick={() => {
+                      setForm((prev) => ({
+                        ...prev,
+                        items: prev.items.map((line) => {
+                          const hit = usableItemSuggestions.find(
+                            (s) =>
+                              s.description.trim() === line.description.trim()
+                          );
+                          if (!hit || hit.suggestedUnitPrice == null) return line;
+                          return {
+                            ...line,
+                            unitPrice: hit.suggestedUnitPrice,
+                            amount:
+                              hit.suggestedUnitPrice * Number(line.quantity),
+                          };
+                        }),
+                      }));
+                      toast.success("已套用有足夠資料的項目建議價");
+                    }}
+                  >
+                    套用全部可用建議
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {usableItemSuggestions.map((s) => {
+                    const idx = form.items.findIndex(
+                      (l) => l.description.trim() === s.description.trim()
+                    );
+                    return (
+                      <div
+                        key={`${s.description}-${idx}`}
+                        className="flex flex-wrap items-center gap-2 rounded px-2 py-1.5 text-xs"
+                        style={{ background: "rgba(0,0,0,0.22)" }}
+                      >
+                        <span className="min-w-[180px] flex-1">{s.description}</span>
+                        <span className="text-muted-foreground">×{s.quantity}</span>
+                        <span style={{ color: "#e8e0d0" }}>
+                          建議單價 HK${s.suggestedUnitPrice.toLocaleString("en-HK")}
+                        </span>
+                        <span className="text-muted-foreground">
+                          ({s.lowUnitPrice?.toLocaleString("en-HK")}–{s.highUnitPrice?.toLocaleString("en-HK")})
+                        </span>
+                        <span className="text-muted-foreground">
+                          {s.matchedBy === "固定營運規則"
+                            ? "固定營運規則"
+                            : `同類成交率 ${s.winRate ?? "—"}% · ${s.sampleCount} 筆成交 · ${s.confidence}`}
+                        </span>
+                        {idx >= 0 && (
+                          <button
+                            type="button"
+                            className="px-2 py-0.5 rounded"
+                            style={{
+                              border: "1px solid rgba(212,168,67,0.35)",
+                              color: "#d4a843",
+                            }}
+                            onClick={() =>
+                              updateItem(idx, "unitPrice", s.suggestedUnitPrice)
+                            }
+                          >
+                            套用
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
