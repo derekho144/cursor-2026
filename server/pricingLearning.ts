@@ -50,6 +50,10 @@ import {
   SUGGEST_TRUST,
 } from "../shared/pricingLearningConfig";
 import { resolvePlatformSuggestRows } from "../shared/pricingLeadSourcePolicy";
+import {
+  buildItemPriceSuggestions,
+  type ItemSuggestInput,
+} from "../shared/itemPriceSuggestions";
 
 const MIN_BUCKET_SAMPLES = 2;
 
@@ -84,6 +88,13 @@ export interface PricingLearningQuoteRow {
   team: string | null;
   features: QuoteShootFeatures;
   itemSummaries: string[];
+  /** Full line items for per-item unit-price suggestions */
+  items: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    category: string | null;
+  }>;
   estimatedTotal: number | null;
   accuracyPct: number | null;
   hasStructuredHours: boolean;
@@ -294,6 +305,12 @@ async function loadLearningQuotesWithItems(opts?: {
           (i) =>
             `${i.description} ×${Number(i.quantity)} @ ${Number(i.unitPrice)}`
         ),
+      items: qItems.map((i) => ({
+        description: String(i.description ?? ""),
+        quantity: Number(i.quantity) || 0,
+        unitPrice: Number(i.unitPrice) || 0,
+        category: i.category != null ? String(i.category) : null,
+      })),
       estimatedTotal,
       accuracyPct,
       hasStructuredHours,
@@ -833,6 +850,8 @@ export async function suggestPriceFromLearning(input: {
   durationPackage?: string | null;
   /** Quote form 詢價來源 — adjusts mid/packages by platform budget skew */
   leadSource?: string | null;
+  /** Current quote line items — drives per-item unit-price suggestions */
+  items?: ItemSuggestInput[] | null;
 }) {
   const allRows = await loadLearningQuotesWithItems({
     serviceType: input.serviceType,
@@ -1113,6 +1132,14 @@ export async function suggestPriceFromLearning(input: {
         r.hasStructuredCrew ||
         r.hasStructuredShotCount,
     })),
+    /** Only items with a usable suggested unit price (no insufficient-data rows). */
+    itemSuggestions: buildItemPriceSuggestions({
+      items: input.items ?? [],
+      history: allRows.map((r) => ({
+        status: r.status,
+        items: r.items,
+      })),
+    }),
   };
 }
 

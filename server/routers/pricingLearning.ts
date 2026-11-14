@@ -52,6 +52,17 @@ export const pricingLearningRouter = router({
           .nullable(),
         /** Quote 詢價來源 — prefer that platform's accepted-quote mid */
         leadSource: z.string().max(64).optional().nullable(),
+        items: z
+          .array(
+            z.object({
+              description: z.string().max(500),
+              quantity: z.number().min(0).max(10000),
+              category: z.string().max(64).optional().nullable(),
+            })
+          )
+          .max(80)
+          .optional()
+          .nullable(),
       })
     )
     .query(async ({ input }) => {
@@ -62,6 +73,7 @@ export const pricingLearningRouter = router({
         shotCount: input.shotCount,
         durationPackage: input.durationPackage,
         leadSource: input.leadSource,
+        items: input.items ?? null,
       });
     }),
 
