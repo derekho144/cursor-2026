@@ -98,6 +98,8 @@ export interface ScrapedFreehunterJob {
 export interface FreehunterBoardScrapeResult {
   success: boolean;
   jobs: ScrapedFreehunterJob[];
+  /** Listings seen on the board / API this run (includes already-known jobs). */
+  discovered: number;
   newJobs: number;
   emailsFetched: number;
   autoEmailsSent?: number;
@@ -371,7 +373,14 @@ export async function scrapeFreehunterBoard(
   const startedAt = Date.now();
   const db = await getDb();
   if (!db) {
-    return { success: false, jobs: [], newJobs: 0, emailsFetched: 0, error: "DB not available" };
+    return {
+      success: false,
+      jobs: [],
+      discovered: 0,
+      newJobs: 0,
+      emailsFetched: 0,
+      error: "DB not available",
+    };
   }
 
   console.log(
@@ -385,7 +394,14 @@ export async function scrapeFreehunterBoard(
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Login failed";
       console.error("[FreehunterBoard] Login error:", msg);
-      return { success: false, jobs: [], newJobs: 0, emailsFetched: 0, error: `登入失敗: ${msg}` };
+      return {
+        success: false,
+        jobs: [],
+        discovered: 0,
+        newJobs: 0,
+        emailsFetched: 0,
+        error: `登入失敗: ${msg}`,
+      };
     }
   }
 
@@ -448,7 +464,20 @@ export async function scrapeFreehunterBoard(
   }
 
   if (allJobs.length === 0) {
-    return { success: true, jobs: [], newJobs: 0, emailsFetched: 0 };
+    // Empty discovery is NOT success — API-only "caught up" still runs Playwright
+    // backup, which should see existing photography listings. Seeing nothing means
+    // the board/API path is broken (was previously recorded as ok:0/0 → fake "正常").
+    const err =
+      "板面無發現任何工作（API 與 Playwright 皆空）— 可能被擋、頁面改版或爬取失敗";
+    console.warn(`[FreehunterBoard] ${err}`);
+    return {
+      success: false,
+      jobs: [],
+      discovered: 0,
+      newJobs: 0,
+      emailsFetched: 0,
+      error: err,
+    };
   }
 
   // Deduplicate by jobId
@@ -468,7 +497,14 @@ export async function scrapeFreehunterBoard(
   console.log(`[FreehunterBoard] New jobs to insert: ${newJobsList.length}`);
 
   if (newJobsList.length === 0) {
-    return { success: true, jobs: uniqueJobs, newJobs: 0, emailsFetched: 0 };
+    // Saw the board, everything already in DB — genuinely caught up.
+    return {
+      success: true,
+      jobs: uniqueJobs,
+      discovered: uniqueJobs.length,
+      newJobs: 0,
+      emailsFetched: 0,
+    };
   }
 
   // Limit to maxJobs
@@ -664,6 +700,7 @@ export async function scrapeFreehunterBoard(
   return {
     success: true,
     jobs: uniqueJobs,
+    discovered: uniqueJobs.length,
     newJobs: insertedJobs.length,
     emailsFetched,
     autoEmailsSent,
