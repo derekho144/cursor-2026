@@ -15,6 +15,46 @@ export function gscOAuthScope() {
   return GSC_SCOPE;
 }
 
+export type GscSiteEntry = { siteUrl: string; permissionLevel?: string };
+
+/**
+ * Pick a GSC property the OAuth user can actually query.
+ * Prefer URL-prefix `https://www.jdstudiohk.com/` over `sc-domain:…`
+ * — domain properties often 403 when the connected Google account only
+ * verified the www URL-prefix property.
+ */
+export function resolveGscSiteUrl(
+  sites: GscSiteEntry[] | null | undefined,
+  preferred?: string | null
+): string {
+  const list = (sites ?? []).filter((s) => s.siteUrl?.trim());
+  const want = (preferred ?? process.env.GSC_SITE_URL ?? "").trim();
+  if (want && list.some((s) => s.siteUrl === want)) return want;
+
+  const www =
+    list.find((s) => s.siteUrl === "https://www.jdstudiohk.com/") ??
+    list.find(
+      (s) =>
+        s.siteUrl.includes("www.jdstudiohk.com") &&
+        s.siteUrl.startsWith("https://")
+    );
+  if (www?.siteUrl) return www.siteUrl;
+
+  const httpsJd = list.find(
+    (s) =>
+      s.siteUrl.includes("jdstudiohk.com") && s.siteUrl.startsWith("https://")
+  );
+  if (httpsJd?.siteUrl) return httpsJd.siteUrl;
+
+  const domain = list.find((s) => s.siteUrl === "sc-domain:jdstudiohk.com");
+  if (domain?.siteUrl) return domain.siteUrl;
+
+  const anyJd = list.find((s) => s.siteUrl.includes("jdstudiohk.com"));
+  if (anyJd?.siteUrl) return anyJd.siteUrl;
+
+  return DEFAULT_GSC_SITE_URL;
+}
+
 export async function saveGscRefreshToken(refreshToken: string): Promise<void> {
   const { getDb } = await import("./db");
   const { platformCredentials } = await import("../drizzle/schema");
@@ -64,7 +104,7 @@ export async function getGscAccessToken(): Promise<string> {
   return json.access_token;
 }
 
-export async function listGscSites(): Promise<Array<{ siteUrl: string; permissionLevel?: string }>> {
+export async function listGscSites(): Promise<GscSiteEntry[]> {
   const token = await getGscAccessToken();
   const res = await fetch("https://www.googleapis.com/webmasters/v3/sites", {
     headers: { Authorization: `Bearer ${token}` },
@@ -96,7 +136,15 @@ export async function queryGscSearchAnalytics(opts: {
   rowLimit?: number;
   dimensionFilterGroups?: unknown[];
 }): Promise<GscSearchAnalyticsRow[]> {
-  const siteUrl = opts.siteUrl ?? DEFAULT_GSC_SITE_URL;
+  let siteUrl = opts.siteUrl ?? DEFAULT_GSC_SITE_URL;
+  // When caller omits siteUrl, pick a property the token can use.
+  if (!opts.siteUrl) {
+    try {
+      siteUrl = resolveGscSiteUrl(await listGscSites());
+    } catch {
+      /* keep default */
+    }
+  }
   const token = await getGscAccessToken();
   const encoded = encodeURIComponent(siteUrl);
   const body: Record<string, unknown> = {
@@ -123,24 +171,69 @@ export async function queryGscSearchAnalytics(opts: {
     rows?: GscSearchAnalyticsRow[];
     error?: { message?: string };
   };
-  if (!res.ok) throw new Error(json.error?.message ?? `GSC query failed (${res.status})`);
+  if (!res.ok) {
+    const msg = json.error?.message ?? `GSC query failed (${res.status})`;
+    // Retry once with www URL-prefix if domain property was rejected.
+    if (
+      siteUrl.startsWith("sc-domain:") &&
+      /permission|forbidden|403/i.test(msg)
+    ) {
+      return queryGscSearchAnalytics({
+        ...opts,
+        siteUrl: DEFAULT_GSC_SITE_URL,
+      });
+    }
+    throw new Error(`${msg} (siteUrl=${siteUrl})`);
+  }
   return json.rows ?? [];
 }
 
 export async function testGscConnection(): Promise<{
   success: boolean;
-  sites?: Array<{ siteUrl: string; permissionLevel?: string }>;
+  sites?: GscSiteEntry[];
   hasJdstudio?: boolean;
+  siteUrl?: string | null;
+  queryOk?: boolean;
   error?: string;
 }> {
   try {
     const sites = await listGscSites();
-    const hasJdstudio = sites.some(
-      (s) =>
-        s.siteUrl.includes("jdstudiohk.com") ||
-        s.siteUrl === "sc-domain:jdstudiohk.com"
-    );
-    return { success: true, sites, hasJdstudio };
+    const hasJdstudio = sites.some((s) => s.siteUrl.includes("jdstudiohk.com"));
+    const siteUrl = resolveGscSiteUrl(sites);
+    let queryOk = false;
+    let queryError: string | undefined;
+    if (hasJdstudio) {
+      try {
+        // Tiny probe — GSC data has ~2d lag; a recent 3-day window is enough.
+        const end = new Date();
+        end.setUTCDate(end.getUTCDate() - 2);
+        const start = new Date(end);
+        start.setUTCDate(start.getUTCDate() - 2);
+        const fmt = (d: Date) => d.toISOString().slice(0, 10);
+        await queryGscSearchAnalytics({
+          siteUrl,
+          startDate: fmt(start),
+          endDate: fmt(end),
+          rowLimit: 1,
+        });
+        queryOk = true;
+      } catch (e: any) {
+        queryError = e?.message ?? String(e);
+      }
+    }
+    if (hasJdstudio && !queryOk) {
+      return {
+        success: false,
+        sites,
+        hasJdstudio,
+        siteUrl,
+        queryOk: false,
+        error:
+          queryError ??
+          `GSC property visible but query failed for ${siteUrl}. Re-auth with the Google account that owns www.jdstudiohk.com in Search Console.`,
+      };
+    }
+    return { success: hasJdstudio, sites, hasJdstudio, siteUrl, queryOk };
   } catch (e: any) {
     return { success: false, error: e?.message ?? String(e) };
   }
