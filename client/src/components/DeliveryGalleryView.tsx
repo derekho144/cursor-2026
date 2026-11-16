@@ -312,6 +312,103 @@ export function DeliveryGalleryView({
         </div>
       </div>
 
+      {/* Thank you + review — directly under cover */}
+      <div
+        style={{
+          width: "100%",
+          background: "#050505",
+          borderTop: `1px solid ${WHITE_FAINT}`,
+          borderBottom: `1px solid ${WHITE_FAINT}`,
+          padding: "48px 20px 44px",
+          textAlign: "center",
+          boxSizing: "border-box",
+          animation: "fadeUp 0.55s 0.05s ease both",
+        }}
+      >
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          <h2
+            style={{
+              fontFamily: SANS,
+              fontWeight: 500,
+              fontSize: "clamp(22px, 3.5vw, 28px)",
+              margin: "0 0 10px",
+              letterSpacing: "0.04em",
+              color: WHITE_HIGH,
+            }}
+          >
+            {t("delivery.thankYou")}
+          </h2>
+          <p
+            style={{
+              fontFamily: SANS,
+              color: WHITE_LOW,
+              fontSize: 11,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              marginBottom: 22,
+            }}
+          >
+            {t("delivery.thankYouSub")}
+          </p>
+          <p
+            style={{
+              fontFamily: SANS,
+              color: WHITE_MED,
+              fontSize: 14,
+              lineHeight: 1.9,
+              letterSpacing: "0.02em",
+              marginBottom: 22,
+            }}
+          >
+            {t("delivery.message1")}
+            <br />
+            {t("delivery.message2")}
+          </p>
+          <div style={{ display: "flex", justifyContent: "center", gap: 5, marginBottom: 18 }}>
+            {[1, 2, 3, 4, 5].map((s) => (
+              <svg key={s} width="18" height="18" viewBox="0 0 24 24" fill={GOLD}>
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            ))}
+          </div>
+          <p
+            style={{
+              fontFamily: SANS,
+              color: WHITE_MED,
+              fontSize: 14,
+              lineHeight: 1.8,
+              marginBottom: 20,
+            }}
+          >
+            {t("delivery.reviewInvite")}
+            <br />
+            {t("delivery.reviewInvite2")}
+          </p>
+          <a
+            href={GOOGLE_REVIEW_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              padding: "13px 22px",
+              border: `1px solid rgba(255,255,255,0.28)`,
+              color: WHITE_HIGH,
+              textDecoration: "none",
+              fontFamily: SANS,
+              fontSize: 12,
+              letterSpacing: "0.16em",
+              fontWeight: 600,
+              background: "transparent",
+            }}
+          >
+            {t("delivery.leaveReview")}
+          </a>
+        </div>
+      </div>
+
       {/* Title strip */}
       <div
         style={{
@@ -320,7 +417,6 @@ export function DeliveryGalleryView({
           justifyContent: "space-between",
           gap: 16,
           padding: "18px 18px 14px",
-          borderBottom: `1px solid ${WHITE_FAINT}`,
           maxWidth: 1400,
           margin: "0 auto",
           width: "100%",
@@ -380,69 +476,6 @@ export function DeliveryGalleryView({
           gap={5}
           targetRowHeight={280}
         />
-      </div>
-
-      {/* Thank you + review */}
-      <div
-        style={{
-          maxWidth: 820,
-          margin: "0 auto",
-          padding: "36px 20px 28px",
-          textAlign: "center",
-          borderTop: `1px solid ${WHITE_FAINT}`,
-        }}
-      >
-        <h2
-          style={{
-            fontFamily: SERIF,
-            fontWeight: 300,
-            fontStyle: "italic",
-            fontSize: 28,
-            margin: "0 0 8px",
-          }}
-        >
-          {t("delivery.thankYou")}
-        </h2>
-        <p style={{ fontFamily: SANS, color: WHITE_LOW, fontSize: 12, letterSpacing: "0.1em", marginBottom: 16 }}>
-          {t("delivery.thankYouSub")}
-        </p>
-        <p style={{ fontFamily: SANS, color: WHITE_MED, fontSize: 14, lineHeight: 1.85, marginBottom: 18 }}>
-          {t("delivery.message1")}
-          <br />
-          {t("delivery.message2")}
-        </p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: 12 }}>
-          {[1, 2, 3, 4, 5].map((s) => (
-            <svg key={s} width="16" height="16" viewBox="0 0 24 24" fill={GOLD}>
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          ))}
-        </div>
-        <p style={{ fontFamily: SANS, color: WHITE_MED, fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>
-          {t("delivery.reviewInvite")}
-          <br />
-          {t("delivery.reviewInvite2")}
-        </p>
-        <a
-          href={GOOGLE_REVIEW_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "12px 18px",
-            border: `1px solid rgba(255,255,255,0.25)`,
-            color: WHITE_HIGH,
-            textDecoration: "none",
-            fontFamily: SANS,
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            fontWeight: 600,
-          }}
-        >
-          {t("delivery.leaveReview")}
-        </a>
       </div>
 
       {/* Packages */}
