@@ -5,6 +5,7 @@ import { getDb, getQuoteById } from "../db";
 import { deliveries } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
+import { listDriveFolderPhotos } from "../driveFolderPhotos";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -280,6 +281,42 @@ export const deliveriesRouter = router({
         message: delivery.message,
         createdAt: delivery.createdAt,
         quoteId: delivery.quoteId ?? null,
+      };
+    }),
+
+  /**
+   * Public: list photos in the delivery's Drive folder for PicSpot-style gallery.
+   * Requires the folder to be shared as "anyone with the link".
+   * Best results with GOOGLE_API_KEY / GOOGLE_DRIVE_API_KEY on the server.
+   */
+  listPhotos: publicProcedure
+    .input(z.object({ token: z.string(), password: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
+      const [delivery] = await db
+        .select()
+        .from(deliveries)
+        .where(eq(deliveries.token, input.token))
+        .limit(1);
+      if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "連結無效或已過期" });
+      if (delivery.status !== "active") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結已停用" });
+      }
+      if (delivery.expiresAt && new Date() > delivery.expiresAt) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結已過期" });
+      }
+      if (delivery.password) {
+        if (!input.password || delivery.password !== input.password.trim()) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "密碼錯誤，請重試" });
+        }
+      }
+      const listed = await listDriveFolderPhotos(delivery.googleDriveUrl);
+      return {
+        folderId: listed.folderId,
+        source: listed.source,
+        photos: listed.photos,
+        error: listed.error ?? null,
       };
     }),
 
