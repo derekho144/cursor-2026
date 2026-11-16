@@ -4,7 +4,7 @@
 
 ## Rules
 - No prices on homepage tiles / FAQ
-- **Own work only** — JD Studio portfolio frames (Squarespace CDN for most tiles; food crab + video BTS served from `https://jdsys.biz/home-tiles/` until uploaded to Squarespace Asset Library)
+- **Own work only** — JD Studio portfolio frames (Squarespace CDN for most tiles; food crab + video BTS served from `https://jdsys.biz/home-tile-*.jpg` until uploaded to Squarespace Asset Library)
 - Strict 4×2 wall, 4:5 cover crop, shared CSS grade
 - Preserve palette: `#050507` / gold `#c9a962` / Noto Sans TC — not a dashboard
 
@@ -12,11 +12,11 @@
 | Service | File |
 |---|---|
 | 產品攝影 | `A7R06570.jpg` (porcelain vase) |
-| 食物攝影 | `food-crab.jpg` → `https://jdsys.biz/home-tiles/food-crab.jpg` |
+| 食物攝影 | `food-crab.jpg` → `https://jdsys.biz/home-tile-food-crab.jpg` |
 | 室內攝影 | `A7R00140.jpg` (Busy Bee boutique) |
 | 珠寶攝影 | `2101+A1.jpg` (diamond ring) |
 | 企業活動 | `DSC02693.jpg` (Cathay signing handshake) |
-| 影片／TVC | `video-bts.jpg` → `https://jdsys.biz/home-tiles/video-bts.jpg` |
+| 影片／TVC | `video-bts.jpg` → `https://jdsys.biz/home-tile-video-bts.jpg` |
 | 派對活動 | `DSC04196.jpg` (family celebration cake) |
 | 餐牌設計 | hotel dessert (`4酒店…`) |
 | Close | `AKE_Cariam-2-Product-Shot-0324.jpg` |

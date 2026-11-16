@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import fs from "fs";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -10,6 +12,30 @@ import { serveStatic, setupVite } from "./vite";
 import { startScheduler } from "../scheduler";
 import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources, ensureAdsQuoteAttributionSchema } from "../db";
 import { ENV } from "./env";
+
+/** Homepage Squarespace tiles — serve even if Vite public copy is missing on host. */
+const HOME_TILE_FILES: Record<string, string> = {
+  "food-crab.jpg": "food-crab.jpg",
+  "video-bts.jpg": "video-bts.jpg",
+  "home-tile-food-crab.jpg": "food-crab.jpg",
+  "home-tile-video-bts.jpg": "video-bts.jpg",
+};
+
+function resolveHomeTilePath(fileName: string): string | null {
+  const mapped = HOME_TILE_FILES[fileName];
+  if (!mapped) return null;
+  const candidates = [
+    path.resolve(process.cwd(), "client/public/home-tiles", mapped),
+    path.resolve(process.cwd(), "client/public", fileName),
+    path.resolve(process.cwd(), "content/geo-aeo/assets/home-tiles", mapped),
+    path.resolve(process.cwd(), "dist/public/home-tiles", mapped),
+    path.resolve(process.cwd(), "dist/public", fileName),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -750,6 +776,21 @@ async function startServer() {
       createContext,
     })
   );
+  // Homepage tile images for Squarespace home-lower code block (must precede SPA fallback)
+  app.get(["/home-tiles/:file", "/home-tile-food-crab.jpg", "/home-tile-video-bts.jpg"], (req, res) => {
+    const file =
+      typeof req.params.file === "string"
+        ? req.params.file
+        : (req.path.split("/").pop() || "");
+    const abs = resolveHomeTilePath(file);
+    if (!abs) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.type("image/jpeg");
+    return res.sendFile(abs);
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
