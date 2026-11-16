@@ -173,12 +173,65 @@
     for (var i = 0; i < nodes.length; i++) rewrite(nodes[i]);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", run);
-  } else {
+  /**
+   * Homepage #jdh service tiles: food / video used jsDelivr on a private GitHub
+   * branch (Failed to fetch). Rewrite to stable jdsys public JPEGs.
+   */
+  var TILE_REWRITES = [
+    {
+      test: /food-crab\.jpg/i,
+      to: "https://jdsys.biz/home-tile-food-crab.jpg",
+    },
+    {
+      test: /video-bts\.jpg/i,
+      to: "https://jdsys.biz/home-tile-video-bts.jpg",
+    },
+  ];
+
+  function rewriteBrokenTiles() {
+    var imgs = document.querySelectorAll("#jdh img, img[src*='jsdelivr.net'][src*='home-tiles']");
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      var src = img.getAttribute("src") || "";
+      if (!src) continue;
+      for (var j = 0; j < TILE_REWRITES.length; j++) {
+        var rule = TILE_REWRITES[j];
+        if (rule.test.test(src) && src.indexOf("jdsys.biz/home-tile") === -1) {
+          img.setAttribute("src", rule.to);
+          var ph = img.closest && img.closest(".ph");
+          if (ph) {
+            if (img.complete && img.naturalWidth) ph.classList.add("is-ready");
+            else {
+              img.addEventListener(
+                "load",
+                function () {
+                  var p = this.closest && this.closest(".ph");
+                  if (p) p.classList.add("is-ready");
+                }.bind(img),
+                { once: true }
+              );
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  function runAll() {
     run();
+    rewriteBrokenTiles();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", runAll);
+  } else {
+    runAll();
   }
   try {
-    new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(runAll).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
   } catch (e) {}
 })();

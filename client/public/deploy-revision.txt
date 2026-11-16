@@ -28,3 +28,5 @@ inquiry-quote-complete-pdf-retry-v1
 wa-inbound-offline-lead-v1
 
 fix-home-tile-images-v1
+
+fix-home-tile-rewrite-v1
