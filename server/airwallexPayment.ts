@@ -430,11 +430,21 @@ export async function applyAirwallexPaymentToQuote(input: {
     };
   }
 
-  if (input.kind === "deposit" && quote.paymentStatus === "fully_paid") {
+  if (quote.paymentStatus === "fully_paid") {
     return { applied: false, reason: "already_fully_paid", quoteId: quote.id };
   }
-  if (input.kind === "balance" && quote.paymentStatus === "fully_paid") {
-    return { applied: false, reason: "already_fully_paid", quoteId: quote.id };
+  // Deposit already booked: only balance may complete payment. A follow-up
+  // "full" link would overwrite depositPaidAmount with the full total while
+  // Airwallex still charged deposit + full.
+  if (
+    quote.paymentStatus === "deposit_paid" &&
+    (input.kind === "deposit" || input.kind === "full")
+  ) {
+    return {
+      applied: false,
+      reason: input.kind === "full" ? "deposit_already_paid_use_balance" : "deposit_already_paid",
+      quoteId: quote.id,
+    };
   }
 
   const patch = buildQuotePaymentPatch({

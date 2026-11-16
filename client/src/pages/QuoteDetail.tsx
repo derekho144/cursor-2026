@@ -246,13 +246,19 @@ export default function QuoteDetail() {
     balancePaidAt: string;
     paymentNotes: string;
   } | null>(null);
+  /** Snapshot at edit-open so we reject saves that would clobber a webhook write. */
+  const [paymentBaseline, setPaymentBaseline] = useState<{
+    paymentStatus: "unpaid" | "deposit_paid" | "fully_paid";
+    paymentNotes: string | null;
+  } | null>(null);
   const updatePaymentMutation = trpc.quotes.updatePayment.useMutation({
     onSuccess: () => {
       toast.success("付款記錄已更新");
       utils.quotes.getById.invalidate({ id: quoteId });
       setPaymentEditing(false);
+      setPaymentBaseline(null);
     },
-    onError: () => toast.error("更新失敗"),
+    onError: (e) => toast.error(e.message || "更新失敗"),
   });
 
   const { data: airwallexStatus } = trpc.quotes.airwallexStatus.useQuery();
@@ -295,13 +301,19 @@ export default function QuoteDetail() {
     }
   }
   function startPaymentEdit() {
+    const status = ((quote as any)?.paymentStatus ?? "unpaid") as
+      | "unpaid"
+      | "deposit_paid"
+      | "fully_paid";
+    const notes = ((quote as any)?.paymentNotes as string | null | undefined) ?? null;
+    setPaymentBaseline({ paymentStatus: status, paymentNotes: notes });
     setPaymentForm({
-      paymentStatus: ((quote as any)?.paymentStatus ?? "unpaid") as "unpaid" | "deposit_paid" | "fully_paid",
+      paymentStatus: status,
       depositPaidAmount: (quote as any)?.depositPaidAmount ? String(Number((quote as any).depositPaidAmount)) : "",
       depositPaidAt: (quote as any)?.depositPaidAt ? new Date((quote as any).depositPaidAt).toISOString().split("T")[0] : "",
       balancePaidAmount: (quote as any)?.balancePaidAmount ? String(Number((quote as any).balancePaidAmount)) : "",
       balancePaidAt: (quote as any)?.balancePaidAt ? new Date((quote as any).balancePaidAt).toISOString().split("T")[0] : "",
-      paymentNotes: (quote as any)?.paymentNotes ?? "",
+      paymentNotes: notes ?? "",
     });
     setPaymentEditing(true);
   }
@@ -1276,7 +1288,11 @@ export default function QuoteDetail() {
               </div>
               {/* Actions */}
               <div className="flex justify-end gap-2 pt-1">
-                <button onClick={() => setPaymentEditing(false)}
+                <button
+                  onClick={() => {
+                    setPaymentEditing(false);
+                    setPaymentBaseline(null);
+                  }}
                   className="px-4 py-2 text-xs rounded transition-all hover:opacity-70"
                   style={{ border: "1px solid rgba(255,255,255,0.1)", color: "#888", letterSpacing: "0.1em" }}
                 >
@@ -1293,6 +1309,8 @@ export default function QuoteDetail() {
                       balancePaidAmount: paymentForm.balancePaidAmount ? Number(paymentForm.balancePaidAmount) : null,
                       balancePaidAt: paymentForm.balancePaidAt || null,
                       paymentNotes: paymentForm.paymentNotes || null,
+                      expectedPaymentStatus: paymentBaseline?.paymentStatus,
+                      expectedPaymentNotes: paymentBaseline?.paymentNotes ?? null,
                     });
                   }}
                   disabled={updatePaymentMutation.isPending}

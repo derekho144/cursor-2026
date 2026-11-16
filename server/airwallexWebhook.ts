@@ -89,7 +89,15 @@ export async function handleAirwallexWebhook(req: Request, res: Response): Promi
   const timestamp = asString(req.headers["x-timestamp"]);
   const signature = asString(req.headers["x-signature"]);
 
-  if (ENV.airwallexWebhookSecret) {
+  if (!ENV.airwallexWebhookSecret) {
+    // Never fail-open in production: unsigned webhooks could mark quotes paid.
+    if (ENV.isProduction) {
+      console.error("[Airwallex Webhook] AIRWALLEX_WEBHOOK_SECRET not set — rejecting");
+      res.status(503).json({ received: false, error: "webhook secret not configured" });
+      return;
+    }
+    console.warn("[Airwallex Webhook] AIRWALLEX_WEBHOOK_SECRET not set — allowing unsigned webhook (non-production)");
+  } else {
     const ok = verifyAirwallexWebhookSignature({
       rawBody,
       timestamp,
@@ -101,8 +109,6 @@ export async function handleAirwallexWebhook(req: Request, res: Response): Promi
       res.status(401).json({ received: false, error: "invalid signature" });
       return;
     }
-  } else if (ENV.isProduction) {
-    console.warn("[Airwallex Webhook] AIRWALLEX_WEBHOOK_SECRET not set — accepting unsigned webhook");
   }
 
   let payload: WebhookPayload;

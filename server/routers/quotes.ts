@@ -1187,11 +1187,39 @@ ${itemsText}
         balancePaidAmount: z.number().nullable().optional(),
         balancePaidAt: z.string().nullable().optional(), // ISO date string or null
         paymentNotes: z.string().nullable().optional(),
+        /** Snapshot when the edit form opened — reject stale saves over webhook writes. */
+        expectedPaymentStatus: z.enum(["unpaid", "deposit_paid", "fully_paid"]).optional(),
+        expectedPaymentNotes: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
+      const [current] = await db
+        .select({
+          paymentStatus: quotesTable.paymentStatus,
+          paymentNotes: quotesTable.paymentNotes,
+        })
+        .from(quotesTable)
+        .where(eq(quotesTable.id, input.id))
+        .limit(1);
+      if (!current) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
+      }
+      if (input.expectedPaymentStatus != null || input.expectedPaymentNotes !== undefined) {
+        const statusOk =
+          input.expectedPaymentStatus == null ||
+          current.paymentStatus === input.expectedPaymentStatus;
+        const notesOk =
+          input.expectedPaymentNotes === undefined ||
+          (current.paymentNotes ?? null) === (input.expectedPaymentNotes ?? null);
+        if (!statusOk || !notesOk) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "付款記錄已被更新（例如 Airwallex 入帳），請重新開啟再儲存",
+          });
+        }
+      }
       await db
         .update(quotesTable)
         .set({
