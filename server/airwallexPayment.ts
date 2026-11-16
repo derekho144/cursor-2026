@@ -325,11 +325,9 @@ export async function resolveAirwallexPaymentNotification(
   let paymentLinkId = notification.paymentLinkId;
   const paymentIntentId = notification.paymentIntentId;
 
-  if (paymentIntentId) {
-    const byIntent = await getAirwallexLinkByPaymentIntentId(paymentIntentId);
-    if (byIntent?.status === "PAID") return null;
-  }
-
+  // Do not short-circuit on link.status === "PAID". A prior crash could have
+  // marked the link PAID before the quote update; retries must still resolve so
+  // applyAirwallexPaymentToQuote can recover via quote paymentNotes idempotency.
   let link = paymentLinkId
     ? await getAirwallexPaymentLinkByAirwallexId(paymentLinkId)
     : null;
@@ -339,9 +337,6 @@ export async function resolveAirwallexPaymentNotification(
   }
 
   if (link) {
-    if (link.status === "PAID" && paymentIntentId && link.paymentIntentId === paymentIntentId) {
-      return null;
-    }
     quoteId = quoteId || link.quoteId;
     kind = kind || (link.kind as AirwallexPaymentLinkKind);
     amount = amount || Number(link.amount);

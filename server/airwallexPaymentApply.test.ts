@@ -17,15 +17,37 @@ const quoteRow = {
   depositPaidAt: null,
   balancePaidAmount: null,
   balancePaidAt: null,
-  paymentNotes: null,
+  paymentNotes: null as string | null,
 };
+
+const paidLinkRow = {
+  id: 9,
+  quoteId: 42,
+  kind: "deposit" as const,
+  airwallexId: "link_orphan",
+  url: "https://example.com/pay",
+  amount: "5000",
+  currency: "HKD",
+  status: "PAID",
+  paymentIntentId: "int_orphan_paid_link",
+  paidAt: new Date("2026-11-13T04:00:00.000Z"),
+  expiresAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+/** FIFO results for db.select().from().where().limit() */
+let selectQueue: unknown[][] = [];
 
 const dbMock = {
   execute: vi.fn().mockResolvedValue(undefined),
   select: vi.fn(() => ({
     from: vi.fn(() => ({
       where: vi.fn(() => ({
-        limit: vi.fn(async () => [{ ...quoteRow }]),
+        limit: vi.fn(async () => {
+          if (selectQueue.length > 0) return selectQueue.shift()!;
+          return [{ ...quoteRow }];
+        }),
       })),
     })),
   })),
@@ -67,13 +89,17 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((a: unknown, b: unknown) => [a, b]),
 }));
 
-import { applyAirwallexPaymentToQuote } from "./airwallexPayment";
+import {
+  applyAirwallexPaymentToQuote,
+  processAirwallexPaymentNotification,
+} from "./airwallexPayment";
 
 describe("applyAirwallexPaymentToQuote ordering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     quoteRow.paymentNotes = null;
     quoteRow.paymentStatus = "unpaid";
+    selectQueue = [];
     quoteUpdateWhere.mockResolvedValue(undefined);
     linkUpdateWhere.mockResolvedValue(undefined);
   });
@@ -150,5 +176,70 @@ describe("applyAirwallexPaymentToQuote ordering", () => {
     });
     expect(quoteUpdateSet).not.toHaveBeenCalled();
     expect(linkUpdateSet).not.toHaveBeenCalled();
+  });
+});
+
+describe("processAirwallexPaymentNotification recovery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    quoteRow.paymentNotes = null;
+    quoteRow.paymentStatus = "unpaid";
+    selectQueue = [];
+    quoteUpdateWhere.mockResolvedValue(undefined);
+    linkUpdateWhere.mockResolvedValue(undefined);
+  });
+
+  it("recovers when webhook retries after link was marked PAID but quote was not", async () => {
+    // resolve: load link by airwallex id → PAID orphan link
+    // apply: load quote → still unpaid / notes empty
+    selectQueue = [[{ ...paidLinkRow }], [{ ...quoteRow }]];
+
+    const result = await processAirwallexPaymentNotification({
+      paymentIntentId: "int_orphan_paid_link",
+      paymentLinkId: "link_orphan",
+      paidAt: new Date("2026-11-13T04:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      applied: true,
+      quoteId: 42,
+      kind: "deposit",
+      paymentStatus: "deposit_paid",
+    });
+    expect(quoteUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentStatus: "deposit_paid",
+        paymentNotes: expect.stringContaining("int_orphan_paid_link"),
+      })
+    );
+  });
+
+  it("skips as duplicate once quote notes already record the intent", async () => {
+    quoteRow.paymentNotes =
+      "✓ Airwallex 訂金 HKD 5,000 · 2026-11-13 · int_orphan_paid_link";
+    quoteRow.paymentStatus = "deposit_paid";
+    selectQueue = [
+      [{ ...paidLinkRow }],
+      [
+        {
+          ...quoteRow,
+          paymentNotes: quoteRow.paymentNotes,
+          paymentStatus: "deposit_paid",
+        },
+      ],
+    ];
+
+    const result = await processAirwallexPaymentNotification({
+      paymentIntentId: "int_orphan_paid_link",
+      paymentLinkId: "link_orphan",
+      paidAt: new Date("2026-11-13T04:00:00.000Z"),
+    });
+
+    expect(result).toEqual({
+      applied: false,
+      reason: "duplicate_payment_intent",
+      quoteId: 42,
+    });
+    expect(quoteUpdateSet).not.toHaveBeenCalled();
   });
 });
