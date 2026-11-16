@@ -175,52 +175,96 @@
 
   /**
    * Homepage #jdh service tiles: food / video used jsDelivr on a private GitHub
-   * branch (Failed to fetch). Rewrite to stable jdsys public JPEGs.
+   * branch (Failed to fetch). Force stable public URLs and remount <img> so a
+   * prior jsDelivr error state cannot leave a blank/opaque tile.
    */
-  var TILE_REWRITES = [
-    {
-      test: /food-crab\.jpg/i,
-      to: "https://jdsys.biz/home-tile-food-crab.jpg",
-    },
-    {
-      test: /video-bts\.jpg/i,
-      to: "https://jdsys.biz/home-tile-video-bts.jpg",
-    },
-  ];
+  var FOOD_TILE =
+    "https://jdsys.biz/home-tile-food-crab.jpg";
+  var VIDEO_TILE =
+    "https://jdsys.biz/home-tile-video-bts.jpg";
+  // Same-origin Squarespace CDN fallback if jdsys is blocked for any reason
+  var FOOD_TILE_FALLBACK =
+    "https://images.squarespace-cdn.com/content/v1/5d6b9dde8a813e0001faeb3c/1769590350460-S4SL1T3H610CVEN0NFKR/1%E9%85%92%E5%BA%97%E9%A3%9F%E7%89%A9%E6%8B%8D%E6%94%9D%E5%8F%8A%E9%A4%90%E5%96%AE%E8%A8%AD%E8%A8%88+JD+STUDIO.png?format=2000w";
+
+  function markTileReady(img) {
+    var ph = img && img.closest && img.closest(".ph");
+    if (ph) ph.classList.add("is-ready");
+  }
+
+  function forceTileSrc(img, url) {
+    if (!img || !url) return;
+    var cur = img.getAttribute("src") || "";
+    if (cur === url && img.complete && img.naturalWidth > 0) {
+      markTileReady(img);
+      return;
+    }
+    // Remount so browsers that already failed jsDelivr still fetch cleanly.
+    var next = img.cloneNode(false);
+    next.removeAttribute("srcset");
+    next.loading = "eager";
+    next.decoding = "async";
+    next.addEventListener("load", function () { markTileReady(next); }, { once: true });
+    next.addEventListener(
+      "error",
+      function () {
+        if (url === FOOD_TILE && FOOD_TILE_FALLBACK) {
+          forceTileSrc(next, FOOD_TILE_FALLBACK);
+        } else {
+          markTileReady(next);
+        }
+      },
+      { once: true }
+    );
+    next.setAttribute("src", url);
+    if (img.parentNode) img.parentNode.replaceChild(next, img);
+  }
+
+  function needsTileFix(src) {
+    if (!src) return true;
+    if (/jsdelivr\.net/i.test(src)) return true;
+    if (/github\.com\/derekho144\/cursor-2026/i.test(src)) return true;
+    if (/homepage-lower-ui-096b/i.test(src)) return true;
+    return false;
+  }
 
   function rewriteBrokenTiles() {
-    var imgs = document.querySelectorAll("#jdh img, img[src*='jsdelivr.net'][src*='home-tiles']");
-    for (var i = 0; i < imgs.length; i++) {
-      var img = imgs[i];
-      var src = img.getAttribute("src") || "";
-      if (!src) continue;
-      for (var j = 0; j < TILE_REWRITES.length; j++) {
-        var rule = TILE_REWRITES[j];
-        if (rule.test.test(src) && src.indexOf("jdsys.biz/home-tile") === -1) {
-          img.setAttribute("src", rule.to);
-          var ph = img.closest && img.closest(".ph");
-          if (ph) {
-            if (img.complete && img.naturalWidth) ph.classList.add("is-ready");
-            else {
-              img.addEventListener(
-                "load",
-                function () {
-                  var p = this.closest && this.closest(".ph");
-                  if (p) p.classList.add("is-ready");
-                }.bind(img),
-                { once: true }
-              );
-            }
-          }
-          break;
-        }
-      }
+    var food =
+      document.querySelector('#jdh a[href*="food-photography"] img') ||
+      document.querySelector('#jdh a[aria-label*="食物攝影"] img');
+    if (food && needsTileFix(food.getAttribute("src") || "")) {
+      forceTileSrc(food, FOOD_TILE);
     }
+
+    var video =
+      document.querySelector('#jdh a[href*="video-project"] img') ||
+      document.querySelector('#jdh a[aria-label*="影片"] img');
+    if (video && needsTileFix(video.getAttribute("src") || "")) {
+      forceTileSrc(video, VIDEO_TILE);
+    }
+
+    // Catch any remaining jsDelivr home-tile imgs outside the selectors above
+    var loose = document.querySelectorAll("img[src*='jsdelivr.net'][src*='home-tiles'], img[src*='jsdelivr.net'][src*='food-crab'], img[src*='jsdelivr.net'][src*='video-bts']");
+    for (var i = 0; i < loose.length; i++) {
+      var img = loose[i];
+      var src = img.getAttribute("src") || "";
+      if (/food-crab/i.test(src)) forceTileSrc(img, FOOD_TILE);
+      else if (/video-bts/i.test(src)) forceTileSrc(img, VIDEO_TILE);
+    }
+  }
+
+  var tileRewriteQueued = false;
+  function queueTileRewrite() {
+    if (tileRewriteQueued) return;
+    tileRewriteQueued = true;
+    setTimeout(function () {
+      tileRewriteQueued = false;
+      rewriteBrokenTiles();
+    }, 0);
   }
 
   function runAll() {
     run();
-    rewriteBrokenTiles();
+    queueTileRewrite();
   }
 
   if (document.readyState === "loading") {
@@ -228,6 +272,8 @@
   } else {
     runAll();
   }
+  // Also run after full load (lazy tiles further down the page)
+  window.addEventListener("load", queueTileRewrite);
   try {
     new MutationObserver(runAll).observe(document.documentElement, {
       childList: true,

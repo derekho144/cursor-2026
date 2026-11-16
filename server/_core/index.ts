@@ -791,6 +791,21 @@ async function startServer() {
     return res.sendFile(abs);
   });
 
+  // Short cache so Squarespace tile remaps ship quickly after deploy
+  app.get("/wa-track-rewrite.js", (req, res) => {
+    const candidates = [
+      path.resolve(process.cwd(), "client/public/wa-track-rewrite.js"),
+      path.resolve(process.cwd(), "dist/public/wa-track-rewrite.js"),
+    ];
+    const abs = candidates.find((p) => fs.existsSync(p));
+    if (!abs) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    res.setHeader("Cache-Control", "public, max-age=60, must-revalidate");
+    res.type("application/javascript");
+    return res.sendFile(abs);
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
