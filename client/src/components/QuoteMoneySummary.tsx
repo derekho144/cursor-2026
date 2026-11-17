@@ -53,7 +53,7 @@ export function QuoteMoneySummary({
   }
 
   return (
-    <div className="w-full sm:w-64 space-y-2">
+    <div className="w-full max-w-[16rem] ml-auto space-y-2">
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">小計</span>
         <span>HKD {subtotal.toLocaleString()}</span>
