@@ -2,6 +2,7 @@ import { isValidQuoteDateRange } from "@shared/quoteDate";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { Plus, Trash2, ArrowLeft, Save, Loader2, Search, UserPlus, X, Check, GripVertical, Phone } from "lucide-react";
@@ -536,7 +537,8 @@ function SortableQuoteItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // Only animate while dragging — otherwise each keystroke remeasure + transition makes rows jump
+    transition: isDragging ? transition : undefined,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : undefined,
   };
@@ -575,11 +577,18 @@ function SortableQuoteItem({
         </div>
         <div className="space-y-1">
           <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} />
-          {showOptionHint && (
-            <div className="text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-              客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
-            </div>
-          )}
+          <div
+            className="text-[11px]"
+            style={{
+              color: "rgba(212,168,67,0.85)",
+              // Reserve hint height so qty/section flips do not reflow the row under the caret
+              minHeight: "1.15rem",
+              visibility: showOptionHint ? "visible" : "hidden",
+            }}
+            aria-hidden={!showOptionHint}
+          >
+            客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
+          </div>
         </div>
         <Select
           value={categoryValue}
@@ -604,11 +613,17 @@ function SortableQuoteItem({
         <Input type="number" value={item.quantity} onChange={(e) => onUpdate(idx, "quantity", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
         <div className="space-y-0.5">
           <Input type="number" value={item.unitPrice} onChange={(e) => onUpdate(idx, "unitPrice", parseFloat(e.target.value) || 0)} min={0} style={inputStyle} disabled={isSection} />
-          {isWaived && (
-            <div className="text-[10px] text-right pr-1" style={{ color: "#86efac" }}>
-              列印顯示 <span style={{ textDecoration: "line-through" }}>{waiveLabelAmount}</span> 豁免
-            </div>
-          )}
+          <div
+            className="text-[10px] text-right pr-1"
+            style={{
+              color: "#86efac",
+              minHeight: "1rem",
+              visibility: isWaived ? "visible" : "hidden",
+            }}
+            aria-hidden={!isWaived}
+          >
+            列印顯示 <span style={{ textDecoration: "line-through" }}>{waiveLabelAmount}</span> 豁免
+          </div>
         </div>
         <div className="flex items-center justify-center">
           <Checkbox
@@ -643,11 +658,17 @@ function SortableQuoteItem({
           <div className="flex-1">
             <div className="text-xs mb-1" style={{ color: "rgba(212,168,67,0.6)", fontSize: "0.6rem", letterSpacing: "0.1em" }}>服務項目說明</div>
             <Input value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} placeholder="服務項目說明" style={inputStyle} className="w-full" />
-            {showOptionHint && (
-              <div className="mt-1 text-[11px]" style={{ color: "rgba(212,168,67,0.85)" }}>
-                客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
-              </div>
-            )}
+            <div
+              className="mt-1 text-[11px]"
+              style={{
+                color: "rgba(212,168,67,0.85)",
+                minHeight: "1.15rem",
+                visibility: showOptionHint ? "visible" : "hidden",
+              }}
+              aria-hidden={!showOptionHint}
+            >
+              客戶可見：Option（數量 0＝待客戶揀；單價可留 0）
+            </div>
           </div>
           <button onClick={() => onRemove(idx)} disabled={!canRemove} className="p-1.5 rounded hover:bg-red-500/10 transition-colors disabled:opacity-20 flex-shrink-0">
             <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -818,6 +839,24 @@ export default function QuoteForm() {
     form.crewVideographers +
     form.crewOthers;
   const suggestShots = form.shotCount.trim() ? Number(form.shotCount) : null;
+  // Debounce line-item payload so typing descriptions does not refetch / resize
+  // the pricing panel on every keystroke (that was jumping the quote-items scroll).
+  const suggestItemsLive = useMemo(
+    () =>
+      form.items
+        .filter((it) => it.description.trim())
+        .map((it) => ({
+          description: it.description,
+          quantity: Number(it.quantity) || 0,
+          category: it.category || null,
+        })),
+    [form.items]
+  );
+  const [suggestItemsDebounced, setSuggestItemsDebounced] = useState(suggestItemsLive);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSuggestItemsDebounced(suggestItemsLive), 900);
+    return () => window.clearTimeout(t);
+  }, [suggestItemsLive]);
   const { data: priceSuggest } = trpc.pricingLearning.suggest.useQuery(
     {
       serviceType: form.serviceType as any,
@@ -832,17 +871,12 @@ export default function QuoteForm() {
           : null,
       durationPackage: form.durationPackage || null,
       leadSource: form.leadSource || null,
-      items: form.items
-        .filter((it) => it.description.trim())
-        .map((it) => ({
-          description: it.description,
-          quantity: Number(it.quantity) || 0,
-          category: it.category || null,
-        })),
+      items: suggestItemsDebounced,
     },
     {
       enabled: !!form.serviceType && isPricingLearningServiceType(form.serviceType),
       refetchOnWindowFocus: false,
+      placeholderData: keepPreviousData,
     }
   );
 
@@ -1288,6 +1322,10 @@ export default function QuoteForm() {
     onError: (e) => toast.error(`更新失敗：${(e.data as any)?.zodError ? JSON.stringify((e.data as any).zodError) : e.message}`),
   });
 
+  const sortableItemIds = useMemo(
+    () => form.items.map((i) => i.id),
+    [form.items]
+  );
   const subtotal = useMemo(
     () => form.items.reduce((sum, item) => sum + item.amount, 0),
     [form.items]
@@ -2326,108 +2364,14 @@ export default function QuoteForm() {
               </div>
             )}
 
-            {usableItemSuggestions.length > 0 && (
-              <div
-                className="md:col-span-2 p-3 rounded space-y-2"
-                style={{
-                  background: "rgba(212,168,67,0.08)",
-                  border: "1px solid rgba(212,168,67,0.28)",
-                }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div
-                      className="text-xs"
-                      style={{ color: "#d4a843", letterSpacing: "0.1em" }}
-                    >
-                      報價項目定價建議
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-1">
-                      以同服務類別、時數／人手／張數及數量級距的已成交報價，計算價格中位數及價格帶；拒單只作成交率參考，按需要逐項套用。只顯示有足夠成交資料的項目。
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded text-[11px]"
-                    style={{
-                      border: "1px solid rgba(212,168,67,0.45)",
-                      color: "#d4a843",
-                    }}
-                    onClick={() => {
-                      setForm((prev) => ({
-                        ...prev,
-                        items: prev.items.map((line) => {
-                          const hit = usableItemSuggestions.find(
-                            (s) =>
-                              s.description.trim() === line.description.trim()
-                          );
-                          if (!hit || hit.suggestedUnitPrice == null) return line;
-                          return {
-                            ...line,
-                            unitPrice: hit.suggestedUnitPrice,
-                            amount:
-                              hit.suggestedUnitPrice * Number(line.quantity),
-                          };
-                        }),
-                      }));
-                      toast.success("已套用有足夠資料的項目建議價");
-                    }}
-                  >
-                    套用全部可用建議
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {usableItemSuggestions.map((s) => {
-                    const idx = form.items.findIndex(
-                      (l) => l.description.trim() === s.description.trim()
-                    );
-                    return (
-                      <div
-                        key={`${s.description}-${idx}`}
-                        className="flex flex-wrap items-center gap-2 rounded px-2 py-1.5 text-xs"
-                        style={{ background: "rgba(0,0,0,0.22)" }}
-                      >
-                        <span className="min-w-[180px] flex-1">{s.description}</span>
-                        <span className="text-muted-foreground">×{s.quantity}</span>
-                        <span style={{ color: "#e8e0d0" }}>
-                          建議單價 HK${s.suggestedUnitPrice.toLocaleString("en-HK")}
-                        </span>
-                        <span className="text-muted-foreground">
-                          ({s.lowUnitPrice?.toLocaleString("en-HK")}–{s.highUnitPrice?.toLocaleString("en-HK")})
-                        </span>
-                        <span className="text-muted-foreground">
-                          {s.matchedBy === "固定營運規則"
-                            ? "固定營運規則"
-                            : `同類成交率 ${s.winRate ?? "—"}% · ${s.sampleCount} 筆成交 · ${s.confidence}`}
-                        </span>
-                        {idx >= 0 && (
-                          <button
-                            type="button"
-                            className="px-2 py-0.5 rounded"
-                            style={{
-                              border: "1px solid rgba(212,168,67,0.35)",
-                              color: "#d4a843",
-                            }}
-                            onClick={() =>
-                              updateItem(idx, "unitPrice", s.suggestedUnitPrice)
-                            }
-                          >
-                            套用
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {priceSuggest?.suggestion && (
               <div
                 className="md:col-span-2 p-3 rounded space-y-2"
                 style={{
                   background: "rgba(212,168,67,0.06)",
                   border: "1px solid rgba(212,168,67,0.22)",
+                  // Dynamic height above quote items — do not let browser scroll-anchor jump the caret
+                  overflowAnchor: "none",
                 }}
               >
                 <div
@@ -2511,6 +2455,7 @@ export default function QuoteForm() {
                 style={{
                   background: "rgba(212,168,67,0.04)",
                   border: "1px solid rgba(212,168,67,0.15)",
+                  overflowAnchor: "none",
                 }}
               >
                 <div style={{ color: "#d4a843", marginBottom: 4 }}>
@@ -2637,7 +2582,7 @@ export default function QuoteForm() {
             </div>
 
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={form.items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
                 {form.items.map((item, idx) => (
                   <SortableQuoteItem
                     key={item.id}
@@ -2664,6 +2609,104 @@ export default function QuoteForm() {
               新增項目
             </button>
           </div>
+
+          {/* Below line items so suggestion height changes do not shove the focused description input */}
+          {usableItemSuggestions.length > 0 && (
+            <div
+              className="mt-4 p-3 rounded space-y-2"
+              style={{
+                background: "rgba(212,168,67,0.08)",
+                border: "1px solid rgba(212,168,67,0.28)",
+                overflowAnchor: "none",
+              }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div
+                    className="text-xs"
+                    style={{ color: "#d4a843", letterSpacing: "0.1em" }}
+                  >
+                    報價項目定價建議
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    以同服務類別、時數／人手／張數及數量級距的已成交報價，計算價格中位數及價格帶；拒單只作成交率參考，按需要逐項套用。只顯示有足夠成交資料的項目。
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded text-[11px]"
+                  style={{
+                    border: "1px solid rgba(212,168,67,0.45)",
+                    color: "#d4a843",
+                  }}
+                  onClick={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      items: prev.items.map((line) => {
+                        const hit = usableItemSuggestions.find(
+                          (s) =>
+                            s.description.trim() === line.description.trim()
+                        );
+                        if (!hit || hit.suggestedUnitPrice == null) return line;
+                        return {
+                          ...line,
+                          unitPrice: hit.suggestedUnitPrice,
+                          amount:
+                            hit.suggestedUnitPrice * Number(line.quantity),
+                        };
+                      }),
+                    }));
+                    toast.success("已套用有足夠資料的項目建議價");
+                  }}
+                >
+                  套用全部可用建議
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {usableItemSuggestions.map((s) => {
+                  const idx = form.items.findIndex(
+                    (l) => l.description.trim() === s.description.trim()
+                  );
+                  return (
+                    <div
+                      key={`${s.description}-${idx}`}
+                      className="flex flex-wrap items-center gap-2 rounded px-2 py-1.5 text-xs"
+                      style={{ background: "rgba(0,0,0,0.22)" }}
+                    >
+                      <span className="min-w-[180px] flex-1">{s.description}</span>
+                      <span className="text-muted-foreground">×{s.quantity}</span>
+                      <span style={{ color: "#e8e0d0" }}>
+                        建議單價 HK${s.suggestedUnitPrice.toLocaleString("en-HK")}
+                      </span>
+                      <span className="text-muted-foreground">
+                        ({s.lowUnitPrice?.toLocaleString("en-HK")}–{s.highUnitPrice?.toLocaleString("en-HK")})
+                      </span>
+                      <span className="text-muted-foreground">
+                        {s.matchedBy === "固定營運規則"
+                          ? "固定營運規則"
+                          : `同類成交率 ${s.winRate ?? "—"}% · ${s.sampleCount} 筆成交 · ${s.confidence}`}
+                      </span>
+                      {idx >= 0 && (
+                        <button
+                          type="button"
+                          className="px-2 py-0.5 rounded"
+                          style={{
+                            border: "1px solid rgba(212,168,67,0.35)",
+                            color: "#d4a843",
+                          }}
+                          onClick={() =>
+                            updateItem(idx, "unitPrice", s.suggestedUnitPrice)
+                          }
+                        >
+                          套用
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Totals — same component as Quote Detail (總計 is the only gold headline) */}
           <div className="mt-6 ml-auto">
