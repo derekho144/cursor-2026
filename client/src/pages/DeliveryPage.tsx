@@ -371,7 +371,7 @@ function DeliveryContentView({
   content: DeliveryContent;
   password?: string;
 }) {
-  return <DeliveryGalleryView content={content} password={password} />;
+  return <DeliveryGalleryView content={content} password={submittedPassword} />;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

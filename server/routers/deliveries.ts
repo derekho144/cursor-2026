@@ -7,7 +7,10 @@ import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { listDriveFolderPhotos } from "../driveFolderPhotos";
 import { ensureDeliveriesReceiptEnabledSchema } from "../db";
-import { isDeliveryReceiptEnabled } from "../../shared/deliveryReceipt";
+import {
+  checkDeliveryReceiptAccess,
+  isDeliveryReceiptEnabled,
+} from "../../shared/deliveryReceipt";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -335,7 +338,7 @@ export const deliveriesRouter = router({
   // Public: get full quote data by delivery token (for browser-side receipt rendering)
   // Used by /receipt/:token page — renders receipt in browser, no server-side PDF needed
   getQuoteByDeliveryToken: publicProcedure
-    .input(z.object({ token: z.string() }))
+    .input(z.object({ token: z.string(), password: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
@@ -345,14 +348,13 @@ export const deliveriesRouter = router({
         .where(eq(deliveries.token, input.token))
         .limit(1);
       if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "連結無效" });
-      if (delivery.status !== "active") throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結已停用" });
-      if (!isDeliveryReceiptEnabled(delivery)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結未開放收據下載" });
+      const access = checkDeliveryReceiptAccess(delivery, {
+        password: input.password,
+      });
+      if (!access.ok) {
+        throw new TRPCError({ code: access.code, message: access.message });
       }
-      if (!delivery.quoteId) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "此交付連結尚未連結報價單，請聯絡 JD Studio 設定" });
-      }
-      const quote = await getQuoteById(delivery.quoteId);
+      const quote = await getQuoteById(delivery.quoteId!);
       if (!quote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
       // Return full quote data for browser-side receipt rendering
       return {

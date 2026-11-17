@@ -78,7 +78,12 @@ export function DeliveryGalleryView({
   );
 
   function handleDownloadReceipt() {
-    window.open(`/receipt/${content.token ?? ""}`, "_blank");
+    const token = content.token ?? "";
+    const qs =
+      password && password.trim()
+        ? `?password=${encodeURIComponent(password.trim())}`
+        : "";
+    window.open(`/receipt/${token}${qs}`, "_blank");
   }
 
   const packages = [

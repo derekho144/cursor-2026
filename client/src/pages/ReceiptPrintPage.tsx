@@ -8,7 +8,7 @@
 import { formatQuoteDateRange } from "@shared/quoteDate";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { SERVICE_LABELS } from "@/lib/serviceLabels";
 import {
@@ -42,10 +42,42 @@ export default function ReceiptPrintPage() {
   const params = useParams<{ token: string }>();
   const token = params.token ?? "";
 
+  // Prefer password from delivery gallery (?password=); strip from URL after read.
+  const initialPassword = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return new URLSearchParams(window.location.search).get("password")?.trim() ?? "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const [passwordInput, setPasswordInput] = useState("");
+  const [submittedPassword, setSubmittedPassword] = useState<string | undefined>(
+    initialPassword || undefined
+  );
+
+  useEffect(() => {
+    if (!initialPassword || typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("password")) return;
+      url.searchParams.delete("password");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      /* ignore */
+    }
+  }, [initialPassword]);
+
   const { data: quote, isLoading, error } = trpc.deliveries.getQuoteByDeliveryToken.useQuery(
-    { token },
+    { token, password: submittedPassword },
     { enabled: !!token, retry: false }
   );
+
+  const needsPassword =
+    !!error &&
+    (error.data?.code === "UNAUTHORIZED" ||
+      /密碼/.test(error.message ?? ""));
 
   useEffect(() => {
     if (quote) {
@@ -63,6 +95,58 @@ export default function ReceiptPrintPage() {
           <Loader2 style={{ width: 32, height: 32, margin: "0 auto 16px", color: "#999" }} className="animate-spin" />
           <p style={{ color: "#999", fontSize: 14 }}>Loading receipt...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (needsPassword && !quote) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#fff", flexDirection: "column", gap: 16, padding: 24 }}>
+        <p style={{ color: "#111", fontSize: 16, fontWeight: 600 }}>
+          This receipt is password protected
+        </p>
+        <p style={{ color: "#888", fontSize: 13, textAlign: "center", maxWidth: 360 }}>
+          Enter the same password used for the delivery link.
+        </p>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && passwordInput.trim()) {
+              setSubmittedPassword(passwordInput.trim());
+            }
+          }}
+          placeholder="Password"
+          style={{
+            width: "min(320px, 100%)",
+            padding: "10px 12px",
+            border: "1px solid #ddd",
+            borderRadius: 4,
+            fontSize: 14,
+          }}
+        />
+        {submittedPassword && (
+          <p style={{ color: "#e53e3e", fontSize: 13 }}>{error?.message}</p>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (!passwordInput.trim()) return;
+            setSubmittedPassword(passwordInput.trim());
+          }}
+          style={{
+            padding: "10px 18px",
+            background: "#111",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          Unlock receipt
+        </button>
       </div>
     );
   }
