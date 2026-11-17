@@ -6,6 +6,8 @@ import { deliveries } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { listDriveFolderPhotos } from "../driveFolderPhotos";
+import { ensureDeliveriesReceiptEnabledSchema } from "../db";
+import { isDeliveryReceiptEnabled } from "../../shared/deliveryReceipt";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ function toGoogleDriveEmbedUrl(url: string): string {
 export const deliveriesRouter = router({
   // Admin: list all deliveries
   list: protectedProcedure.query(async () => {
+    await ensureDeliveriesReceiptEnabledSchema();
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
     return db.select().from(deliveries).orderBy(desc(deliveries.createdAt));
@@ -64,13 +67,17 @@ export const deliveriesRouter = router({
         password: z.string().optional(),
         quoteId: z.number().optional(),
         expiresAt: z.string().optional(),
+        receiptEnabled: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
+      await ensureDeliveriesReceiptEnabledSchema();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
       const token = generateToken();
       const embedUrl = toGoogleDriveEmbedUrl(input.googleDriveUrl);
+      const receiptEnabled =
+        input.receiptEnabled ?? (input.quoteId != null);
       const [result] = await db.insert(deliveries).values({
         token,
         clientName: input.clientName,
@@ -82,6 +89,7 @@ export const deliveriesRouter = router({
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
         status: "active",
         downloadCount: 0,
+        receiptEnabled,
       });
       const id = (result as any).insertId as number;
       return { id, token };
@@ -100,12 +108,14 @@ export const deliveriesRouter = router({
         status: z.enum(["active", "expired", "archived"]).optional(),
         expiresAt: z.string().optional(),
         quoteId: z.number().optional().nullable(),
+        receiptEnabled: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
+      await ensureDeliveriesReceiptEnabledSchema();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
-      const { id, googleDriveUrl, expiresAt, password, quoteId, ...rest } = input;
+      const { id, googleDriveUrl, expiresAt, password, quoteId, receiptEnabled, ...rest } = input;
       await db.update(deliveries).set({
         ...rest,
         ...(googleDriveUrl && { googleDriveUrl: toGoogleDriveEmbedUrl(googleDriveUrl) }),
@@ -114,6 +124,7 @@ export const deliveriesRouter = router({
         ...(password !== undefined && { password: password?.trim() || null }),
         // Allow updating quoteId (null to unlink)
         ...(quoteId !== undefined && { quoteId: quoteId ?? null }),
+        ...(receiptEnabled !== undefined && { receiptEnabled }),
       }).where(eq(deliveries.id, id));
       return { success: true };
     }),
@@ -208,6 +219,7 @@ export const deliveriesRouter = router({
         message: delivery.message,
         createdAt: delivery.createdAt,
         quoteId: delivery.quoteId ?? null,
+        receiptEnabled: isDeliveryReceiptEnabled(delivery),
       };
     }),
 
@@ -334,6 +346,9 @@ export const deliveriesRouter = router({
         .limit(1);
       if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "連結無效" });
       if (delivery.status !== "active") throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結已停用" });
+      if (!isDeliveryReceiptEnabled(delivery)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "此交付連結未開放收據下載" });
+      }
       if (!delivery.quoteId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "此交付連結尚未連結報價單，請聯絡 JD Studio 設定" });
       }

@@ -512,6 +512,13 @@
       "when": 1794019940266,
       "tag": "0072_messy_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "5",
+      "when": 1794885000000,
+      "tag": "0073_delivery_receipt_enabled",
+      "breakpoints": true
     }
   ]
 }

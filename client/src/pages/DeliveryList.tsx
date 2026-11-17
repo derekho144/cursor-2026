@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ type FormState = {
   quoteId: string; // selected quote id (string for Select)
   quoteNumber: string; // display only
   quoteLocked: boolean; // true when navigated from quote detail
+  receiptEnabled: boolean; // show「下載收據」on client delivery page
 };
 
 const emptyForm: FormState = {
@@ -81,6 +83,7 @@ const emptyForm: FormState = {
   quoteId: "",
   quoteNumber: "",
   quoteLocked: false,
+  receiptEnabled: false,
 };
 
 export default function DeliveryList() {
@@ -131,7 +134,15 @@ export default function DeliveryList() {
       const title = params.get("title") ?? "";
       const quoteId = params.get("quoteId") ?? "";
       const quoteNumber = params.get("quoteNumber") ?? "";
-      setForm({ ...emptyForm, clientName, title, quoteId, quoteNumber, quoteLocked: !!quoteId });
+      setForm({
+        ...emptyForm,
+        clientName,
+        title,
+        quoteId,
+        quoteNumber,
+        quoteLocked: !!quoteId,
+        receiptEnabled: !!quoteId,
+      });
       setShowCreate(true);
       // Clean URL without reload
       window.history.replaceState({}, "", window.location.pathname);
@@ -151,8 +162,8 @@ export default function DeliveryList() {
       return;
     }
     const quoteId = form.quoteId ? parseInt(form.quoteId) : undefined;
-    // Auto-generate Receipt PDF if quote selected
-    if (quoteId) {
+    // Auto-generate Receipt PDF only when guest receipt download is enabled
+    if (quoteId && form.receiptEnabled) {
       setIsGeneratingReceipt(true);
       try {
         await generateReceiptMutation.mutateAsync({ id: quoteId });
@@ -170,6 +181,7 @@ export default function DeliveryList() {
       password: form.password.trim() || undefined,
       expiresAt: form.expiresAt || undefined,
       quoteId,
+      receiptEnabled: form.receiptEnabled,
     });
   }
 
@@ -187,6 +199,7 @@ export default function DeliveryList() {
       quoteId: d.quoteId ? String(d.quoteId) : "",
       quoteNumber: linkedQuote?.quoteNumber ?? (d.quoteId ? String(d.quoteId) : ""),
       quoteLocked: false, // editing always allows changing quote
+      receiptEnabled: d.receiptEnabled === true || (d.receiptEnabled == null && !!d.quoteId),
     });
     setEditStatus(d.status);
     setShowEdit(true);
@@ -195,8 +208,8 @@ export default function DeliveryList() {
   async function handleUpdate() {
     if (!editId) return;
     const quoteId = form.quoteId ? parseInt(form.quoteId) : undefined;
-    // Auto-generate Receipt PDF if quote selected
-    if (quoteId) {
+    // Auto-generate Receipt PDF only when guest receipt download is enabled
+    if (quoteId && form.receiptEnabled) {
       setIsGeneratingReceipt(true);
       try {
         await generateReceiptMutation.mutateAsync({ id: quoteId });
@@ -216,6 +229,7 @@ export default function DeliveryList() {
       status: editStatus,
       expiresAt: form.expiresAt || undefined,
       quoteId: quoteId !== undefined ? (quoteId || null) : undefined,
+      receiptEnabled: form.receiptEnabled,
     });
   }
 
@@ -330,12 +344,21 @@ export default function DeliveryList() {
                     </div>
 
                     {/* Stats row */}
-                    <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-4 mb-4 flex-wrap">
                       <div className="flex items-center gap-1.5">
                         <Eye className="h-3.5 w-3.5" style={{ color: "rgba(255,255,255,0.3)" }} />
                         <span className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{d.downloadCount} 次瀏覽</span>
                       </div>
-
+                      <span
+                        className="text-[10px] tracking-wide px-2 py-0.5"
+                        style={{
+                          color: (d as any).receiptEnabled ? "#d4a843" : "rgba(255,255,255,0.35)",
+                          border: `1px solid ${(d as any).receiptEnabled ? "rgba(212,168,67,0.35)" : "rgba(255,255,255,0.12)"}`,
+                          borderRadius: 3,
+                        }}
+                      >
+                        {(d as any).receiptEnabled ? "收據：開放" : "收據：關閉"}
+                      </span>
                     </div>
 
                     {/* Link preview */}
@@ -415,7 +438,14 @@ export default function DeliveryList() {
                 <label className="text-xs tracking-widest text-muted-foreground mb-1.5 block">連結報價單（選填）</label>
                 <Select value={form.quoteId || "none"} onValueChange={(v) => {
                   const q = quotesListData?.data?.find((q: any) => String(q.id) === v);
-                  setForm((p) => ({ ...p, quoteId: v === "none" ? "" : v, quoteNumber: q?.quoteNumber ?? "" }));
+                  const linked = v !== "none";
+                  setForm((p) => ({
+                    ...p,
+                    quoteId: linked ? v : "",
+                    quoteNumber: q?.quoteNumber ?? "",
+                    // Linking a quote suggests enabling receipt; unlinking turns it off
+                    receiptEnabled: linked ? true : false,
+                  }));
                 }}>
                   <SelectTrigger style={inputStyle}>
                     <SelectValue placeholder="選擇報價單（可選）" />
@@ -447,9 +477,30 @@ export default function DeliveryList() {
               <label className="text-xs tracking-widest text-muted-foreground mb-1.5 block">密碼保護（選填）</label>
               <PasswordInput value={form.password} onChange={(v) => setForm((p) => ({ ...p, password: v }))} placeholder="設定後客人需輸入密碼才能查看" inputStyle={inputStyle} />
             </div>
-            {form.quoteId && (
+            <label
+              className="flex items-start gap-3 cursor-pointer rounded-md px-3 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <Checkbox
+                checked={form.receiptEnabled}
+                onCheckedChange={(v) => setForm((p) => ({ ...p, receiptEnabled: v === true }))}
+                className="mt-0.5 border-white/30 data-[state=checked]:bg-[#d4a843] data-[state=checked]:border-[#d4a843] data-[state=checked]:text-black"
+              />
+              <span>
+                <span className="block text-sm text-white">允許客人下載收據</span>
+                <span className="block text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  剔選後，交付連結會顯示「下載收據」按鈕；未剔選則客人看不到／打不開收據頁
+                </span>
+              </span>
+            </label>
+            {form.quoteId && form.receiptEnabled && (
               <p className="text-xs" style={{ color: "rgba(111,207,111,0.8)" }}>
                 <FileText className="inline h-3 w-3 mr-1" />Receipt PDF 將根據已連結的報價單 <strong>{form.quoteNumber}</strong> 自動生成
+              </p>
+            )}
+            {form.receiptEnabled && !form.quoteId && (
+              <p className="text-xs" style={{ color: "rgba(248,113,113,0.85)" }}>
+                請先連結報價單，收據頁才有資料可顯示
               </p>
             )}
           </div>
@@ -474,7 +525,13 @@ export default function DeliveryList() {
               <label className="text-xs tracking-widest text-muted-foreground mb-1.5 block">連結報價單</label>
               <Select value={form.quoteId || "none"} onValueChange={(v) => {
                 const q = quotesListData?.data?.find((q: any) => String(q.id) === v);
-                setForm((p) => ({ ...p, quoteId: v === "none" ? "" : v, quoteNumber: q?.quoteNumber ?? "" }));
+                const linked = v !== "none";
+                setForm((p) => ({
+                  ...p,
+                  quoteId: linked ? v : "",
+                  quoteNumber: q?.quoteNumber ?? "",
+                  receiptEnabled: linked ? true : p.receiptEnabled,
+                }));
               }}>
                 <SelectTrigger style={form.quoteId ? { ...inputStyle, borderColor: "rgba(111,207,111,0.4)", color: "#6fcf6f" } : inputStyle}>
                   <SelectValue placeholder="不連結報價單" />
@@ -488,12 +545,28 @@ export default function DeliveryList() {
                   ))}
                 </SelectContent>
               </Select>
-              {form.quoteId && (
+              {form.quoteId && form.receiptEnabled && (
                 <p className="text-xs mt-1" style={{ color: "rgba(111,207,111,0.7)" }}>
                   <FileText className="inline h-3 w-3 mr-1" />Receipt 將根據 <strong>{form.quoteNumber}</strong> 生成
                 </p>
               )}
             </div>
+            <label
+              className="flex items-start gap-3 cursor-pointer rounded-md px-3 py-3"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <Checkbox
+                checked={form.receiptEnabled}
+                onCheckedChange={(v) => setForm((p) => ({ ...p, receiptEnabled: v === true }))}
+                className="mt-0.5 border-white/30 data-[state=checked]:bg-[#d4a843] data-[state=checked]:border-[#d4a843] data-[state=checked]:text-black"
+              />
+              <span>
+                <span className="block text-sm text-white">允許客人下載收據</span>
+                <span className="block text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+                  剔選後，交付連結會顯示「下載收據」；未剔選則隱藏並封鎖收據頁
+                </span>
+              </span>
+            </label>
             <div>
               <label className="text-xs tracking-widest text-muted-foreground mb-1.5 block">客戶名稱</label>
               <Input value={form.clientName} onChange={(e) => setForm((p) => ({ ...p, clientName: e.target.value }))} style={inputStyle} />

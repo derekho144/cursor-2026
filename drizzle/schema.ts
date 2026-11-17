@@ -350,6 +350,8 @@ export const deliveries = mysqlTable("deliveries", {
   status: mysqlEnum("status", ["active", "expired", "archived"]).notNull().default("active"),
   downloadCount: int("downloadCount").notNull().default(0),
   receiptUrl: text("receiptUrl"),
+  /** When true, client delivery page shows「下載收據」and /receipt/:token works. */
+  receiptEnabled: boolean("receiptEnabled").notNull().default(false),
   expiresAt: timestamp("expiresAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

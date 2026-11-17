@@ -29,6 +29,7 @@ export type DeliveryGalleryContent = {
   googleDriveUrl: string;
   message: string | null;
   createdAt: Date;
+  receiptEnabled?: boolean;
   token?: string;
 };
 
@@ -208,23 +209,25 @@ export function DeliveryGalleryView({
           >
             {t("delivery.openDownload")}
           </a>
-          <button
-            type="button"
-            onClick={handleDownloadReceipt}
-            style={{
-              padding: "8px 12px",
-              background: "transparent",
-              border: `1px solid rgba(255,255,255,0.2)`,
-              color: WHITE_HIGH,
-              fontFamily: SANS,
-              fontSize: 10,
-              letterSpacing: "0.1em",
-              cursor: "pointer",
-              borderRadius: 2,
-            }}
-          >
-            {t("delivery.downloadReceipt")}
-          </button>
+          {content.receiptEnabled && (
+            <button
+              type="button"
+              onClick={handleDownloadReceipt}
+              style={{
+                padding: "8px 12px",
+                background: "transparent",
+                border: `1px solid rgba(255,255,255,0.2)`,
+                color: WHITE_HIGH,
+                fontFamily: SANS,
+                fontSize: 10,
+                letterSpacing: "0.1em",
+                cursor: "pointer",
+                borderRadius: 2,
+              }}
+            >
+              {t("delivery.downloadReceipt")}
+            </button>
+          )}
         </div>
       </div>
 

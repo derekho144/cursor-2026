@@ -10,7 +10,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { startScheduler } from "../scheduler";
-import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources, ensureAdsQuoteAttributionSchema } from "../db";
+import { updateEmailLogTracking, updateEmailInquiryTracking, updateEmailLogOpenTracking, updateEmailInquiryOpenById, recordWhatsappClick, backfillEmailInquiryLeadSources, ensureAdsQuoteAttributionSchema, ensureDeliveriesReceiptEnabledSchema } from "../db";
 import { ENV } from "./env";
 
 /** Homepage Squarespace tiles — serve even if Vite public copy is missing on host. */
@@ -836,6 +836,9 @@ async function startServer() {
       ensureAdsQuoteAttributionSchema()
         .then(() => console.log("[Startup] ads quote attribution schema OK"))
         .catch((err) => console.error("[Startup] ads attribution schema failed:", err));
+      ensureDeliveriesReceiptEnabledSchema()
+        .then(() => console.log("[Startup] deliveries.receiptEnabled schema OK"))
+        .catch((err) => console.error("[Startup] deliveries.receiptEnabled schema failed:", err));
     });
   });
 }

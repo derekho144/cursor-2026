@@ -18,6 +18,7 @@ type DeliveryContent = {
   createdAt: Date;
   receiptUrl?: string | null;
   quoteId?: number | null;
+  receiptEnabled?: boolean;
   token?: string;
 };
 
