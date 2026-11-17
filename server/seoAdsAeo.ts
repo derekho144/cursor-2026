@@ -780,12 +780,9 @@ export function scoreServicePriority(input: ServicePriorityInput): ServicePriori
 }
 
 async function chooseGscSiteUrl(): Promise<string> {
+  const { resolveGscSiteUrl } = await import("./googleSearchConsole");
   const sites = await listGscSites();
-  return (
-    sites.find((site) => site.siteUrl === DEFAULT_GSC_SITE_URL)?.siteUrl ??
-    sites.find((site) => site.siteUrl.includes("jdstudiohk.com") && site.siteUrl.startsWith("https://"))?.siteUrl ??
-    DEFAULT_GSC_SITE_URL
-  );
+  return resolveGscSiteUrl(sites);
 }
 
 export async function getGrowthPriorities(days = 28) {

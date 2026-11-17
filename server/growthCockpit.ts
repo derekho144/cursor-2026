@@ -27,7 +27,12 @@ import {
   type WeeklyLoop,
 } from "@shared/growthCockpit";
 import { runGoogleAdsGaql } from "./googleAds";
-import { DEFAULT_GSC_SITE_URL, queryGscSearchAnalytics, testGscConnection } from "./googleSearchConsole";
+import {
+  DEFAULT_GSC_SITE_URL,
+  queryGscSearchAnalytics,
+  resolveGscSiteUrl,
+  testGscConnection,
+} from "./googleSearchConsole";
 import { lastFreehunterScrapeAt } from "./scheduler";
 import { getTrustedNegativeAutoLaneStatus } from "./trustedNegativeAutoExec";
 import {
@@ -583,9 +588,8 @@ async function gscWindowsSnapshot(thisWeek: WeekWindow, lastWeek: WeekWindow) {
       };
     }
     const siteUrl =
-      conn.sites?.find(
-        (s) => s.siteUrl.includes("jdstudiohk.com") || s.siteUrl === "sc-domain:jdstudiohk.com"
-      )?.siteUrl ??
+      conn.siteUrl ??
+      resolveGscSiteUrl(conn.sites) ??
       conn.sites?.[0]?.siteUrl ??
       DEFAULT_GSC_SITE_URL;
 
