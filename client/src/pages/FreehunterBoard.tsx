@@ -178,11 +178,18 @@ function JobCard({
               </div>
             )}
 
-            {/* FH 工作板已發第一封郵件資訊 */}
+            {/* FH 工作板已發第一封郵件資訊（顯示完整時間，避免只見日期誤以為已過 24 小時）*/}
             {job.firstEmailSentAt && (
               <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded mb-2 w-fit">
                 <CheckCircle className="w-3 h-3" />
-                <span>第一封郵件已發送 {new Date(job.firstEmailSentAt).toLocaleDateString("zh-HK")}</span>
+                <span>
+                  第一封已發 · {new Date(job.firstEmailSentAt).toLocaleString("zh-HK", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
               </div>
             )}
 
@@ -194,7 +201,7 @@ function JobCard({
               </div>
             )}
 
-            {/* 跟進郵件狀態（已發跟進 / 等待 24 小時跟進 / 未發）*/}
+            {/* 跟進郵件狀態（已發跟進 / 等待 24 小時跟進 / 逾期）*/}
             {job.followUpSentAt && new Date(job.followUpSentAt).getFullYear() > 1970 ? (
               <div
                 className="flex items-center gap-1.5 text-xs px-2 py-1 rounded mb-2 w-fit"
@@ -202,7 +209,14 @@ function JobCard({
                 title={`跟進郵件已於 ${new Date(job.followUpSentAt).toLocaleString("zh-HK")} 自動發送`}
               >
                 <Mail className="w-3 h-3" />
-                <span>跟進郵件已發 · {new Date(job.followUpSentAt).toLocaleDateString("zh-HK")}</span>
+                <span>
+                  跟進已發 · {new Date(job.followUpSentAt).toLocaleString("zh-HK", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
               </div>
             ) : job.firstEmailSentAt && job.status === "first_email_sent" && (() => {
               const sentAt = new Date(job.firstEmailSentAt);
@@ -210,21 +224,36 @@ function JobCard({
               const now = new Date();
               const isPending = followUpAt > now;
               const hoursLeft = Math.max(0, Math.ceil((followUpAt.getTime() - now.getTime()) / (60 * 60 * 1000)));
+              const overdueHours = Math.max(0, Math.floor((now.getTime() - followUpAt.getTime()) / (60 * 60 * 1000)));
+              const scheduleLabel = followUpAt.toLocaleString("zh-HK", {
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
               return (
                 <div
                   className="flex items-center gap-1.5 text-xs px-2 py-1 rounded mb-2 w-fit"
                   style={isPending
                     ? { background: "rgba(255,152,0,0.10)", color: "#e65100" }
-                    : { background: "rgba(33,150,243,0.08)", color: "#1565c0" }
+                    : overdueHours >= 2
+                      ? { background: "rgba(211,47,47,0.10)", color: "#c62828" }
+                      : { background: "rgba(33,150,243,0.08)", color: "#1565c0" }
                   }
                   title={isPending
-                    ? `預計於 ${followUpAt.toLocaleString("zh-HK")} 自動發送跟進郵件`
-                    : `跟進郵件將於下次排程檢查時發送`
+                    ? `第一封 +24 小時後自動發第二封（預計 ${followUpAt.toLocaleString("zh-HK")}）`
+                    : overdueHours >= 2
+                      ? `已過預計時間 ${overdueHours} 小時仍未發第二封，請檢查排程／日誌`
+                      : `已過預計時間，下次每小時排程會發送`
                   }
                 >
                   <Clock className="w-3 h-3" />
                   <span>
-                    {isPending ? `跟進郵件：${hoursLeft} 小時後發送` : "跟進郵件將即發送"}
+                    {isPending
+                      ? `第二封預計 ${scheduleLabel}（約 ${hoursLeft} 小時後）`
+                      : overdueHours >= 2
+                        ? `第二封逾期 ${overdueHours} 小時未發`
+                        : `第二封將於下次排程發送`}
                   </span>
                 </div>
               );

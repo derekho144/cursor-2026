@@ -19,8 +19,8 @@ vi.mock("./scrapers/freehunterBoard", () => ({
   fetchEmailForJob: vi.fn(async () => ({ email: null })),
 }));
 
-vi.mock("./routers/emailInquiries", () => ({
-  sendFHFirstEmail: vi.fn(async () => ({ success: false })),
+vi.mock("./routers/freehunterBoard", () => ({
+  sendFirstEmailWithTracking: vi.fn(async () => false),
 }));
 
 vi.mock("./schedulerLock", () => ({
