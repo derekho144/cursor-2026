@@ -2945,6 +2945,32 @@ export async function getClientsForWinbackEmail() {
 
 let adsQuoteAttributionSchemaReady = false;
 
+/** Apply deliveries.receiptEnabled (drizzle/0073) idempotently. */
+let deliveriesReceiptEnabledReady = false;
+export async function ensureDeliveriesReceiptEnabledSchema(): Promise<void> {
+  if (deliveriesReceiptEnabledReady) return;
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(
+      sql.raw(
+        "ALTER TABLE `deliveries` ADD `receiptEnabled` boolean NOT NULL DEFAULT false"
+      )
+    );
+    await db.execute(
+      sql.raw(
+        "UPDATE `deliveries` SET `receiptEnabled` = true WHERE `quoteId` IS NOT NULL"
+      )
+    );
+  } catch (err) {
+    const msg = String((err as any)?.message || err);
+    if (!/Duplicate column|already exists/i.test(msg)) {
+      console.warn("[deliveries] ADD receiptEnabled:", msg.slice(0, 200));
+    }
+  }
+  deliveriesReceiptEnabledReady = true;
+}
+
 /**
  * Apply drizzle/0066_ads_quote_attribution.sql idempotently (ADD COLUMN / ENUM).
  * Production Manus may not run drizzle-kit migrate; startup self-heal covers that.
