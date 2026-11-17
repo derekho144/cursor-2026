@@ -48,7 +48,11 @@ export function verifyWhatsappWebhookChallenge(query: {
   return query["hub.challenge"] ?? null;
 }
 
-/** Validate X-Hub-Signature-256 when app secret is set. */
+/**
+ * Validate X-Hub-Signature-256.
+ * Fail closed when WHATSAPP_APP_SECRET is missing — unsigned POSTs can forge
+ * inbound messages and trigger Google Ads offline lead uploads.
+ */
 export function verifyWhatsappSignature(
   rawBody: Buffer | string,
   signatureHeader: string | undefined
@@ -56,8 +60,10 @@ export function verifyWhatsappSignature(
   const cfg = getWhatsappCloudConfig();
   if (!cfg) return false;
   if (!cfg.appSecret) {
-    // Allow receive without HMAC in early setup; log elsewhere.
-    return true;
+    console.error(
+      "[WhatsApp Webhook] WHATSAPP_APP_SECRET not set — rejecting unsigned webhook"
+    );
+    return false;
   }
   if (!signatureHeader || !signatureHeader.startsWith("sha256=")) return false;
   const expected = signatureHeader.slice("sha256=".length);

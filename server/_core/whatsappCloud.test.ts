@@ -193,4 +193,19 @@ describe("webhook verify helpers", () => {
       }
     );
   });
+
+  it("rejects webhooks when WHATSAPP_APP_SECRET is missing", async () => {
+    await withEnv(
+      {
+        WHATSAPP_TOKEN: "t",
+        WHATSAPP_PHONE_NUMBER_ID: "1",
+        WHATSAPP_VERIFY_TOKEN: "v",
+      },
+      () => {
+        const body = Buffer.from('{"ok":true}');
+        expect(verifyWhatsappSignature(body, undefined)).toBe(false);
+        expect(verifyWhatsappSignature(body, "sha256=anything")).toBe(false);
+      }
+    );
+  });
 });

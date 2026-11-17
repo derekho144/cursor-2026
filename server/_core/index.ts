@@ -577,6 +577,8 @@ async function startServer() {
   // ─── Google Ads OAuth2 Re-authorization ─────────────────────────────────
   // Step 1: Generate Google OAuth2 authorization URL and redirect
   app.get("/api/google-ads/auth-url", async (req, res) => {
+    const { requireLoggedInSessionOr401 } = await import("./requireSession");
+    if (!(await requireLoggedInSessionOr401(req, res))) return;
     const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
     if (!clientId) {
       res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
@@ -622,6 +624,13 @@ async function startServer() {
     }
     const redirectBack = (params: string) =>
       res.redirect(`${appOrigin}${returnPath}?${params}`);
+
+    // Must be logged in before overwriting the production Ads refresh token.
+    const { requireLoggedInSession } = await import("./requireSession");
+    if (!(await requireLoggedInSession(req))) {
+      redirectBack("google_auth=error&msg=login_required");
+      return;
+    }
 
     if (error) {
       redirectBack(`google_auth=error&msg=${encodeURIComponent(error)}`);
@@ -670,6 +679,8 @@ async function startServer() {
   // ─── Google Search Console OAuth2 ───────────────────────────────────────
   // Reuses GOOGLE_ADS_CLIENT_ID/SECRET; scope = webmasters.readonly
   app.get("/api/google-search-console/auth-url", async (req, res) => {
+    const { requireLoggedInSessionOr401 } = await import("./requireSession");
+    if (!(await requireLoggedInSessionOr401(req, res))) return;
     const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
     if (!clientId) {
       res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
@@ -713,6 +724,12 @@ async function startServer() {
     }
     const redirectBack = (params: string) =>
       res.redirect(`${appOrigin}${returnPath}?${params}`);
+
+    const { requireLoggedInSession } = await import("./requireSession");
+    if (!(await requireLoggedInSession(req))) {
+      redirectBack("gsc_auth=error&msg=login_required");
+      return;
+    }
 
     if (error) {
       redirectBack(`gsc_auth=error&msg=${encodeURIComponent(error)}`);
