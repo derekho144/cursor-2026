@@ -74,6 +74,8 @@ function Router() {
         <Route path="/delivery/:token" component={DeliveryPage} />
         <Route path="/sign/:token" component={SignPage} />
         <Route path="/print/quote/:id" component={QuotePrintPage} />
+        {/* Guest signed-quote print from confirmation email (public sign token) */}
+        <Route path="/print/sign/:token" component={QuotePrintPage} />
         <Route path="/receipt/:token" component={ReceiptPrintPage} />
         <Route path="/email-inquiries" component={EmailInquiries} />
         <Route path="/freehunter-board" component={FreehunterBoard} />

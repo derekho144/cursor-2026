@@ -47,6 +47,9 @@ import {
 } from "../../shared/quoteLineItemKind";
 import { computeQuoteTotalsFromItems } from "../../shared/quoteTotals";
 import {
+  buildSignedQuotePrintUrl,
+} from "../../shared/signConfirmation";
+import {
   createQuoteAirwallexPaymentLink,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
@@ -1063,14 +1066,19 @@ ${itemsText}
         id: fullQuote.id,
         quoteNumber: fullQuote.quoteNumber,
         clientName: fullQuote.clientName,
+        clientCompany: fullQuote.clientCompany,
         clientEmail: fullQuote.clientEmail,
         clientPhone: fullQuote.clientPhone,
         serviceType: fullQuote.serviceType,
         shootingDate: fullQuote.shootingDate,
+        shootingEndDate: (fullQuote as any).shootingEndDate ?? null,
         shootingLocation: fullQuote.shootingLocation,
         notes: fullQuote.notes,
         subtotal: fullQuote.subtotal,
         discountAmount: fullQuote.discountAmount,
+        discountPercent: (fullQuote as any).discountPercent ?? null,
+        depositPercent: (fullQuote as any).depositPercent ?? 50,
+        depositAmount: (fullQuote as any).depositAmount ?? null,
         total: fullQuote.total,
         currency: fullQuote.currency,
         validUntil: fullQuote.validUntil,
@@ -1081,6 +1089,8 @@ ${itemsText}
         items: (fullQuote as any).items ?? [],
         signedAt: fullQuote.signedAt,
         signedByName: fullQuote.signedByName,
+        // Needed for /print/sign/:token (confirmation email View & Print).
+        signatureData: (fullQuote as any).signatureData ?? null,
         signAttachments: fullQuote.signAttachments
           ? JSON.parse(fullQuote.signAttachments as string)
           : [] as Array<{ name: string; url: string; key: string }>,
@@ -1114,13 +1124,34 @@ ${itemsText}
         status: "accepted",
       } as any);
 
-      // Fire-and-forget: send confirmation email with print page link
+      // Offline conversion → Google Ads (accepted value). Must mirror quotes.update
+      // when status becomes accepted — client e-sign is the primary accept path.
+      if (updatedQuote) {
+        try {
+          const { scheduleQuoteAcceptedConversionUpload } = await import("../adsOfflineConversions");
+          scheduleQuoteAcceptedConversionUpload({
+            id: updatedQuote.id,
+            gclid: (updatedQuote as any).gclid,
+            gbraid: (updatedQuote as any).gbraid,
+            wbraid: (updatedQuote as any).wbraid,
+            total: updatedQuote.total as any,
+            currency: (updatedQuote as any).currency ?? "HKD",
+            createdAt: (updatedQuote as any).createdAt,
+            adsOfflineAcceptedUploadedAt: (updatedQuote as any).adsOfflineAcceptedUploadedAt,
+          });
+        } catch (err) {
+          console.warn("[Sign] Ads offline accepted schedule failed:", err);
+        }
+      }
+
+      // Fire-and-forget: confirmation email with PUBLIC print link (sign token).
+      // /print/quote/:id requires staff login and redirects guests to /login.
       if (updatedQuote?.clientEmail) {
         (async () => {
           try {
             const signedDate = new Date().toLocaleString("zh-HK", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
-            const origin = input.origin || "https://jdsys.manus.space";
-            const printUrl = `${origin}/print/quote/${row.id}`;
+            const origin = input.origin || ENV.publicBaseUrl || ENV.appBaseUrl;
+            const printUrl = buildSignedQuotePrintUrl(origin, input.token);
             const emailBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
 <div style="background:#1a1a1a;padding:20px 30px">
   <h2 style="color:#fff;margin:0;font-size:18px;letter-spacing:2px">JD STUDIO HK</h2>

@@ -3,7 +3,9 @@
  * A dedicated print-optimized page for quote PDFs.
  * Uses browser native window.print() — no backend Chrome/Puppeteer needed.
  * Layout matches the reference PDF template exactly.
- * Accessible at /print/quote/:id (protected, requires login)
+ *
+ * - /print/quote/:id — staff (protected getById)
+ * - /print/sign/:token — guest confirmation email (public getBySignToken)
  */
 import { formatQuoteDateRange } from "@shared/quoteDate";
 import { useParams } from "wouter";
@@ -42,15 +44,27 @@ function formatMoney(val: string | number) {
 }
 
 export default function QuotePrintPage() {
-  const params = useParams<{ id: string }>();
-  const quoteId = parseInt(params.id);
-  const isReceipt = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("type") === "receipt";
+  const params = useParams<{ id?: string; token?: string }>();
+  const signToken = params.token?.trim() || "";
+  const quoteId = params.id ? parseInt(params.id) : NaN;
+  const isReceipt =
+    !signToken &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("type") === "receipt";
   const docLabel = isReceipt ? "RECEIPT" : "QUOTATION";
 
-  const { data: quote, isLoading, error } = trpc.quotes.getById.useQuery(
+  const byIdQuery = trpc.quotes.getById.useQuery(
     { id: quoteId },
-    { enabled: !isNaN(quoteId) }
+    { enabled: !signToken && !isNaN(quoteId) }
   );
+  const byTokenQuery = trpc.quotes.getBySignToken.useQuery(
+    { token: signToken },
+    { enabled: !!signToken, retry: false }
+  );
+
+  const quote = (signToken ? byTokenQuery.data : byIdQuery.data) as any;
+  const isLoading = signToken ? byTokenQuery.isLoading : byIdQuery.isLoading;
+  const error = signToken ? byTokenQuery.error : byIdQuery.error;
 
   const printTriggered = useRef(false);
 
