@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { router, publicProcedure, pageProcedure } from "../_core/trpc";
+
 import {
   createQuote,
   createEmailLog,
@@ -52,6 +53,7 @@ import {
   syncRecentAirwallexPayments,
 } from "../airwallexPayment";
 
+const protectedProcedure = pageProcedure("quotes");
 function normalizeQuoteItemCategory(
   raw: string | null | undefined
 ): QuoteLineItemCategory | null {

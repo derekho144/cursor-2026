@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { getGrowthPriorities } from "../seoAdsAeo";
 import { executeApprovedAdsAction } from "../adsActionExecutor";
 import { buildSeoToAdsPlan, verifySeoToAdsPlan } from "../seoToAdsAgent";
@@ -9,6 +10,7 @@ import { blockedExecutionResult } from "@shared/adsActionExecution";
 import { getDb } from "../db";
 import { adSyncLogs } from "../../drizzle/schema";
 
+const protectedProcedure = pageProcedure("growth-priorities");
 const actionInput = z.object({
   id: z.string().min(1).max(240),
   backlogId: z.string().min(1).max(240),

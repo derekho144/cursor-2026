@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { getAdsAttributionForPhone } from "../db";
 import {
   getWhatsappCloudConfig,
@@ -9,6 +10,7 @@ import {
   normalizeWaPhone,
 } from "../_core/whatsappCloud";
 
+const protectedProcedure = pageProcedure("quotes");
 export const whatsappRouter = router({
   /** Connection status for staff UI / ops. */
   status: protectedProcedure.query(() => {

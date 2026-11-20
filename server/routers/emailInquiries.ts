@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { invokeLLM, extractLLMText } from "../_core/llm";
 import {
   createEmailInquiry,
@@ -59,6 +60,7 @@ import {
 import { sectionBLinesForService } from "../../shared/quoteSectionB";
 import { hasOrphanedQuoteLink } from "../inquiryQuoteRepair";
 
+const protectedProcedure = pageProcedure("email-inquiries");
 /** Keep inquiry-created quote drafts aligned with the full QuoteForm Section B options. */
 function addSectionBQuoteItems<T extends {
   description: string;
@@ -662,7 +664,6 @@ function isFreehunterEmail(fromEmail: string, htmlBody?: string): boolean {
   return false;
 }
 
-
 // ─── HK Market Reference Pricing (fallback when no historical data) ─────────
 const HK_MARKET_PRICING: Record<string, { low: number; mid: number; high: number; note?: string; items: Array<{desc: string; unitPrice: number}> }> = {
   // 2026 HK Market Reference (Sources: freelance.com.hk, jdstudiohk.com, hellotoby.com, freehunter.hk)
@@ -1121,7 +1122,6 @@ Extract and return a JSON object with these fields:
   - unitPrice CAN be 0 ONLY if the service is genuinely bundled/complimentary
 - confidence: "high" | "medium" | "low" (how confident you are this is a genuine photography inquiry AND you understood the core need)
 - isInquiry: boolean (true ONLY if an external customer is asking JD STUDIO HK to provide photography/design services. false if this is a supplier/vendor reply to OUR outbound RFQ, a thank-you for our reaching out, or we are the buyer asking them for their fees)`;
-
 
   try {
     const result = await invokeLLM({

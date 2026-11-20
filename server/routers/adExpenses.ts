@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedureAny } from "../_core/trpc";
+
 import { SERVICE_TYPE_LABELS } from "./quotePdfKit";
 import { invokeLLM, extractLLMText } from "../_core/llm";
 import { ENV } from "../_core/env";
@@ -35,6 +36,7 @@ import { scrapeHellotobyExpenses, scrapePro360Expenses, scrapePro360WithCookies,
 import { getSchedulerStatus } from "../scheduler";
 import { fetchGoogleAdsCosts, testGoogleAdsConnection } from "../googleAds";
 
+const protectedProcedure = pageProcedureAny(["ad-expenses", "platform-efficiency", "ad-sync"]);
 const platformEnum = z.enum(["hellotoby", "360pro", "freehunter", "google_ads"]);
 
 export const adExpensesRouter = router({

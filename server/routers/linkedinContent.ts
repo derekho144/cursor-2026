@@ -2,7 +2,8 @@
  * linkedinContent.ts — 內容工廠 API（含圖片庫）
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -40,6 +41,8 @@ import {
   fetchBufferPostMetrics,
   fetchAggregatedLinkedInMetrics,
 } from "../bufferClient";
+
+const protectedProcedure = pageProcedure("linkedin-ops");
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "草稿",

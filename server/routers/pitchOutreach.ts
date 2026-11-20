@@ -3,7 +3,8 @@
  * 客戶開拓系統的後端 API
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { pitchLeads, pitchSendLog } from "../../drizzle/schema";
@@ -16,6 +17,8 @@ import { findLinkedInDecisionMakers } from "../scrapers/linkedinDecisionMaker";
 import { sendViaGmail } from "../resendEmail";
 import { ENV } from "../_core/env";
 import axios from "axios";
+
+const protectedProcedure = pageProcedure("pitch-outreach");
 
 export const pitchOutreachRouter = router({
   // ─── 取得 leads 清單 ───────────────────────────────────────────────

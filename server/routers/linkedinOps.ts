@@ -3,7 +3,8 @@
  * 今日任務板：暖場步驟 + DM 草稿 + 同招聘線索打通
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -19,6 +20,8 @@ import {
   expireStaleLeads,
   JOB_LISTING_MAX_AGE_DAYS,
 } from "../scrapers/pitchOutreach";
+
+const protectedProcedure = pageProcedure("linkedin-ops");
 
 const STAGE_VALUES = [
   "new",

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   backfillStructuredShootFields,
   getPricingLearningByServiceType,
@@ -7,6 +8,7 @@ import {
   suggestPriceFromLearning,
 } from "../pricingLearning";
 
+const protectedProcedure = pageProcedure("pricing-learning");
 const serviceTypeSchema = z.enum([
   "corporate_event",
   "party_family_event",

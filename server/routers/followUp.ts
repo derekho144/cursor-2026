@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   getFollowUpSettings,
   updateFollowUpSettings,
@@ -11,6 +12,7 @@ import { scanSentBoxForFollowUps, runQuoteFollowUps } from "../gmailFollowUp";
 import { quoteFollowUps } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
+const protectedProcedure = pageProcedure("follow-up");
 export const followUpRouter = router({
   /** 取得 follow up 設定 */
   getSettings: protectedProcedure.query(async () => {

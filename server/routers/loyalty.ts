@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   getAllMemberships,
   getClientMembership,
@@ -17,6 +18,7 @@ import { getDb } from "../db";
 import { clients, quotes, clientMemberships } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
+const protectedProcedure = pageProcedure("loyalty");
 export const loyaltyRouter = router({
   /** 取得所有會員列表（管理員用） */
   getAll: protectedProcedure.query(async () => {

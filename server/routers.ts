@@ -25,7 +25,8 @@ import { googleSearchConsoleRouter } from "./routers/googleSearchConsole";
 import { growthPrioritiesRouter } from "./routers/growthPriorities";
 import { growthCockpitRouter } from "./routers/growthCockpit";
 import { whatsappRouter } from "./routers/whatsapp";
-import { protectedProcedure } from "./_core/trpc";
+import { pageProcedure } from "./_core/trpc";
+
 import { emailInquiries, freehunterJobs } from "../drizzle/schema";
 import { eq, sql, isNotNull, isNull, and, gt } from "drizzle-orm";
 import { getWatchdogStatus } from "./watchdog";
@@ -35,6 +36,7 @@ import { verifyPassword } from "./passwordAuth";
 import { sdk } from "./_core/sdk";
 import { TRPCError } from "@trpc/server";
 
+const protectedProcedure = pageProcedure("dashboard");
 export const appRouter = router({
   system: systemRouter,
   auth: router({

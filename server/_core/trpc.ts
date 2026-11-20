@@ -1,4 +1,5 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
+import { userCanAccessPage, type PageId } from "@shared/pagePermissions";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -64,7 +65,49 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
+/** Auth-only. Prefer pageProcedure / pageProcedureAny for staff APIs. */
 export const protectedProcedure = t.procedure.use(requireUser);
+
+const PAGE_FORBIDDEN_MSG = "沒有權限存取此功能";
+
+function assertPageAccess(
+  user: NonNullable<TrpcContext["user"]>,
+  pageIds: PageId[]
+) {
+  const ok = pageIds.some((pageId) =>
+    userCanAccessPage({
+      role: user.role,
+      isActive: user.isActive,
+      allowedPages: user.allowedPages,
+      pageId,
+    })
+  );
+  if (!ok) {
+    throw new TRPCError({ code: "FORBIDDEN", message: PAGE_FORBIDDEN_MSG });
+  }
+}
+
+/**
+ * Logged-in + allowedPages includes pageId (admins always pass).
+ * Use as a drop-in for protectedProcedure on page-scoped routers.
+ */
+export function pageProcedure(pageId: PageId) {
+  return t.procedure.use(requireUser).use(async ({ ctx, next }) => {
+    assertPageAccess(ctx.user, [pageId]);
+    return next({ ctx });
+  });
+}
+
+/** Logged-in + allowedPages includes any of the given pages (admins always pass). */
+export function pageProcedureAny(pageIds: PageId[]) {
+  if (pageIds.length === 0) {
+    throw new Error("pageProcedureAny requires at least one page id");
+  }
+  return t.procedure.use(requireUser).use(async ({ ctx, next }) => {
+    assertPageAccess(ctx.user, pageIds);
+    return next({ ctx });
+  });
+}
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

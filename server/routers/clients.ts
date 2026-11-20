@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   createClient,
   deleteClient,
@@ -12,6 +13,7 @@ import {
   upsertClientFromQuote,
 } from "../db";
 
+const protectedProcedure = pageProcedure("clients");
 export const clientsRouter = router({
   list: protectedProcedure
     .input(

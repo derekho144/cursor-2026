@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   getQuoteCosts,
   createQuoteCost,
@@ -9,6 +10,7 @@ import {
   createExpenseFromQuoteCost,
 } from "../db";
 
+const protectedProcedure = pageProcedure("quotes");
 const COST_CATEGORY_LABELS: Record<string, string> = {
   freelancer: "外判人員",
   venue: "拍攝場地",

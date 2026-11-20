@@ -1,10 +1,12 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import {
   fetchGoogleAdsQualityDashboard,
   testGoogleAdsConnection,
 } from "../googleAds";
 
+const protectedProcedure = pageProcedure("google-ads-quality");
 export const googleAdsRouter = router({
   testConnection: protectedProcedure.query(async () => {
     return testGoogleAdsConnection();

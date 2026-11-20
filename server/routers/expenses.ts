@@ -3,9 +3,11 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { getDb, ensureExpensesPostProductionCategory } from "../db";
 import { expenses } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { EXPENSE_CATEGORY_LABELS as CATEGORY_LABELS, expenseMonthCondition, getMonthlyExpenseSummary } from "../monthlyExpenses";
 
+const protectedProcedure = pageProcedure("expenses");
 const expenseInputSchema = z.object({
   date: z.string(),
   category: z.enum([

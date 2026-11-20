@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+import { router, publicProcedure, pageProcedure } from "../_core/trpc";
+
 import { getDb, getQuoteById } from "../db";
 import { deliveries } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
@@ -9,6 +10,7 @@ import { listDriveFolderPhotos } from "../driveFolderPhotos";
 import { ensureDeliveriesReceiptEnabledSchema } from "../db";
 import { isDeliveryReceiptEnabled } from "../../shared/deliveryReceipt";
 
+const protectedProcedure = pageProcedure("deliveries");
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function generateToken(): string {

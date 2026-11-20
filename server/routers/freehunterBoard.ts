@@ -10,7 +10,8 @@
  */
 
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { router, pageProcedure } from "../_core/trpc";
+
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { freehunterJobs, emailInquiries } from "../../drizzle/schema";
@@ -21,6 +22,8 @@ import { sendFHFirstEmail, translateJobTitleToEnglish, cleanClientName } from ".
 import { invokeLLM } from "../_core/llm";
 import { sendEmail } from "../resendEmail";
 import { appBaseUrl, buildWaTrackUrl, rewriteWaLinks, WA_RAW } from "../_core/waTracking";
+
+const protectedProcedure = pageProcedure("freehunter-board");
 
 /** Create tracking inquiry + send first email (so FH follow-ups can fire later). */
 async function sendFirstEmailWithTracking(job: {
