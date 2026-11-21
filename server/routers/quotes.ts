@@ -825,6 +825,11 @@ export const quotesRouter = router({
         }),
         // Auto-invalidate cached PDF when content changes
         ...(hasContentChange && { pdfUrl: null, pdfKey: null }),
+        // Invalidate e-sign links when a quote is rejected or expired so a
+        // leftover token cannot resurrect it via public submitSignature.
+        ...((input.status === "rejected" || input.status === "expired") && {
+          signToken: null,
+        }),
       });
 
       if (attribution?.whatsappClickId) {
@@ -1052,11 +1057,14 @@ ${itemsText}
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
       const [row] = await db
-        .select({ id: quotesTable.id })
+        .select({ id: quotesTable.id, status: quotesTable.status })
         .from(quotesTable)
         .where(eq(quotesTable.signToken, input.token))
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "連結無效或已過期" });
+      if (row.status === "rejected" || row.status === "expired") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "此報價單已失效，無法簽署" });
+      }
       const fullQuote = await getQuoteById(row.id);
       if (!fullQuote) throw new TRPCError({ code: "NOT_FOUND", message: "報價單不存在" });
       return {
@@ -1100,12 +1108,20 @@ ${itemsText}
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "資料庫連線失敗" });
       const [row] = await db
-        .select({ id: quotesTable.id, signedAt: quotesTable.signedAt })
+        .select({
+          id: quotesTable.id,
+          signedAt: quotesTable.signedAt,
+          status: quotesTable.status,
+        })
         .from(quotesTable)
         .where(eq(quotesTable.signToken, input.token))
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "連結無效或已過期" });
       if (row.signedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "此報價單已簽署" });
+      // Rejected/expired quotes keep their signToken historically; never resurrect them.
+      if (row.status === "rejected" || row.status === "expired") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "此報價單已失效，無法簽署" });
+      }
 
       const updatedQuote = await updateQuote(row.id, {
         signedAt: new Date(),
