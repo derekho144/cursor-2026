@@ -4240,11 +4240,13 @@ export async function upsertQuoteFollowUp(data: InsertQuoteFollowUp): Promise<vo
       updatedAt: new Date(),
     }).where(eq(quoteFollowUps.id, current.id));
   } else {
-    // 新建記錄時，如果是 pending 狀態，設置 followUpSentAt 為當前時間
+    // Pending rows must keep followUpSentAt NULL so getPendingFollowUps can
+    // claim them (IS NULL + SENTINEL). Setting it on insert made cold follow-ups
+    // permanently unclaimable for newly labeled clients.
     const insertData = {
       ...data,
       quoteId,
-      followUpSentAt: data.status === 'pending' ? new Date() : null,
+      followUpSentAt: null,
     };
     await db.insert(quoteFollowUps).values(insertData);
   }
@@ -4261,6 +4263,17 @@ export async function getPendingFollowUps(daysAfterSent: number): Promise<QuoteF
   const cutoff = new Date(Date.now() - maxDays * 24 * 60 * 60 * 1000);
   const SENTINEL = new Date("1970-01-01T00:00:01.000Z");
   const now = Date.now();
+
+  // Heal rows poisoned by the old upsert that stamped followUpSentAt on pending
+  // insert. status is still pending, so no follow-up email was marked sent —
+  // only the SENTINEL claim stamp must be preserved for in-flight sends.
+  await db.execute(sql`
+    UPDATE quote_follow_ups
+    SET follow_up_sent_at = NULL
+    WHERE status = 'pending'
+      AND follow_up_sent_at IS NOT NULL
+      AND follow_up_sent_at <> ${SENTINEL}
+  `);
 
   const candidates = await db
     .select({
