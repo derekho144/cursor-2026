@@ -91,6 +91,14 @@ export async function getDb() {
   return _db;
 }
 
+/** mysql2 insertId from a drizzle insert result (shape varies by driver wrapper). */
+export function mysqlInsertId(result: unknown): number {
+  const id = Number(
+    (result as any)?.[0]?.insertId ?? (result as any)?.insertId ?? 0
+  );
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
 // ─── Users ────────────────────────────────────────────────────────
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
@@ -1615,12 +1623,13 @@ export async function getClientById(id: number) {
 export async function createClient(data: InsertClient) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.insert(clients).values(data);
-  const [newClient] = await db
-    .select()
-    .from(clients)
-    .where(sql`id = LAST_INSERT_ID()`)
-    .limit(1);
+  // Use insertId — LAST_INSERT_ID() on a pooled connection can see another
+  // session's id (or 0) because each query may use a different connection.
+  const insertResult = await db.insert(clients).values(data);
+  const id = mysqlInsertId(insertResult);
+  if (!id) throw new Error("Failed to create client (no insertId)");
+  const [newClient] = await db.select().from(clients).where(eq(clients.id, id)).limit(1);
+  if (!newClient) throw new Error(`Failed to load created client #${id}`);
   return newClient;
 }
 
@@ -1675,15 +1684,16 @@ export async function upsertClientFromQuote(data: {
     }
     return { id: existing.id, isNew: false };
   } else {
-    // Create new client
-    await db.insert(clients).values({
+    // Create new client — never use LAST_INSERT_ID() across the pool.
+    const insertResult = await db.insert(clients).values({
       name: data.name,
       company: data.company,
       email: data.email,
       phone: data.phone,
     });
-    const [newClient] = await db.select().from(clients).where(sql`id = LAST_INSERT_ID()`).limit(1);
-    return { id: newClient.id, isNew: true };
+    const id = mysqlInsertId(insertResult);
+    if (!id) throw new Error("Failed to create client from quote (no insertId)");
+    return { id, isNew: true };
   }
 }
 
@@ -3795,13 +3805,17 @@ export async function getQuoteCosts(quoteId: number) {
 export async function createQuoteCost(data: InsertQuoteCost) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.insert(quoteCosts).values(data);
+  // Prefer insertId over "latest by quoteId" — concurrent creates on the same
+  // quote can otherwise return the sibling row and mis-link expenses.
+  const insertResult = await db.insert(quoteCosts).values(data);
+  const id = mysqlInsertId(insertResult);
+  if (!id) throw new Error("Failed to create quote cost (no insertId)");
   const [created] = await db
     .select()
     .from(quoteCosts)
-    .where(eq(quoteCosts.quoteId, data.quoteId))
-    .orderBy(desc(quoteCosts.createdAt))
+    .where(eq(quoteCosts.id, id))
     .limit(1);
+  if (!created) throw new Error(`Failed to load created quote cost #${id}`);
   return created;
 }
 
