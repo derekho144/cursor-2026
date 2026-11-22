@@ -188,7 +188,11 @@ export function buildQuotePaymentPatch(input: {
   } else if (input.kind === "balance") {
     balancePaidAmount = String(amount);
     balancePaidAt = input.paidAt;
-    paymentStatus = "fully_paid";
+    // Never assume a "balance" payment completes the quote — the link may be
+    // stale after a total change, or deposit accounting may already be short.
+    const depositPaid = Number(depositPaidAmount) || 0;
+    paymentStatus =
+      roundMoney(depositPaid + amount) >= total ? "fully_paid" : "deposit_paid";
   } else {
     depositPaidAmount = String(amount);
     depositPaidAt = input.paidAt;
@@ -250,7 +254,14 @@ export async function createQuoteAirwallexPaymentLink(input: {
       )
       .orderBy(desc(airwallexPaymentLinks.createdAt))
       .limit(1);
-    if (existing?.url) return existing;
+    // Reuse only when the charged amount still matches — otherwise a total
+    // change would leave a stale under/over-priced link that still settles.
+    if (
+      existing?.url &&
+      roundMoney(Number(existing.amount)) === roundMoney(amount)
+    ) {
+      return existing;
+    }
   }
 
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();

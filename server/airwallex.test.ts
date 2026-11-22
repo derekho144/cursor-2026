@@ -126,6 +126,30 @@ describe("buildQuotePaymentPatch", () => {
     expect(Number(patch.balancePaidAmount)).toBe(5000);
     expect(patch.paymentNotes).toContain("尾款");
   });
+
+  it("keeps deposit_paid when balance payment does not cover remaining total", () => {
+    // Stale balance link: deposit 5k on original 10k total, then total raised to 15k
+    // while the UNPAID 5k balance link was reused — paying it must not mark fully_paid.
+    const patch = buildQuotePaymentPatch({
+      quote: {
+        total: "15000",
+        paymentStatus: "deposit_paid",
+        depositPaidAmount: "5000",
+        depositPaidAt: new Date("2026-08-10"),
+        balancePaidAmount: null,
+        balancePaidAt: null,
+        paymentNotes: "✓ Airwallex 訂金 HKD 5,000",
+        currency: "HKD",
+      },
+      kind: "balance",
+      amount: 5000,
+      paidAt: new Date("2026-08-18T12:00:00Z"),
+      paymentIntentId: "int_stale_balance",
+    });
+    expect(patch.paymentStatus).toBe("deposit_paid");
+    expect(Number(patch.balancePaidAmount)).toBe(5000);
+    expect(patch.paymentNotes).toContain("尾款");
+  });
 });
 
 describe("verifyAirwallexWebhookSignature", () => {
