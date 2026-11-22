@@ -452,16 +452,23 @@ export async function updateQuote(
   await ensureAdsQuoteAttributionSchema();
   const { items, ...quoteData } = data;
 
-  if (Object.keys(quoteData).length > 0) {
-    await db.update(quotes).set(quoteData).where(eq(quotes.id, id));
-  }
-  if (items !== undefined) {
-    await db.delete(quoteItems).where(eq(quoteItems.quoteId, id));
-    if (items.length > 0) {
-      await db.insert(quoteItems).values(
-        items.map((item, idx) => ({ ...item, quoteId: id, sortOrder: idx }))
-      );
-    }
+  // Replace items inside a transaction so a failed insert cannot leave the
+  // quote with zero line items (delete-then-insert without a txn wiped rows).
+  // Concurrent item saves are also serialized on the same connection.
+  if (items !== undefined || Object.keys(quoteData).length > 0) {
+    await db.transaction(async (tx) => {
+      if (Object.keys(quoteData).length > 0) {
+        await tx.update(quotes).set(quoteData).where(eq(quotes.id, id));
+      }
+      if (items !== undefined) {
+        await tx.delete(quoteItems).where(eq(quoteItems.quoteId, id));
+        if (items.length > 0) {
+          await tx.insert(quoteItems).values(
+            items.map((item, idx) => ({ ...item, quoteId: id, sortOrder: idx }))
+          );
+        }
+      }
+    });
   }
   return getQuoteById(id);
 }
