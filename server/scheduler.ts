@@ -16,7 +16,9 @@ import { desc, sql, eq } from "drizzle-orm";
 import {
   getFHJobsPendingFollowUp,
   markFollowUpSent,
-  resetFollowUpSentinel, getQuotesPendingReviewEmail, markReviewEmailSent, resetReviewEmailSentinel, getClientsForSeasonalEmail, getClientsForWinbackEmail, recordLoyaltyEmail, getClientMembership, getDb, createEmailInquiry } from "./db";
+  resetFollowUpSentinel, getQuotesPendingReviewEmail, markReviewEmailSent, resetReviewEmailSentinel, getClientsForSeasonalEmail, getClientsForWinbackEmail, recordLoyaltyEmail, getClientMembership, getDb, createEmailInquiry,
+  resetStuckClaimSentinelsOnStartup,
+} from "./db";
 import { sendEmail } from "./resendEmail";
 import { runQuoteFollowUps } from "./gmailFollowUp";
 import { runWatchdog } from "./watchdog";
@@ -1161,28 +1163,22 @@ export function startScheduler(): void {
 
   console.log("[Scheduler] Background scheduler started. PRO360 sync every 3 days, HelloToby/Google Ads sync every 7 days, Gmail scan every 30 min, FH scrape every 15 min (09:00-21:00 HKT), Pitch Outreach daily (10:00 HKT), Trusted negatives auto daily (10:00-21:00 HKT), Loyalty remarketing hourly (seasonal + winback).");
 
-  // On startup: reset any SENTINEL (1970-01-01) values left over from a previous server crash
-  // This prevents follow-up emails from being permanently stuck if the server was killed mid-operation
-  getDb().then(async (db) => {
-    if (!db) return;
-    try {
-      // Match both string and Date forms of the SENTINEL across MySQL TZ modes
-      const result = await db.execute(sql`
-        UPDATE email_inquiries
-        SET follow_up_sent_at = NULL,
-            follow_up_retry_count = COALESCE(follow_up_retry_count, 0) + 1,
-            follow_up_last_error = 'Reset on startup (server crash recovery)'
-        WHERE follow_up_sent_at = ${new Date("1970-01-01T00:00:01.000Z")}
-           OR follow_up_sent_at = '1970-01-01 00:00:01'
-      `);
-      const affected = (result as any)?.[0]?.affectedRows ?? 0;
-      if (affected > 0) {
-        console.log(`[Scheduler] Startup: reset ${affected} stuck SENTINEL follow-up record(s) from previous crash.`);
+  // On startup: reset claim SENTINELs left from a previous crash/deploy mid-send.
+  // Without this, claim queries (IS NULL) permanently skip stuck rows — FH, quote
+  // cold follow-ups, and same-day review invites.
+  resetStuckClaimSentinelsOnStartup()
+    .then((counts) => {
+      const total =
+        counts.emailInquiries + counts.quoteFollowUps + counts.reviewEmails;
+      if (total > 0) {
+        console.log(
+          `[Scheduler] Startup: reset stuck claim SENTINELs — email_inquiries=${counts.emailInquiries}, quote_follow_ups=${counts.quoteFollowUps}, reviewEmails=${counts.reviewEmails}`
+        );
       }
-    } catch (e) {
-      console.error('[Scheduler] Startup SENTINEL cleanup failed:', e);
-    }
-  }).catch(console.error);
+    })
+    .catch((e) => {
+      console.error("[Scheduler] Startup SENTINEL cleanup failed:", e);
+    });
 
   // Initial checks after 30s startup delay
   setTimeout(() => {

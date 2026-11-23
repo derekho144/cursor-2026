@@ -4322,6 +4322,81 @@ export async function resetQuoteFollowUpSentinel(id: number): Promise<void> {
   `);
 }
 
+/**
+ * Claim lock written while a scheduled send is in-flight.
+ * Must stay identical across claim / per-row reset / startup recovery.
+ */
+export const CLAIM_SENTINEL = new Date("1970-01-01T00:00:01.000Z");
+/** MySQL DATETIME string form of {@link CLAIM_SENTINEL} (TZ-mode tolerant match). */
+export const CLAIM_SENTINEL_MYSQL = "1970-01-01 00:00:01";
+
+/** True when a timestamp is the in-flight claim lock (not a real send time). */
+export function isClaimSentinel(value: Date | string | null | undefined): boolean {
+  if (value == null) return false;
+  if (value instanceof Date) {
+    return !Number.isNaN(value.getTime()) && value.getTime() === CLAIM_SENTINEL.getTime();
+  }
+  const s = String(value).trim();
+  if (!s) return false;
+  if (s === CLAIM_SENTINEL_MYSQL || s === CLAIM_SENTINEL.toISOString()) return true;
+  // MySQL / driver variants: "1970-01-01 00:00:01.000", "1970-01-01T00:00:01Z", etc.
+  return /^1970-01-01[ T]00:00:01(\.0+)?(Z)?$/.test(s);
+}
+
+export type StuckClaimSentinelResetCounts = {
+  emailInquiries: number;
+  quoteFollowUps: number;
+  reviewEmails: number;
+};
+
+function affectedRowsFromExecute(result: unknown): number {
+  const r = result as any;
+  return Number(r?.[0]?.affectedRows ?? r?.affectedRows ?? 0) || 0;
+}
+
+/**
+ * After a crash/deploy mid-send, claim SENTINELs would permanently skip rows
+ * because claim queries require IS NULL. FH email_inquiries already recovered
+ * on startup; quote_follow_ups + quotes.reviewEmailSentAt did not.
+ */
+export async function resetStuckClaimSentinelsOnStartup(): Promise<StuckClaimSentinelResetCounts> {
+  const db = await getDb();
+  const counts: StuckClaimSentinelResetCounts = {
+    emailInquiries: 0,
+    quoteFollowUps: 0,
+    reviewEmails: 0,
+  };
+  if (!db) return counts;
+
+  const fh = await db.execute(sql`
+    UPDATE email_inquiries
+    SET follow_up_sent_at = NULL,
+        follow_up_retry_count = COALESCE(follow_up_retry_count, 0) + 1,
+        follow_up_last_error = 'Reset on startup (server crash recovery)'
+    WHERE follow_up_sent_at = ${CLAIM_SENTINEL}
+       OR follow_up_sent_at = ${CLAIM_SENTINEL_MYSQL}
+  `);
+  counts.emailInquiries = affectedRowsFromExecute(fh);
+
+  const qf = await db.execute(sql`
+    UPDATE quote_follow_ups
+    SET follow_up_sent_at = NULL
+    WHERE follow_up_sent_at = ${CLAIM_SENTINEL}
+       OR follow_up_sent_at = ${CLAIM_SENTINEL_MYSQL}
+  `);
+  counts.quoteFollowUps = affectedRowsFromExecute(qf);
+
+  const rev = await db.execute(sql`
+    UPDATE quotes
+    SET reviewEmailSentAt = NULL
+    WHERE reviewEmailSentAt = ${CLAIM_SENTINEL}
+       OR reviewEmailSentAt = ${CLAIM_SENTINEL_MYSQL}
+  `);
+  counts.reviewEmails = affectedRowsFromExecute(rev);
+
+  return counts;
+}
+
 /** 標記 follow up 已發送 */
 export async function markFollowUpEmailSent(id: number): Promise<void> {
   const db = await getDb();
