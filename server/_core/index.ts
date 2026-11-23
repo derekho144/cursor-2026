@@ -582,13 +582,9 @@ async function startServer() {
       res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
       return;
     }
+    const { resolveTrustedOAuthReturn } = await import("./oauthReturnUrl");
     const returnTo = (req.query.origin as string) || ENV.appBaseUrl;
-    let appOrigin = ENV.appBaseUrl;
-    try {
-      appOrigin = new URL(returnTo).origin;
-    } catch {
-      appOrigin = returnTo.replace(/\/$/, "");
-    }
+    const { appOrigin } = resolveTrustedOAuthReturn(returnTo);
     const redirectUri = `${appOrigin}/api/google-ads/oauth-callback`;
     const params = new URLSearchParams({
       client_id: clientId,
@@ -597,7 +593,8 @@ async function startServer() {
       scope: "https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/datamanager",
       access_type: "offline",
       prompt: "consent",
-      state: returnTo,
+      // Persist only the trusted bounce target in state (never attacker origin).
+      state: `${appOrigin}/ad-sync`,
     });
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     // Redirect directly to Google
@@ -609,17 +606,8 @@ async function startServer() {
     const code = req.query.code as string;
     const state = req.query.state as string;
     const error = req.query.error as string;
-    let appOrigin = ENV.appBaseUrl;
-    let returnPath = "/ad-sync";
-    if (state) {
-      try {
-        const u = new URL(state);
-        appOrigin = u.origin;
-        returnPath = u.pathname || "/ad-sync";
-      } catch {
-        appOrigin = state.replace(/\/$/, "");
-      }
-    }
+    const { resolveTrustedOAuthReturn } = await import("./oauthReturnUrl");
+    const { appOrigin, returnPath } = resolveTrustedOAuthReturn(state);
     const redirectBack = (params: string) =>
       res.redirect(`${appOrigin}${returnPath}?${params}`);
 
@@ -675,13 +663,9 @@ async function startServer() {
       res.status(500).json({ error: "GOOGLE_ADS_CLIENT_ID not configured" });
       return;
     }
+    const { resolveTrustedOAuthReturn } = await import("./oauthReturnUrl");
     const returnTo = (req.query.origin as string) || ENV.appBaseUrl;
-    let appOrigin = ENV.appBaseUrl;
-    try {
-      appOrigin = new URL(returnTo).origin;
-    } catch {
-      appOrigin = returnTo.replace(/\/$/, "");
-    }
+    const { appOrigin } = resolveTrustedOAuthReturn(returnTo);
     const redirectUri = `${appOrigin}/api/google-search-console/oauth-callback`;
     const { gscOAuthScope } = await import("../googleSearchConsole");
     const params = new URLSearchParams({
@@ -691,7 +675,7 @@ async function startServer() {
       scope: gscOAuthScope(),
       access_type: "offline",
       prompt: "consent",
-      state: returnTo,
+      state: `${appOrigin}/ad-sync`,
     });
     res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
   });
@@ -700,17 +684,8 @@ async function startServer() {
     const code = req.query.code as string;
     const state = req.query.state as string;
     const error = req.query.error as string;
-    let appOrigin = ENV.appBaseUrl;
-    let returnPath = "/ad-sync";
-    if (state) {
-      try {
-        const u = new URL(state);
-        appOrigin = u.origin;
-        returnPath = u.pathname || "/ad-sync";
-      } catch {
-        appOrigin = state.replace(/\/$/, "");
-      }
-    }
+    const { resolveTrustedOAuthReturn } = await import("./oauthReturnUrl");
+    const { appOrigin, returnPath } = resolveTrustedOAuthReturn(state);
     const redirectBack = (params: string) =>
       res.redirect(`${appOrigin}${returnPath}?${params}`);
 
