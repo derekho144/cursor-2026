@@ -9,7 +9,10 @@ import {
   suggestPaymentKind,
   verifyAirwallexWebhookSignature,
 } from "./airwallex";
-import { buildQuotePaymentPatch } from "./airwallexPayment";
+import {
+  buildQuotePaymentPatch,
+  isReusableUnpaidAirwallexLink,
+} from "./airwallexPayment";
 
 describe("Airwallex payment amounts", () => {
   it("computes percent deposit", () => {
@@ -77,6 +80,64 @@ describe("Airwallex payment amounts", () => {
         5000
       )
     ).toBe("deposit");
+  });
+});
+
+describe("isReusableUnpaidAirwallexLink", () => {
+  const now = new Date("2026-11-24T12:00:00Z");
+
+  it("reuses a live UNPAID link with future expiry", () => {
+    expect(
+      isReusableUnpaidAirwallexLink(
+        {
+          url: "https://pay.airwallex.com/link_live",
+          expiresAt: new Date("2026-12-24T12:00:00Z"),
+        },
+        now
+      )
+    ).toBe(true);
+  });
+
+  it("does not reuse an expired UNPAID link", () => {
+    expect(
+      isReusableUnpaidAirwallexLink(
+        {
+          url: "https://pay.airwallex.com/link_dead",
+          expiresAt: new Date("2026-10-24T12:00:00Z"),
+        },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("does not reuse a link that expires exactly now", () => {
+    expect(
+      isReusableUnpaidAirwallexLink(
+        {
+          url: "https://pay.airwallex.com/link_edge",
+          expiresAt: now,
+        },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("rejects rows without a URL", () => {
+    expect(
+      isReusableUnpaidAirwallexLink(
+        { url: null, expiresAt: new Date("2026-12-24T12:00:00Z") },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("allows reuse when expiresAt is missing (legacy rows)", () => {
+    expect(
+      isReusableUnpaidAirwallexLink(
+        { url: "https://pay.airwallex.com/link_legacy", expiresAt: null },
+        now
+      )
+    ).toBe(true);
   });
 });
 

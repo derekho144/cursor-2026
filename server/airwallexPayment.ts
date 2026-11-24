@@ -214,6 +214,19 @@ export function buildQuotePaymentPatch(input: {
   };
 }
 
+/** True when an existing UNPAID DB row is still safe to hand back to staff/customers. */
+export function isReusableUnpaidAirwallexLink(
+  link: { url?: string | null; expiresAt?: Date | string | null },
+  now: Date = new Date()
+): boolean {
+  if (!link?.url) return false;
+  if (link.expiresAt == null || link.expiresAt === "") return true;
+  const expiresMs = new Date(link.expiresAt).getTime();
+  if (Number.isNaN(expiresMs)) return true;
+  // Airwallex rejects settlement after expires_at; reusing a dead URL blocks collection.
+  return expiresMs > now.getTime();
+}
+
 export async function createQuoteAirwallexPaymentLink(input: {
   quoteId: number;
   kind?: AirwallexPaymentLinkKind;
@@ -250,7 +263,7 @@ export async function createQuoteAirwallexPaymentLink(input: {
       )
       .orderBy(desc(airwallexPaymentLinks.createdAt))
       .limit(1);
-    if (existing?.url) return existing;
+    if (existing && isReusableUnpaidAirwallexLink(existing)) return existing;
   }
 
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
