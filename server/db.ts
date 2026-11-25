@@ -1826,7 +1826,22 @@ export async function getEmailInquiryByMessageId(messageId: string) {
   return row ?? null;
 }
 
-/** 檢查是否已曾向某個 email 發送過高價值 meeting email 或第一封郵件（防止重複發送） */
+/**
+ * True when an inquiry row proves we already sent outbound mail to this address.
+ * Do NOT treat processedAt as sent: pending_send / ignored / rejected stamp it
+ * without any SMTP/Resend delivery (which previously blocked later HV meeting emails).
+ */
+export function inquiryIndicatesOutboundSent(row: {
+  meetingStatus?: string | null;
+  autoRepliedAt?: Date | string | null;
+}): boolean {
+  const ms = row.meetingStatus;
+  if (ms === "meeting_scheduled" || ms === "meeting_done") return true;
+  if (row.autoRepliedAt != null && row.autoRepliedAt !== "") return true;
+  return false;
+}
+
+/** 檢查是否已曾向某個 email 發送過高價值 meeting email 或報價回覆（防止重複發送） */
 export async function hasAlreadySentToEmail(fromEmail: string): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
@@ -1837,8 +1852,10 @@ export async function hasAlreadySentToEmail(fromEmail: string): Promise<boolean>
       and(
         eq(emailInquiries.fromEmail, fromEmail),
         or(
-          eq(emailInquiries.meetingStatus, "meeting_scheduled"),
-          isNotNull(emailInquiries.processedAt)
+          // Meeting email actually sent (auto or manual)
+          inArray(emailInquiries.meetingStatus, ["meeting_scheduled", "meeting_done"]),
+          // Quote / auto-reply email actually sent (confirmSendQuote sets this)
+          isNotNull(emailInquiries.autoRepliedAt)
         )
       )
     )
