@@ -1875,6 +1875,69 @@ export async function runEmailScan(maxResults = 20): Promise<{ scanned: number; 
   return { scanned: emails.length, newInquiries, skipped };
 }
 
+/** Escape plain text before embedding in confirm-send HTML. */
+export function escapeConfirmSendEmailHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Send the pending_send inquiry quotation email WITH the PDF attachment.
+ * Matches quotes.sendQuoteEmail / quoteEmailSendQueue (PDF via print-format renderer).
+ */
+export async function sendInquiryConfirmQuoteEmail(input: {
+  to: string;
+  subject: string;
+  body: string;
+  quote: {
+    quoteNumber: string;
+    llmDescription?: string | null;
+    signatureData?: string | null;
+    [key: string]: unknown;
+  };
+  inquiryId: number;
+}): Promise<{ success: boolean; messageId?: string; error?: string; provider?: string }> {
+  const llmDescription =
+    (input.quote.llmDescription || "").trim() ||
+    "感謝您選擇 JD Studio HK 的專業攝影服務。";
+  const signatureData = (input.quote as { signatureData?: string | null }).signatureData || null;
+  // Dynamic import avoids circular dependency with routers/quotes.ts
+  const { generateQuotePdfMatchingDownload } = await import("./quotes");
+  const pdfBuffer = await generateQuotePdfMatchingDownload(
+    input.quote,
+    llmDescription,
+    "QUOTATION",
+    signatureData
+  );
+
+  const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+<div style="background:#1a1a1a;padding:20px 30px"><h2 style="color:#fff;margin:0;font-size:18px;letter-spacing:2px">JD STUDIO HK</h2></div>
+<div style="padding:30px"><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeConfirmSendEmailHtml(input.body)}</pre></div>
+<div style="background:#f5f5f5;padding:15px 30px;font-size:12px;color:#888"><p style="margin:0">JD Studio &middot; Hong Kong &nbsp;|&nbsp; info.exposurehk@gmail.com &nbsp;|&nbsp; www.jdstudiohk.com</p></div>
+</div>`;
+
+  // Prefer Gmail path for PDF attachments (sendEmail routes attachments → Gmail).
+  return sendEmail({
+    to: input.to,
+    subject: input.subject,
+    html: htmlBody,
+    text: input.body,
+    attachments: [
+      {
+        filename: `${input.quote.quoteNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: "application/pdf",
+      },
+    ],
+    tags: [
+      { name: "type", value: "inquiry_quote" },
+      { name: "inquiryId", value: String(input.inquiryId) },
+    ],
+  });
+}
+
 export const emailInquiriesRouter = router({
   // Manually trigger a Gmail scan (async — returns immediately to avoid proxy/Safari timeouts)
   scanGmail: protectedProcedure
@@ -2057,26 +2120,30 @@ JD STUDIO HK
 Tel No: (852) 9153 1976
 Web: https://jdstudiohk.com/`;
 
-      // Send email
+      // Send email WITH quotation PDF (body claims "Please find attached…")
       const gmailUser = process.env.GMAIL_USER;
       const gmailPassword = process.env.GMAIL_APP_PASSWORD;
       if (!gmailUser || !gmailPassword) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "郵件設定未完成，請聯絡管理員" });
       }
 
-      const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-<div style="background:#1a1a1a;padding:20px 30px"><h2 style="color:#fff;margin:0;font-size:18px;letter-spacing:2px">JD STUDIO HK</h2></div>
-<div style="padding:30px"><pre style="font-family:Arial,sans-serif;white-space:pre-wrap">${emailBody}</pre></div>
-<div style="background:#f5f5f5;padding:15px 30px;font-size:12px;color:#888"><p style="margin:0">JD Studio &middot; Hong Kong &nbsp;|&nbsp; info.exposurehk@gmail.com &nbsp;|&nbsp; www.jdstudiohk.com</p></div>
-</div>`;
-
-      const sendResult = await sendEmail({
-        to: toEmail,
-        subject: emailSubject,
-        html: htmlBody,
-        text: emailBody,
-        tags: [{ name: "type", value: "inquiry_quote" }, { name: "inquiryId", value: String(input.id) }],
-      });
+      let sendResult: { success: boolean; messageId?: string; error?: string };
+      try {
+        sendResult = await sendInquiryConfirmQuoteEmail({
+          to: toEmail,
+          subject: emailSubject,
+          body: emailBody,
+          quote,
+          inquiryId: input.id,
+        });
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err?.message ?? "報價 PDF 生成或郵件發送失敗",
+          cause: err,
+        });
+      }
 
       if (!sendResult.success) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `郵件發送失敗：${sendResult.error}` });
@@ -2094,7 +2161,7 @@ Web: https://jdstudiohk.com/`;
         await updateQuote(inquiryRows.quoteId!, { status: "sent" });
       }
 
-      console.log(`[EmailInquiry] confirmSendQuote: Sent quote email via Resend to ${toEmail} for inquiry ${input.id} (id: ${sendResult.messageId})`);
+      console.log(`[EmailInquiry] confirmSendQuote: Sent quote email with PDF to ${toEmail} for inquiry ${input.id} (id: ${sendResult.messageId})`);
       return { success: true, sentTo: toEmail };
     }),
 
