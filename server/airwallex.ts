@@ -321,3 +321,46 @@ export async function createAirwallexPaymentLink(input: {
     expiresAt: body.expires_at ?? null,
   };
 }
+
+/**
+ * Deactivate an Airwallex payment link so customers can no longer pay.
+ * Idempotent for already-inactive / invalid-status responses.
+ */
+export async function deactivateAirwallexPaymentLink(
+  airwallexId: string
+): Promise<void> {
+  const id = airwallexId.trim();
+  if (!id) throw new Error("Missing Airwallex payment link id");
+
+  const token = await getAirwallexAccessToken();
+  const resp = await fetch(
+    `${getAirwallexBaseUrl()}/api/v1/pa/payment_links/${encodeURIComponent(id)}/deactivate`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (resp.ok) return;
+
+  const body = (await resp.json().catch(() => ({}))) as {
+    message?: string;
+    code?: string;
+  };
+  const detail = `${body.code ?? ""} ${body.message ?? ""} ${resp.status}`;
+  // Already inactive / paid / gone — safe for our cleanup paths.
+  if (
+    resp.status === 404 ||
+    /invalid_status|already|not_active|inactive|resource_not_found|not_found/i.test(
+      detail
+    )
+  ) {
+    return;
+  }
+  throw new Error(
+    body.message || `Airwallex deactivate failed (${resp.status})`
+  );
+}

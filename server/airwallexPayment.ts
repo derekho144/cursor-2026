@@ -8,7 +8,9 @@ import {
 import { getDb } from "./db";
 import {
   createAirwallexPaymentLink,
+  deactivateAirwallexPaymentLink,
   inferPaymentKindForQuote,
+  isAirwallexConfigured,
   listRecentSucceededPaymentIntents,
   paymentAmountForKind,
   paymentKindLabel,
@@ -306,6 +308,55 @@ export async function markAirwallexLinkPaid(input: {
     .where(eq(airwallexPaymentLinks.airwallexId, input.airwallexId));
 
   return getAirwallexPaymentLinkByAirwallexId(input.airwallexId);
+}
+
+/**
+ * Stop customers paying on UNPAID links for a quote (delete / leave-accepted).
+ * Calls Airwallex deactivate when configured, then marks local rows DISABLED.
+ * Fail-closed: throws if any remote deactivate fails so callers can abort delete.
+ */
+export async function deactivateUnpaidAirwallexLinksForQuote(
+  quoteId: number
+): Promise<{ deactivated: number }> {
+  if (!quoteId || quoteId <= 0) return { deactivated: 0 };
+
+  const links = await listAirwallexPaymentLinksForQuote(quoteId);
+  const unpaid = links.filter(
+    (l) => String(l.status || "").toUpperCase() === "UNPAID"
+  );
+  if (unpaid.length === 0) return { deactivated: 0 };
+
+  const configured = isAirwallexConfigured();
+  const failures: string[] = [];
+
+  for (const link of unpaid) {
+    if (configured) {
+      try {
+        await deactivateAirwallexPaymentLink(link.airwallexId);
+      } catch (err) {
+        failures.push(
+          `${link.airwallexId}: ${err instanceof Error ? err.message : String(err)}`
+        );
+        continue;
+      }
+    }
+
+    const db = await getDb();
+    if (db) {
+      await db
+        .update(airwallexPaymentLinks)
+        .set({ status: "DISABLED" })
+        .where(eq(airwallexPaymentLinks.airwallexId, link.airwallexId));
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `無法停用 Airwallex 收款連結（${failures.length}/${unpaid.length}）: ${failures.join("; ")}`
+    );
+  }
+
+  return { deactivated: unpaid.length };
 }
 
 /** Resolve quote + kind + amount from webhook / payment_link.paid payload. */

@@ -48,6 +48,7 @@ import {
 import { computeQuoteTotalsFromItems } from "../../shared/quoteTotals";
 import {
   createQuoteAirwallexPaymentLink,
+  deactivateUnpaidAirwallexLinksForQuote,
   listAirwallexPaymentLinksForQuote,
   syncRecentAirwallexPayments,
 } from "../airwallexPayment";
@@ -775,6 +776,26 @@ export const quotesRouter = router({
         });
       }
 
+      // Leaving accepted with live UNPAID Airwallex links → payments would hit
+      // quote_not_accepted and never attach in CRM. Deactivate before status write.
+      if (input.status && input.status !== "accepted") {
+        const existingStatus =
+          (existingForReconcile ?? (await getQuoteById(id)))?.status ?? null;
+        if (existingStatus === "accepted") {
+          try {
+            await deactivateUnpaidAirwallexLinksForQuote(id);
+          } catch (err) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                err instanceof Error
+                  ? err.message
+                  : "無法停用收款連結，狀態未更新",
+            });
+          }
+        }
+      }
+
       const result = await updateQuote(id, {
         ...rest,
         ...enrichedPatch,
@@ -875,6 +896,19 @@ export const quotesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
+      // Shared payment URLs stay live after quote row delete → Airwallex pay
+      // succeeds but apply returns quote_not_found (money unattached in CRM).
+      try {
+        await deactivateUnpaidAirwallexLinksForQuote(input.id);
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            err instanceof Error
+              ? err.message
+              : "無法停用收款連結，刪除已取消",
+        });
+      }
       await deleteQuote(input.id);
       return { success: true };
     }),

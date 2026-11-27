@@ -15,6 +15,7 @@ import {
   adTransactions,
   aiAnalysisReports,
   AiAnalysisReport,
+  airwallexPaymentLinks,
   Client,
   clients,
   clientMemberships,
@@ -469,6 +470,19 @@ export async function updateQuote(
 export async function deleteQuote(id: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  // Local payment-link rows (no FK cascade). Remote UNPAID links must be
+  // deactivated by the caller before this — see quotes.delete.
+  try {
+    await db
+      .delete(airwallexPaymentLinks)
+      .where(eq(airwallexPaymentLinks.quoteId, id));
+  } catch (err) {
+    // Table may not exist yet in fresh envs.
+    console.warn(
+      "[deleteQuote] airwallex_payment_links cleanup:",
+      String((err as Error)?.message || err).slice(0, 200)
+    );
+  }
   await db.delete(quoteItems).where(eq(quoteItems.quoteId, id));
   await db.delete(quotes).where(eq(quotes.id, id));
 }
